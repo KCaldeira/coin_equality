@@ -21,6 +21,9 @@ This project prioritizes elegant, fail-fast code that surfaces errors quickly ra
 - No backward compatibility - do not add conditional logic to support deprecated field names or old configurations. Update all code and configurations to use current conventions.
 - Use standard Python packages - prefer established numerical methods from scipy, numpy, etc. rather than implementing custom numerical algorithms
 
+### Code Organization
+- All imports at the top of the file - no imports inside functions or scattered throughout the code
+
 
 ### Naming Conventions
 - Consistent naming - use the same variable/field names throughout the codebase when referring to the same concept

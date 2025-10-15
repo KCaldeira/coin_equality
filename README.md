@@ -27,6 +27,25 @@ where:
 - `L(t)` = population at time t
 - `f(t)` = fraction of resources allocated to abatement (control variable)
 
+### Calculation Order
+
+For the differential equation solver, variables are calculated in this order:
+
+1. **Y_gross** from K, L, A, α (Cobb-Douglas production)
+2. **ΔT** from Ecum, k_climate (temperature from cumulative emissions)
+3. **Ω** from ΔT, k_damage, β (climate damage fraction)
+4. **Y_net** from Y_gross, Ω (production after climate damage)
+5. **y** from Y_net, L, s (mean per-capita income)
+6. **Δc** from y, ΔL (per-capita amount redistributable)
+7. **μ** from f, Δc, θ₁, θ₂ (fraction of emissions abated)
+8. **E** from σ, μ, Y_gross (emissions net of abatement)
+9. **dK/dt** from s, Y_net, δ, K (capital tendency)
+10. **dEcum/dt = E** (cumulative emissions tendency)
+
+Additionally, for utility calculations:
+- **G_eff** from f, ΔL, G₁ (effective Gini index)
+- **U** from y_eff, G_eff, η (mean utility)
+
 ### Core Components
 
 #### 1. Economic Model (Solow-Swann Growth)
@@ -38,24 +57,42 @@ Y_gross(t) = A(t) · K(t)^α · L(t)^(1-α)
 
 **Climate Damage:**
 ```
-Y_damaged(t) = (1 - Ω(t)) · Y_gross(t)
 Ω(t) = k_damage · ΔT(t)^β
 ```
+where `Ω(t)` is the fraction of gross production lost to climate damage.
 
-**Abatement Cost:**
+**Net Production (after climate damage):**
 ```
-Y_net(t) = (1 - Λ(t)) · Y_damaged(t)
+Y_net(t) = (1 - Ω(t)) · Y_gross(t)
+```
+
+**Abatement Fraction:**
+
+The fraction of emissions abated, `μ(t)`, is determined by the allocation between redistribution and abatement:
+```
+μ(t) = [f·Δc(t)·L(t) / (θ₁(t)·L(t))]^(1/θ₂)
+     = [f·Δc(t) / θ₁(t)]^(1/θ₂)
+```
+where:
+- `Δc(t)` = per-capita amount of income that could be redistributed
+- `f` = fraction of redistributable resources allocated to abatement (0 ≤ f ≤ 1)
+- `θ₁(t)` = abatement cost coefficient
+- `θ₂` = abatement cost exponent
+
+**Abatement Cost Fraction:**
+```
 Λ(t) = θ₁(t) · μ(t)^θ₂
+```
+This represents the fraction of gross production allocated to emissions abatement.
+
+**Mean Per-Capita Income (before redistribution/abatement allocation):**
+```
+y(t) = (1 - s) · Y_net(t) / L(t)
 ```
 
 **Capital Accumulation:**
 ```
 dK/dt = s · Y_net(t) - δ · K(t)
-```
-
-**Per-Capita Consumption:**
-```
-c(t) = (1 - s) · Y_net(t) / L(t)
 ```
 
 #### 2. Climate Model
@@ -109,20 +146,35 @@ U = ln(y) + ln((1-G)/(1+G)) + 2G/(1+G)                              for η = 1
 
 #### 4. Redistribution Mechanics
 
-**Crossing Rank (no income change):**
+The model considers allocation of resources between income redistribution and emissions abatement. The key parameters are:
+- `G₁` = initial Gini index
+- `ΔL` = fraction of total income to be redistributed (specified exogenously)
+- `f` = fraction of redistributable resources allocated to abatement (0 ≤ f ≤ 1)
+
+**Step 1: Calculate target G₂ from ΔL**
+
+Given `ΔL` and `G₁`, we numerically solve for `G₂` (the Gini index after full redistribution) using the relationship:
+```
+ΔL(F*) = [2(G₁-G₂)/(1-G₁)(1+G₂)] · [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^((1+G₁)(1-G₂)/(2(G₂-G₁)))
+```
+where `F*` is the crossing rank (see below).
+
+**Step 2: Calculate crossing rank F***
+
+The population rank where income remains unchanged during redistribution:
 ```
 F* = 1 - [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^(((1+G₁)(1-G₂))/(2(G₂-G₁)))
 ```
 
-**Fraction of Income Redistributed:**
+**Step 3: Calculate per-capita amount redistributed**
 ```
-ΔL(F*) = [2(G₁-G₂)/(1-G₁)(1+G₂)] · [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^((1+G₁)(1-G₂)/(2(G₂-G₁)))
+Δc = y · ΔL
 ```
+where `y` is mean per-capita income.
 
-**Per-Capita Amount Redistributed:**
-```
-Δc(F*) = y · ΔL(F*)
-```
+**Step 4: Calculate effective Gini index**
+
+When fraction `f` of redistributable resources goes to abatement instead of redistribution, the effective Gini index is calculated using a two-step Pareto-preserving approach (see `income_distribution.G2_effective_pareto`).
 
 **Gini Index After Removal (all to abatement, f=1):**
 ```
