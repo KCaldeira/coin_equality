@@ -50,23 +50,23 @@ Additionally, for utility calculations:
 
 #### 1. Economic Model (Solow-Swann Growth)
 
-**Production Function (Cobb-Douglas):**
+**Eq. (1.1) - Production Function (Cobb-Douglas):**
 ```
 Y_gross(t) = A(t) · K(t)^α · L(t)^(1-α)
 ```
 
-**Climate Damage:**
+**Eq. (1.2) - Climate Damage:**
 ```
 Ω(t) = k_damage · ΔT(t)^β
 ```
 where `Ω(t)` is the fraction of gross production lost to climate damage.
 
-**Net Production (after climate damage):**
+**Eq. (1.3) - Net Production (after climate damage):**
 ```
 Y_net(t) = (1 - Ω(t)) · Y_gross(t)
 ```
 
-**Abatement Fraction:**
+**Eq. (1.4) - Abatement Fraction:**
 
 The fraction of emissions abated, `μ(t)`, is determined by the allocation between redistribution and abatement:
 ```
@@ -79,58 +79,59 @@ where:
 - `θ₁(t)` = abatement cost coefficient
 - `θ₂` = abatement cost exponent
 
-**Abatement Cost Fraction:**
+**Eq. (1.5) - Abatement Cost Fraction:**
 ```
 Λ(t) = θ₁(t) · μ(t)^θ₂
 ```
 This represents the fraction of gross production allocated to emissions abatement.
 
-**Mean Per-Capita Income (before redistribution/abatement allocation):**
+**Eq. (1.6) - Mean Per-Capita Income:**
 ```
 y(t) = (1 - s) · Y_net(t) / L(t)
 ```
 
-**Capital Accumulation:**
+**Eq. (1.7) - Capital Accumulation:**
 ```
 dK/dt = s · Y_net(t) - δ · K(t)
 ```
 
 #### 2. Climate Model
 
-**Emissions:**
+**Eq. (2.1) - Emissions:**
 ```
 E_base(t) = σ(t) · Y_gross(t)
 E(t) = σ(t) · (1 - μ(t)) · Y_gross(t)
 ```
 
-**Temperature Change:**
+**Eq. (2.2) - Temperature Change:**
 ```
 ΔT(t) = k_climate · ∫₀^t E(t') dt'
+       = k_climate · Ecum(t)
 ```
 
 Temperature change is proportional to cumulative carbon dioxide emissions.
 
 #### 3. Income Distribution and Utility
 
-**Pareto-Lorenz Distribution:**
+**Eq. (3.1) - Pareto-Lorenz Distribution:**
 ```
 ℒ(F) = 1 - (1 - F)^(1-1/a)
 ```
 
 where `F` is the fraction of the population with the lowest incomes.
 
-**Gini Index:**
+**Eq. (3.2) - Gini Index:**
 ```
 G = 1/(2a - 1)
 a = (1 + 1/G)/2
 ```
 
-**Income at Rank F:**
+**Eq. (3.3) - Income at Rank F:**
 ```
 c(F) = y · (1 - 1/a) · (1 - F)^(-1/a)
 ```
 
-**Isoelastic Utility Function (CRRA):**
+**Eq. (3.4) - Isoelastic Utility Function (CRRA):**
 ```
 u(c) = (c^(1-η) - 1)/(1 - η)  for η ≠ 1
 u(c) = ln(c)                   for η = 1
@@ -138,7 +139,7 @@ u(c) = ln(c)                   for η = 1
 
 where `η` is the coefficient of relative risk aversion.
 
-**Mean Population Utility:**
+**Eq. (3.5) - Mean Population Utility:**
 ```
 U = [y^(1-η)/(1-η)] · [(1+G)^η(1-G)^(1-η)/(1+G(2η-1))]^(1/(1-η))  for η ≠ 1
 U = ln(y) + ln((1-G)/(1+G)) + 2G/(1+G)                              for η = 1
@@ -151,38 +152,35 @@ The model considers allocation of resources between income redistribution and em
 - `ΔL` = fraction of total income to be redistributed (specified exogenously)
 - `f` = fraction of redistributable resources allocated to abatement (0 ≤ f ≤ 1)
 
-**Step 1: Calculate target G₂ from ΔL**
+**Eq. (4.1) - Fraction of Income Redistributed:**
 
 Given `ΔL` and `G₁`, we numerically solve for `G₂` (the Gini index after full redistribution) using the relationship:
 ```
 ΔL(F*) = [2(G₁-G₂)/(1-G₁)(1+G₂)] · [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^((1+G₁)(1-G₂)/(2(G₂-G₁)))
 ```
-where `F*` is the crossing rank (see below).
+where `F*` is the crossing rank (see Eq. 4.2).
 
-**Step 2: Calculate crossing rank F***
+**Eq. (4.2) - Crossing Rank:**
 
 The population rank where income remains unchanged during redistribution:
 ```
 F* = 1 - [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^(((1+G₁)(1-G₂))/(2(G₂-G₁)))
 ```
 
-**Step 3: Calculate per-capita amount redistributed**
+**Eq. (4.3) - Per-Capita Amount Redistributed:**
 ```
 Δc = y · ΔL
 ```
 where `y` is mean per-capita income.
 
-**Step 4: Calculate effective Gini index**
+**Eq. (4.4) - Effective Gini Index:**
 
 When fraction `f` of redistributable resources goes to abatement instead of redistribution, the effective Gini index is calculated using a two-step Pareto-preserving approach (see `income_distribution.G2_effective_pareto`).
 
-**Gini Index After Removal (all to abatement, f=1):**
+For reference, the formulas are:
 ```
-G₂ᵣ = 1 - (1 - G₁)^((1-ΔL(1-F*))/(1-ΔL))
-```
+G₂ᵣ = 1 - (1 - G₁)^((1-ΔL(1-F*))/(1-ΔL))  [all to abatement, f=1]
 
-**Effective Gini Index with Partial Allocation:**
-```
 G_eff(f) = (1-ΔL)/(1-f·ΔL) · [1 - (1 - G₁)^((1-ΔL(1-F*))/(1-ΔL))]
 ```
 
