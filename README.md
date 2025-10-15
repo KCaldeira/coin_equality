@@ -85,12 +85,23 @@ where:
 ```
 This represents the fraction of gross production allocated to emissions abatement.
 
-**Eq. (1.6) - Mean Per-Capita Income:**
+**Eq. (1.6) - Abatement Cost:**
+```
+abatecost(t) = Λ(t) · Y_net(t)
+```
+
+**Eq. (1.7) - Mean Per-Capita Income:**
 ```
 y(t) = (1 - s) · Y_net(t) / L(t)
 ```
 
-**Eq. (1.7) - Capital Accumulation:**
+**Eq. (1.8) - Effective Per-Capita Income:**
+```
+y_eff(t) = y(t) - abatecost(t) / L(t)
+```
+This is the per-capita income after subtracting abatement costs, used for utility calculations.
+
+**Eq. (1.9) - Capital Accumulation:**
 ```
 dK/dt = s · Y_net(t) - δ · K(t)
 ```

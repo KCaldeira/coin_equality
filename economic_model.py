@@ -202,6 +202,107 @@ def calculate_capital_tendency(s, Y_net, delta, K):
 
     Notes
     -----
-    From equation (26): dK/dt = s·Y_net(t) - δ·K(t)
+    From equation (1.9): dK/dt = s·Y_net(t) - δ·K(t)
     """
     return s * Y_net - delta * K
+
+
+def calculate_tendencies(state, params):
+    """
+    Calculate time derivatives of state variables.
+
+    Parameters
+    ----------
+    state : dict
+        State variables:
+        - 'K': Capital stock ($)
+        - 'Ecum': Cumulative CO2 emissions (tCO2)
+    params : dict
+        Model parameters (all must be provided):
+        - 'alpha': Output elasticity of capital
+        - 'delta': Capital depreciation rate (yr^-1)
+        - 's': Savings rate
+        - 'k_damage': Climate damage coefficient (°C^-β)
+        - 'beta': Climate damage exponent
+        - 'k_climate': Temperature sensitivity (°C tCO2^-1)
+        - 'A': Total factor productivity (current)
+        - 'L': Population (current)
+        - 'sigma': Carbon intensity of GDP (current, tCO2 $^-1)
+        - 'theta1': Abatement cost coefficient (current)
+        - 'theta2': Abatement cost exponent
+        - 'G1': Initial Gini index
+        - 'delta_L': Fraction of income to redistribute
+        - 'f': Fraction allocated to abatement vs redistribution
+
+    Returns
+    -------
+    dict
+        Time derivatives:
+        - 'K': dK/dt ($ yr^-1)
+        - 'Ecum': dEcum/dt = E (tCO2 yr^-1)
+
+    Notes
+    -----
+    Calculation order follows equations 1.1-1.9 and 2.1:
+    1. Y_gross from K, L, A, α (Eq 1.1)
+    2. ΔT from Ecum, k_climate (Eq 2.2)
+    3. Ω from ΔT, k_damage, β (Eq 1.2)
+    4. Y_net from Y_gross, Ω (Eq 1.3)
+    5. y from Y_net, L, s (Eq 1.7)
+    6. Δc from y, ΔL (Eq 4.3)
+    7. μ from f, Δc, θ₁, θ₂ (Eq 1.4)
+    8. Λ from θ₁, μ, θ₂ (Eq 1.5)
+    9. E from σ, μ, Y_gross (Eq 2.1)
+    10. dK/dt from s, Y_net, δ, K (Eq 1.9)
+    """
+    # Extract state variables
+    K = state['K']
+    Ecum = state['Ecum']
+
+    # Extract parameters
+    alpha = params['alpha']
+    delta = params['delta']
+    s = params['s']
+    k_damage = params['k_damage']
+    beta = params['beta']
+    k_climate = params['k_climate']
+    A = params['A']
+    L = params['L']
+    sigma = params['sigma']
+    theta1 = params['theta1']
+    theta2 = params['theta2']
+    delta_L = params['delta_L']
+    f = params['f']
+
+    # Step 1: Calculate gross production (Eq 1.1)
+    Y_gross = calculate_gross_production(K, L, A, alpha)
+
+    # Step 2: Calculate temperature change (Eq 2.2)
+    delta_T = calculate_temperature_change(Ecum, k_climate)
+
+    # Step 3: Calculate climate damage fraction (Eq 1.2)
+    Omega = calculate_climate_damage_fraction(delta_T, k_damage, beta)
+
+    # Step 4: Calculate net production after climate damage (Eq 1.3)
+    Y_net = (1 - Omega) * Y_gross
+
+    # Step 5: Calculate mean per-capita income (Eq 1.7)
+    y = (1 - s) * Y_net / L
+
+    # Step 6: Calculate per-capita amount redistributed (Eq 4.3)
+    delta_c = y * delta_L
+
+    # Step 7: Calculate abatement fraction (Eq 1.4)
+    mu = (f * delta_c / theta1) ** (1 / theta2)
+
+    # Step 8: Calculate emissions (Eq 2.1)
+    E = calculate_emissions(sigma, mu, Y_gross)
+
+    # Step 9: Calculate capital tendency (Eq 1.9)
+    dK_dt = calculate_capital_tendency(s, Y_net, delta, K)
+
+    # Step 10: Return tendencies
+    return {
+        'K': dK_dt,
+        'Ecum': E
+    }
