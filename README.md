@@ -188,16 +188,9 @@ where `y` is mean per-capita income.
 
 When fraction `f` of redistributable resources goes to abatement instead of redistribution, the effective Gini index is calculated using a two-step Pareto-preserving approach (see `income_distribution.G2_effective_pareto`).
 
-For reference, the formulas are:
-```
-G₂ᵣ = 1 - (1 - G₁)^((1-ΔL(1-F*))/(1-ΔL))  [all to abatement, f=1]
-
-G_eff(f) = (1-ΔL)/(1-f·ΔL) · [1 - (1 - G₁)^((1-ΔL(1-F*))/(1-ΔL))]
-```
-
-where:
+For reference:
 - `f = 0`: all resources go to redistribution → `G_eff(0)` = minimum (most equal)
-- `f = 1`: all resources go to abatement → `G_eff(1) = G₂ᵣ`
+- `f = 1`: all resources go to abatement → `G_eff(1)` = maximum Gini given removal
 - `0 < f < 1`: mixed allocation
 
 **Fraction of Emissions Abated:**
