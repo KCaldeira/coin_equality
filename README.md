@@ -175,7 +175,7 @@ where `F*` is the crossing rank (see Eq. 4.2).
 
 The population rank where income remains unchanged during redistribution:
 ```
-F* = 1 - [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^(((1+G₁)(1-G₂))/(2(G₂-G₁)))
+F* = 1 - [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^(((1+G₁)(1+G₂))/(2(G₂-G₁)))
 ```
 
 **Eq. (4.3) - Per-Capita Amount Redistributed:**
