@@ -302,6 +302,73 @@ G_eff, remainder = G2_effective_pareto(f, deltaL, G1)
 print(f"Effective Gini: {G_eff:.4f}")
 ```
 
+## Next Steps
+
+### 1. Define Test Case Parameters and Exogenous Functions
+
+Create a test configuration with:
+- Initial conditions: `K(0)`, `Ecum(0)`
+- Constant parameters: `α`, `δ`, `s`, `k_damage`, `β`, `k_climate`, `η`, `G₁`, `ΔL`
+- Time-dependent exogenous functions: `A(t)`, `L(t)`, `σ(t)`, `θ₁(t)`, `θ₂`
+
+These should be defined as Python functions or data structures that can be evaluated at any time `t`.
+
+### 2. Create Time-Integration Routine
+
+Develop a forward model that integrates the system from `t=0` to `t=T` given:
+- Initial state: `state_0 = {'K': K0, 'Ecum': Ecum0}`
+- Control trajectory: `f(t)` - the fraction allocated to abatement vs redistribution
+- Parameters: including time-dependent functions
+
+Use `scipy.integrate.solve_ivp` or similar ODE solver. The control variable `f(t)` will later be optimized but initially should be tested with simple functions (e.g., constant, linear, step functions).
+
+### 3. Test Forward Model
+
+Validate the forward integration:
+- Run with physically reasonable parameters
+- Check conservation properties and bounds (0 ≤ f(t) ≤ 1, K > 0, etc.)
+- Verify sensitivity to key parameters
+- Compare different `f(t)` trajectories manually
+- Calculate and track utility over time using `y_eff(t)` and `G_eff(t)`
+
+### 4. Create Optimization Code
+
+Find the optimal control trajectory `f(t)` that maximizes the objective function:
+
+```
+max ∫₀^T e^(-ρt) · U(t) · L(t) dt
+```
+
+where `U(t)` is calculated from `y_eff(t)`, `G_eff(t)`, and `η` (Eq. 3.5).
+
+**Optimization approaches to consider:**
+
+1. **MIDACO Solver** (used previously): https://www.midaco-solver.com/
+   - Commercial global optimization solver
+   - Handles mixed-integer nonlinear problems
+   - Good for constrained optimization
+
+2. **scipy.optimize alternatives:**
+   - `scipy.optimize.minimize` - local optimization with constraints
+   - `scipy.optimize.differential_evolution` - global optimization
+   - `scipy.optimize.dual_annealing` - global optimization
+
+3. **Optimal control solvers:**
+   - `pyomo` - optimization modeling in Python
+   - `casadi` - symbolic framework for optimal control
+   - `gekko` - dynamic optimization
+
+4. **Direct methods:**
+   - Discretize `f(t)` at N time points: `f = [f₀, f₁, ..., f_N]`
+   - Use gradient-based optimization with adjoint methods for gradients
+   - Consider piecewise constant or piecewise linear control
+
+**Key considerations:**
+- Control variable bounds: 0 ≤ f(t) ≤ 1
+- Computational cost: each objective evaluation requires forward integration
+- Gradient availability: can we compute gradients via adjoint method?
+- Multi-modal objective: global vs local optimization
+
 ## Project Structure
 
 ```
@@ -310,6 +377,7 @@ coin_equality/
 ├── CLAUDE.md                          # AI coding style guide
 ├── requirements.txt                   # Python dependencies
 ├── income_distribution.py             # Core income distribution functions
+├── economic_model.py                  # Forward model and ODE system
 ├── coin_equality (methods) v0.1.pdf   # Detailed methods document
 └── [source code directories]
 ```
