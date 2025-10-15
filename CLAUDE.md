@@ -19,6 +19,7 @@ This project prioritizes elegant, fail-fast code that surfaces errors quickly ra
 - Use numpy operations instead of loops and conditionals where possible
 - Compute once, use many times - move invariant calculations outside loops and create centralized helper functions
 - No backward compatibility - do not add conditional logic to support deprecated field names or old configurations. Update all code and configurations to use current conventions.
+- Use standard Python packages - prefer established numerical methods from scipy, numpy, etc. rather than implementing custom numerical algorithms
 
 
 ### Naming Conventions

@@ -111,7 +111,7 @@ U = ln(y) + ln((1-G)/(1+G)) + 2G/(1+G)                              for η = 1
 
 **Crossing Rank (no income change):**
 ```
-F* = 1 - [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^((G₂-G₁)/(2(G₂-G₁)))
+F* = 1 - [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^(((1+G₁)(1-G₂))/(2(G₂-G₁)))
 ```
 
 **Fraction of Income Redistributed:**
@@ -124,10 +124,20 @@ F* = 1 - [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^((G₂-G₁)/(2(G₂-G₁)))
 Δc(F*) = y · ΔL(F*)
 ```
 
-**New Gini Index with Partial Allocation to Abatement:**
+**Gini Index After Removal (all to abatement, f=1):**
 ```
-G₂(f) = (1-ΔL)/(1-f·ΔL) · [1 - (1 - G₁)^((1-ΔL(1-F*))/(1-ΔL))]
+G₂ᵣ = 1 - (1 - G₁)^((1-ΔL(1-F*))/(1-ΔL))
 ```
+
+**Effective Gini Index with Partial Allocation:**
+```
+G_eff(f) = (1-ΔL)/(1-f·ΔL) · [1 - (1 - G₁)^((1-ΔL(1-F*))/(1-ΔL))]
+```
+
+where:
+- `f = 0`: all resources go to redistribution → `G_eff(0)` = minimum (most equal)
+- `f = 1`: all resources go to abatement → `G_eff(1) = G₂ᵣ`
+- `0 < f < 1`: mixed allocation
 
 **Fraction of Emissions Abated:**
 ```
@@ -173,12 +183,72 @@ To maintain analytical tractability:
 
 4. **Income Distribution Mechanics**: Taxing the wealthy reduces the Gini index even if revenues are allocated to abatement rather than redistribution, but only redistribution increases current aggregate utility.
 
+## Implementation: Key Functions
+
+The `income_distribution.py` module provides the core mathematical functions for calculating income distribution metrics and effective Gini indices under different allocation scenarios.
+
+### Basic Conversion Functions
+
+- **`a_from_G(G)`** - Converts Gini index to Pareto distribution parameter `a` using equation (4)
+- **`L_pareto(F, G)`** - Calculates Lorenz curve value at population fraction `F` for a given Gini index (equation 2)
+
+### Redistribution Mechanics
+
+- **`crossing_rank_from_G(G1, G2)`** - Computes the population rank `F*` where income remains unchanged during redistribution from `G1` to `G2` (equation 10)
+
+- **`deltaL_G1_G2(G1, G2)`** - Calculates the fraction of total income `ΔL` redistributed when Gini shifts from `G1` to `G2` (equation 11). Uses log-space arithmetic for numerical stability.
+
+### Inverse Problem: Finding G2 from ΔL
+
+- **`_phi(r)`** - Helper function for numerical root finding; computes `φ(r) = (r-1) · r^(1/(r-1)-1)` with proper handling of edge cases
+
+- **`G2_from_deltaL(deltaL, G1)`** - **Solves the inverse problem**: given an initial Gini `G1` and a desired redistribution amount `ΔL`, numerically finds the target Gini `G2` that would result from full redistribution. Uses `scipy.optimize.root_scalar` with Brent's method. Returns `(G2, remainder)` where remainder is non-zero if `ΔL` exceeds the maximum possible for the Pareto family (caps at G2=0).
+
+### Effective Gini Calculation
+
+- **`G2_effective_pareto(f, deltaL, G1)`** - **Main function** that calculates the effective Gini index when fraction `f` of redistributable resources is allocated to emissions abatement instead of redistribution.
+
+  **Algorithm:**
+  1. Solves for full-redistribution target `G2` from `ΔL` and `G1`
+  2. Computes crossing rank `F*` for the `(G1 → G2)` transition
+  3. Calculates effective redistribution amount `ΔL_eff` at the same `F*` for partial allocation
+  4. Solves for Pareto-equivalent `G2_eff` from `ΔL_eff`
+
+  **Parameters:**
+  - `f = 0`: All resources to redistribution → minimum Gini (maximum equality)
+  - `f = 1`: All resources to abatement → maximum Gini given removal
+  - `0 < f < 1`: Mixed allocation
+
+  **Returns:** `(G2_eff, remainder)` tuple
+
+### Usage Example
+
+```python
+from income_distribution import G2_effective_pareto
+
+# Initial Gini index
+G1 = 0.4
+
+# Fraction of income to be redistributed (e.g., 5% of total income)
+deltaL = 0.05
+
+# Fraction allocated to abatement vs redistribution
+f = 0.5  # 50% to abatement, 50% to redistribution
+
+# Calculate effective Gini index
+G_eff, remainder = G2_effective_pareto(f, deltaL, G1)
+
+print(f"Effective Gini: {G_eff:.4f}")
+```
+
 ## Project Structure
 
 ```
 coin_equality/
 ├── README.md                          # This file
 ├── CLAUDE.md                          # AI coding style guide
+├── requirements.txt                   # Python dependencies
+├── income_distribution.py             # Core income distribution functions
 ├── coin_equality (methods) v0.1.pdf   # Detailed methods document
 └── [source code directories]
 ```
