@@ -48,11 +48,6 @@
     "atol": 1e-9
   },
 
-  "initial_state": {
-    "K": 500e12,
-    "Ecum": 2000e12
-  },
-
   "control_function": {
     "type": "constant",
     "value": 0.5

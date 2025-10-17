@@ -1,11 +1,12 @@
 """
 Test script for COIN_equality model integration.
 
-Demonstrates loading configuration and running the forward model.
+Demonstrates loading configuration, running the forward model, and saving outputs.
 """
 
 from parameters import load_configuration
 from economic_model import integrate_model
+from output import save_results
 
 def main():
     # Load configuration
@@ -63,6 +64,15 @@ def main():
     print(f'  ΔEcum = {results["Ecum"][-1] - results["Ecum"][0]:.3e} tCO2 ({100*(results["Ecum"][-1]/results["Ecum"][0] - 1):.1f}%)')
     print(f'  ΔT_change = {results["delta_T"][-1] - results["delta_T"][0]:.3f} °C')
     print(f'  ΔU = {results["U"][-1] - results["U"][0]:.6f}')
+
+    # Save results
+    print(f'\n' + '=' * 60)
+    print(f'Saving Results')
+    print(f'=' * 60)
+    output_paths = save_results(results, config.run_name)
+    print(f'Output directory: {output_paths["output_dir"]}')
+    print(f'CSV file:         {output_paths["csv_file"]}')
+    print(f'PDF file:         {output_paths["pdf_file"]}')
 
     print(f'\n' + '=' * 60)
 

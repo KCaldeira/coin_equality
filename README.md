@@ -322,14 +322,23 @@ Each JSON configuration file must contain:
    - Type-specific parameters (e.g., `initial_value`, `growth_rate`)
 
 5. **`integration_parameters`** - Solver configuration:
-   - `t_start`, `t_end`, `rtol`, `atol`
+   - `t_start`, `t_end`, `dt`, `rtol`, `atol`
 
-6. **`initial_state`** - Initial conditions:
-   - `K` (capital stock), `Ecum` (cumulative emissions)
-
-7. **`control_function`** - Allocation policy f(t):
+6. **`control_function`** - Allocation policy f(t):
    - `type`: "constant" or "piecewise_constant"
    - Type-specific parameters (e.g., `value` for constant)
+
+### Initial Conditions
+
+Initial conditions are **computed automatically** (not specified in JSON):
+
+- **`Ecum(0) = 0`**: No cumulative emissions at start
+- **`K(0)`**: Steady-state capital stock with no climate damage or abatement:
+  ```
+  K₀ = (s · A(0) / δ)^(1/(1-α)) · L(0)
+  ```
+
+This ensures the model starts from a consistent economic equilibrium.
 
 ### Example Configuration
 
@@ -383,6 +392,55 @@ The results dictionary contains arrays for:
 - **Tendencies**: `dK_dt`, `dEcum_dt`
 
 All arrays have the same length corresponding to time points from `t_start` to `t_end` in steps of `dt`.
+
+## Output and Visualization
+
+Model results are automatically saved to timestamped directories with CSV data and PDF plots.
+
+### Saving Results
+
+```python
+from output import save_results
+
+# After running integration
+output_paths = save_results(results, config.run_name)
+```
+
+This creates a directory: `./data/output/{run_name}_YYYYMMDD-HHMMSS/`
+
+### Output Files
+
+**CSV File (`results.csv`):**
+- Each column is a model variable
+- Each row is a time point
+- First row contains variable names (header)
+- Can be loaded into Excel, Python (pandas), R, etc.
+
+**PDF File (`plots.pdf`):**
+- Multi-page PDF with all time series plots
+- 6 plots per page (2 rows × 3 columns)
+- Each plot shows one variable vs time
+- Automatically uses scientific notation for large/small values
+
+### Example Workflow
+
+```python
+from parameters import load_configuration
+from economic_model import integrate_model
+from output import save_results
+
+# Load configuration
+config = load_configuration('config_baseline.json')
+
+# Run model
+results = integrate_model(config)
+
+# Save outputs
+output_paths = save_results(results, config.run_name)
+print(f"Results saved to: {output_paths['output_dir']}")
+```
+
+Run `python test_integration.py` to see a complete example with output generation.
 
 ## Next Steps
 
@@ -442,7 +500,12 @@ coin_equality/
 ├── requirements.txt                   # Python dependencies
 ├── income_distribution.py             # Core income distribution functions
 ├── economic_model.py                  # Economic production and tendency calculations
-├── parameters.py                      # Parameter definitions and test configurations
+├── parameters.py                      # Parameter definitions and configuration loading
+├── output.py                          # Output generation (CSV and PDF)
+├── test_integration.py                # Test script demonstrating complete workflow
+├── config_baseline.json               # Baseline scenario configuration
+├── config_high_inequality.json        # High inequality scenario configuration
+├── data/output/                       # Output directory (timestamped subdirectories)
 ├── coin_equality (methods) v0.1.pdf   # Detailed methods document
 └── [source code directories]
 ```

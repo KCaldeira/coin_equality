@@ -387,6 +387,39 @@ def _create_control_function(control_spec):
         )
 
 
+def calculate_initial_capital(s, A0, L0, delta, alpha):
+    """
+    Calculate steady-state initial capital stock.
+
+    Parameters
+    ----------
+    s : float
+        Savings rate
+    A0 : float
+        Total factor productivity at t=0
+    L0 : float
+        Population at t=0
+    delta : float
+        Capital depreciation rate (yr^-1)
+    alpha : float
+        Output elasticity of capital
+
+    Returns
+    -------
+    float
+        Initial capital stock at steady state with no climate damage or abatement
+
+    Notes
+    -----
+    At steady state with dK/dt = 0, no climate damage (Ω=0), and no abatement (Λ=0):
+        s · A · K^α · L^(1-α) = δ · K
+
+    Solving for K:
+        K = (s · A / δ)^(1/(1-α)) · L
+    """
+    return ((s * A0 / delta) ** (1 / (1 - alpha))) * L0
+
+
 def load_configuration(config_path):
     """
     Load model configuration from JSON file.
@@ -407,9 +440,12 @@ def load_configuration(config_path):
     - run_name: string identifier for this run
     - scalar_parameters: dict with all ScalarParameters fields
     - time_functions: dict with specs for A, L, sigma, theta1
-    - integration_parameters: dict with t_start, t_end, rtol, atol
-    - initial_state: dict with K, Ecum
+    - integration_parameters: dict with t_start, t_end, dt, rtol, atol
     - control_function: dict with type and parameters
+
+    Initial state is computed automatically:
+    - Ecum(0) = 0 (no cumulative emissions at start)
+    - K(0) = steady-state capital with no climate damage or abatement
 
     See config_baseline.json for an example.
     """
@@ -428,14 +464,29 @@ def load_configuration(config_path):
     # Create integration parameters
     integration_params = IntegrationParameters(**config_data['integration_parameters'])
 
-    # Extract initial state
-    initial_state = config_data['initial_state']
-
     # Create control function
     control_function = _create_control_function(config_data['control_function'])
 
     # Extract run name
     run_name = config_data['run_name']
+
+    # Calculate initial state automatically
+    t0 = integration_params.t_start
+    A0 = time_functions['A'](t0)
+    L0 = time_functions['L'](t0)
+
+    K0 = calculate_initial_capital(
+        s=scalar_params.s,
+        A0=A0,
+        L0=L0,
+        delta=scalar_params.delta,
+        alpha=scalar_params.alpha
+    )
+
+    initial_state = {
+        'K': K0,
+        'Ecum': 0.0
+    }
 
     return ModelConfiguration(
         run_name=run_name,
