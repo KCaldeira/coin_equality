@@ -224,13 +224,16 @@ class IntegrationParameters:
         Start time for integration (yr)
     t_end : float
         End time for integration (yr)
+    dt : float
+        Time step for Euler integration (yr)
     rtol : float
-        Relative tolerance for ODE solver
+        Relative tolerance for ODE solver (reserved for future use)
     atol : float
-        Absolute tolerance for ODE solver
+        Absolute tolerance for ODE solver (reserved for future use)
     """
     t_start: float
     t_end: float
+    dt: float
     rtol: float
     atol: float
 

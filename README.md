@@ -347,15 +347,46 @@ config = load_configuration('config_baseline.json')
 
 The `evaluate_params_at_time(t, config)` helper combines all parameters into a dict for use with `calculate_tendencies()`.
 
+### Testing
+
+Run `python test_integration.py` to verify the model integration with the baseline configuration.
+
+## Time Integration
+
+The model uses Euler's method with fixed time steps for transparent integration that ensures all functional relationships are satisfied exactly at output points.
+
+### Integration Function
+
+```python
+from economic_model import integrate_model
+from parameters import load_configuration
+
+config = load_configuration('config_baseline.json')
+results = integrate_model(config)
+```
+
+The `integrate_model(config)` function:
+- Uses simple Euler integration: `state(t+dt) = state(t) + dt * tendency(t)`
+- Time step `dt` is specified in the JSON configuration
+- Returns a dictionary containing time series for all model variables
+
+### Output Variables
+
+The results dictionary contains arrays for:
+- **Time**: `t`
+- **State variables**: `K`, `Ecum`
+- **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`
+- **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_eff`
+- **Climate variables**: `delta_T`, `Omega`, `E`
+- **Abatement variables**: `mu`, `Lambda`, `abatecost`, `delta_c`
+- **Inequality/utility**: `G_eff`, `U`
+- **Tendencies**: `dK_dt`, `dEcum_dt`
+
+All arrays have the same length corresponding to time points from `t_start` to `t_end` in steps of `dt`.
+
 ## Next Steps
 
-### 1. Create Time-Integration Routine
-
-Develop a forward model that integrates the system from `t=0` to `t=T` using the `ModelConfiguration` object.
-
-Use `scipy.integrate.solve_ivp` or similar ODE solver. The control variable `f(t)` will later be optimized but initially should be tested with simple functions (e.g., constant, linear, step functions).
-
-### 2. Test Forward Model
+### 1. Test Forward Model
 
 Validate the forward integration:
 - Run with physically reasonable parameters
@@ -364,7 +395,7 @@ Validate the forward integration:
 - Compare different `f(t)` trajectories manually
 - Calculate and track utility over time using `y_eff(t)` and `G_eff(t)`
 
-### 3. Create Optimization Code
+### 2. Create Optimization Code
 
 Find the optimal control trajectory `f(t)` that maximizes the objective function:
 

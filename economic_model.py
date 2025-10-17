@@ -5,7 +5,9 @@ This module implements the Solow-Swann growth model with climate damage
 and emissions abatement costs.
 """
 
+import numpy as np
 from income_distribution import G2_effective_pareto
+from parameters import evaluate_params_at_time
 
 
 def calculate_gross_production(K, L, A, alpha):
@@ -207,9 +209,74 @@ def calculate_capital_tendency(s, Y_net, delta, K):
     return s * Y_net - delta * K
 
 
+def calculate_effective_gini(f, deltaL, G1):
+    """
+    Calculate effective Gini index after partial redistribution.
+
+    Parameters
+    ----------
+    f : float
+        Fraction allocated to abatement (vs redistribution)
+    deltaL : float
+        Fraction of income available for redistribution
+    G1 : float
+        Initial Gini index
+
+    Returns
+    -------
+    float
+        Effective Gini index after allocation
+
+    Notes
+    -----
+    From equation (4.4): Uses Pareto-preserving two-step approach.
+    When f=0 (all to redistribution), Gini is minimized.
+    When f=1 (all to abatement), Gini is maximized.
+    """
+    G_eff, _ = G2_effective_pareto(f, deltaL, G1)
+    return G_eff
+
+
+def calculate_mean_utility(y_eff, G_eff, eta):
+    """
+    Calculate mean population utility using CRRA utility function.
+
+    Parameters
+    ----------
+    y_eff : float
+        Effective per-capita income (after abatement costs)
+    G_eff : float
+        Effective Gini index
+    eta : float
+        Coefficient of relative risk aversion
+
+    Returns
+    -------
+    float
+        Mean utility of the population
+
+    Notes
+    -----
+    From equation (3.5):
+    For η ≠ 1:
+        U = [y^(1-η)/(1-η)] · [(1+G)^η(1-G)^(1-η)/(1+G(2η-1))]^(1/(1-η))
+
+    For η = 1 (logarithmic utility):
+        U = ln(y) + ln((1-G)/(1+G)) + 2G/(1+G)
+    """
+    if np.abs(eta - 1.0) < 1e-10:
+        return np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
+
+    term1 = (y_eff ** (1 - eta)) / (1 - eta)
+    numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
+    denominator = 1 + G_eff * (2 * eta - 1)
+    term2 = (numerator / denominator) ** (1 / (1 - eta))
+    return term1 * term2
+
+
 def calculate_tendencies(state, params):
     """
-    Calculate time derivatives of state variables.
+    Calculate time derivatives and all derived variables.
 
     Parameters
     ----------
@@ -225,6 +292,7 @@ def calculate_tendencies(state, params):
         - 'k_damage': Climate damage coefficient (°C^-β)
         - 'beta': Climate damage exponent
         - 'k_climate': Temperature sensitivity (°C tCO2^-1)
+        - 'eta': Coefficient of relative risk aversion
         - 'A': Total factor productivity (current)
         - 'L': Population (current)
         - 'sigma': Carbon intensity of GDP (current, tCO2 $^-1)
@@ -237,13 +305,14 @@ def calculate_tendencies(state, params):
     Returns
     -------
     dict
-        Time derivatives:
-        - 'K': dK/dt ($ yr^-1)
-        - 'Ecum': dEcum/dt = E (tCO2 yr^-1)
+        Dictionary containing:
+        - Tendencies: 'dK_dt', 'dEcum_dt'
+        - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y, delta_c,
+          mu, Lambda, abatecost, y_eff, G_eff, U, E
 
     Notes
     -----
-    Calculation order follows equations 1.1-1.9 and 2.1:
+    Calculation order follows equations 1.1-1.9, 2.1-2.2, 3.5, 4.3-4.4:
     1. Y_gross from K, L, A, α (Eq 1.1)
     2. ΔT from Ecum, k_climate (Eq 2.2)
     3. Ω from ΔT, k_damage, β (Eq 1.2)
@@ -252,8 +321,12 @@ def calculate_tendencies(state, params):
     6. Δc from y, ΔL (Eq 4.3)
     7. μ from f, Δc, θ₁, θ₂ (Eq 1.4)
     8. Λ from θ₁, μ, θ₂ (Eq 1.5)
-    9. E from σ, μ, Y_gross (Eq 2.1)
-    10. dK/dt from s, Y_net, δ, K (Eq 1.9)
+    9. abatecost from Λ, Y_net (Eq 1.6)
+    10. y_eff from y, abatecost, L (Eq 1.8)
+    11. G_eff from f, ΔL, G₁ (Eq 4.4)
+    12. U from y_eff, G_eff, η (Eq 3.5)
+    13. E from σ, μ, Y_gross (Eq 2.1)
+    14. dK/dt from s, Y_net, δ, K (Eq 1.9)
     """
     # Extract state variables
     K = state['K']
@@ -266,12 +339,14 @@ def calculate_tendencies(state, params):
     k_damage = params['k_damage']
     beta = params['beta']
     k_climate = params['k_climate']
+    eta = params['eta']
     A = params['A']
     L = params['L']
     sigma = params['sigma']
     theta1 = params['theta1']
     theta2 = params['theta2']
     delta_L = params['delta_L']
+    G1 = params['G1']
     f = params['f']
 
     # Step 1: Calculate gross production (Eq 1.1)
@@ -283,11 +358,11 @@ def calculate_tendencies(state, params):
     # Step 3: Calculate climate damage fraction (Eq 1.2)
     Omega = calculate_climate_damage_fraction(delta_T, k_damage, beta)
 
-    # Step 4: Calculate net production after climate damage (Eq 1.3)
-    Y_net = (1 - Omega) * Y_gross
+    # Step 4: Calculate production after climate damage (Eq 1.3)
+    Y_damaged = calculate_damaged_production(Y_gross, Omega)
 
     # Step 5: Calculate mean per-capita income (Eq 1.7)
-    y = (1 - s) * Y_net / L
+    y = (1 - s) * Y_damaged / L
 
     # Step 6: Calculate per-capita amount redistributed (Eq 4.3)
     delta_c = y * delta_L
@@ -295,14 +370,157 @@ def calculate_tendencies(state, params):
     # Step 7: Calculate abatement fraction (Eq 1.4)
     mu = (f * delta_c / theta1) ** (1 / theta2)
 
-    # Step 8: Calculate emissions (Eq 2.1)
+    # Step 8: Calculate abatement cost fraction (Eq 1.5)
+    Lambda = calculate_abatement_cost_fraction(mu, theta1, theta2)
+
+    # Step 9: Calculate abatement cost (Eq 1.6)
+    abatecost = Lambda * Y_damaged
+
+    # Step 10: Calculate net production after abatement costs
+    Y_net = calculate_net_production(Y_damaged, Lambda)
+
+    # Step 11: Calculate effective per-capita income (Eq 1.8)
+    y_eff = y - abatecost / L
+
+    # Step 12: Calculate effective Gini index (Eq 4.4)
+    G_eff = calculate_effective_gini(f, delta_L, G1)
+
+    # Step 13: Calculate mean utility (Eq 3.5)
+    U = calculate_mean_utility(y_eff, G_eff, eta)
+
+    # Step 14: Calculate emissions (Eq 2.1)
     E = calculate_emissions(sigma, mu, Y_gross)
 
-    # Step 9: Calculate capital tendency (Eq 1.9)
+    # Step 15: Calculate capital tendency (Eq 1.9)
     dK_dt = calculate_capital_tendency(s, Y_net, delta, K)
 
-    # Step 10: Return tendencies
     return {
-        'K': dK_dt,
-        'Ecum': E
+        'dK_dt': dK_dt,
+        'dEcum_dt': E,
+        'Y_gross': Y_gross,
+        'delta_T': delta_T,
+        'Omega': Omega,
+        'Y_damaged': Y_damaged,
+        'Y_net': Y_net,
+        'y': y,
+        'delta_c': delta_c,
+        'mu': mu,
+        'Lambda': Lambda,
+        'abatecost': abatecost,
+        'y_eff': y_eff,
+        'G_eff': G_eff,
+        'U': U,
+        'E': E,
     }
+
+
+def integrate_model(config):
+    """
+    Integrate the model forward in time using Euler's method.
+
+    Parameters
+    ----------
+    config : ModelConfiguration
+        Complete model configuration including initial state, parameters,
+        and time-dependent functions
+
+    Returns
+    -------
+    dict
+        Time series results with keys:
+        - 't': array of time points
+        - 'K': array of capital stock values
+        - 'Ecum': array of cumulative emissions values
+        - 'A', 'L', 'sigma', 'theta1', 'f': time-dependent inputs
+        - All derived variables: Y_gross, delta_T, Omega, Y_damaged, Y_net,
+          y, delta_c, mu, Lambda, abatecost, y_eff, G_eff, U, E
+        - 'dK_dt', 'dEcum_dt': tendencies
+
+    Notes
+    -----
+    Uses simple Euler integration: state(t+dt) = state(t) + dt * tendency(t)
+    This ensures all functional relationships are satisfied exactly at output points.
+    """
+    # Extract integration parameters
+    t_start = config.integration_params.t_start
+    t_end = config.integration_params.t_end
+    dt = config.integration_params.dt
+
+    # Create time array
+    t_array = np.arange(t_start, t_end + dt, dt)
+    n_steps = len(t_array)
+
+    # Initialize state
+    state = config.initial_state.copy()
+
+    # Initialize storage for all variables
+    results = {
+        't': t_array,
+        'K': np.zeros(n_steps),
+        'Ecum': np.zeros(n_steps),
+        'A': np.zeros(n_steps),
+        'L': np.zeros(n_steps),
+        'sigma': np.zeros(n_steps),
+        'theta1': np.zeros(n_steps),
+        'f': np.zeros(n_steps),
+        'Y_gross': np.zeros(n_steps),
+        'delta_T': np.zeros(n_steps),
+        'Omega': np.zeros(n_steps),
+        'Y_damaged': np.zeros(n_steps),
+        'Y_net': np.zeros(n_steps),
+        'y': np.zeros(n_steps),
+        'delta_c': np.zeros(n_steps),
+        'mu': np.zeros(n_steps),
+        'Lambda': np.zeros(n_steps),
+        'abatecost': np.zeros(n_steps),
+        'y_eff': np.zeros(n_steps),
+        'G_eff': np.zeros(n_steps),
+        'U': np.zeros(n_steps),
+        'E': np.zeros(n_steps),
+        'dK_dt': np.zeros(n_steps),
+        'dEcum_dt': np.zeros(n_steps),
+    }
+
+    # Time stepping loop
+    for i, t in enumerate(t_array):
+        # Evaluate time-dependent parameters at current time
+        params = evaluate_params_at_time(t, config)
+
+        # Calculate all variables and tendencies at current time
+        outputs = calculate_tendencies(state, params)
+
+        # Store state variables
+        results['K'][i] = state['K']
+        results['Ecum'][i] = state['Ecum']
+
+        # Store time-dependent inputs
+        results['A'][i] = params['A']
+        results['L'][i] = params['L']
+        results['sigma'][i] = params['sigma']
+        results['theta1'][i] = params['theta1']
+        results['f'][i] = params['f']
+
+        # Store all derived variables
+        results['Y_gross'][i] = outputs['Y_gross']
+        results['delta_T'][i] = outputs['delta_T']
+        results['Omega'][i] = outputs['Omega']
+        results['Y_damaged'][i] = outputs['Y_damaged']
+        results['Y_net'][i] = outputs['Y_net']
+        results['y'][i] = outputs['y']
+        results['delta_c'][i] = outputs['delta_c']
+        results['mu'][i] = outputs['mu']
+        results['Lambda'][i] = outputs['Lambda']
+        results['abatecost'][i] = outputs['abatecost']
+        results['y_eff'][i] = outputs['y_eff']
+        results['G_eff'][i] = outputs['G_eff']
+        results['U'][i] = outputs['U']
+        results['E'][i] = outputs['E']
+        results['dK_dt'][i] = outputs['dK_dt']
+        results['dEcum_dt'][i] = outputs['dEcum_dt']
+
+        # Euler step: update state for next iteration (skip on last step)
+        if i < n_steps - 1:
+            state['K'] = state['K'] + dt * outputs['dK_dt']
+            state['Ecum'] = state['Ecum'] + dt * outputs['dEcum_dt']
+
+    return results

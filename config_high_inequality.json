@@ -43,6 +43,7 @@
   "integration_parameters": {
     "t_start": 0.0,
     "t_end": 100.0,
+    "dt": 1.0,
     "rtol": 1e-6,
     "atol": 1e-9
   },
