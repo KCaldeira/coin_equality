@@ -183,9 +183,9 @@ class ScalarParameters:
         Capital depreciation rate (yr^-1)
     s : float
         Savings rate (fraction of net production)
-    k_damage : float
-        Climate damage coefficient (°C^-beta)
-    beta : float
+    k_damage_coeff : float
+        Climate damage coefficient (°C^-k_damage_exp)
+    k_damage_exp : float
         Climate damage exponent
     k_climate : float
         Temperature sensitivity to cumulative emissions (°C tCO2^-1)
@@ -203,8 +203,8 @@ class ScalarParameters:
     alpha: float
     delta: float
     s: float
-    k_damage: float
-    beta: float
+    k_damage_coeff: float
+    k_damage_exp: float
     k_climate: float
     eta: float
     rho: float
@@ -290,7 +290,7 @@ def evaluate_params_at_time(t, config):
     dict
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
-        'alpha', 'delta', 's', 'k_damage', 'beta', 'k_climate',
+        'alpha', 'delta', 's', 'k_damage_coeff', 'k_damage_exp', 'k_climate',
         'eta', 'rho', 'G1', 'deltaL', 'theta2',
         'A', 'L', 'sigma', 'theta1', 'f'
     """
@@ -302,8 +302,8 @@ def evaluate_params_at_time(t, config):
         'alpha': sp.alpha,
         'delta': sp.delta,
         's': sp.s,
-        'k_damage': sp.k_damage,
-        'beta': sp.beta,
+        'k_damage_coeff': sp.k_damage_coeff,
+        'k_damage_exp': sp.k_damage_exp,
         'k_climate': sp.k_climate,
         'eta': sp.eta,
         'rho': sp.rho,
@@ -420,6 +420,23 @@ def calculate_initial_capital(s, A0, L0, delta, alpha):
     return ((s * A0 / delta) ** (1 / (1 - alpha))) * L0
 
 
+def _filter_description_keys(d):
+    """
+    Remove keys starting with '_' from dictionary (used for descriptions/comments).
+
+    Parameters
+    ----------
+    d : dict
+        Dictionary that may contain description keys
+
+    Returns
+    -------
+    dict
+        Dictionary with all keys starting with '_' removed
+    """
+    return {k: v for k, v in d.items() if not k.startswith('_')}
+
+
 def load_configuration(config_path):
     """
     Load model configuration from JSON file.
@@ -447,25 +464,31 @@ def load_configuration(config_path):
     - Ecum(0) = 0 (no cumulative emissions at start)
     - K(0) = steady-state capital with no climate damage or abatement
 
+    Keys starting with '_' are treated as comments/descriptions and ignored.
+
     See config_baseline.json for an example.
     """
     with open(config_path, 'r') as f:
         config_data = json.load(f)
 
-    # Create scalar parameters
-    scalar_params = ScalarParameters(**config_data['scalar_parameters'])
+    # Create scalar parameters (filter out description keys)
+    scalar_params_data = _filter_description_keys(config_data['scalar_parameters'])
+    scalar_params = ScalarParameters(**scalar_params_data)
 
-    # Create time-dependent functions
+    # Create time-dependent functions (filter out description keys)
     time_functions = {
-        name: _create_time_function(spec)
+        name: _create_time_function(_filter_description_keys(spec))
         for name, spec in config_data['time_functions'].items()
+        if not name.startswith('_')
     }
 
-    # Create integration parameters
-    integration_params = IntegrationParameters(**config_data['integration_parameters'])
+    # Create integration parameters (filter out description keys)
+    integration_params_data = _filter_description_keys(config_data['integration_parameters'])
+    integration_params = IntegrationParameters(**integration_params_data)
 
-    # Create control function
-    control_function = _create_control_function(config_data['control_function'])
+    # Create control function (filter out description keys)
+    control_function_data = _filter_description_keys(config_data['control_function'])
+    control_function = _create_control_function(control_function_data)
 
     # Extract run name
     run_name = config_data['run_name']

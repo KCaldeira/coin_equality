@@ -205,21 +205,78 @@ where:
 
 ## Key Parameters
 
-| Symbol | Description | Units |
-|--------|-------------|-------|
-| `ρ` | Pure rate of time preference | yr⁻¹ |
-| `η` | Coefficient of relative risk aversion | - |
-| `G` | Gini index (0 = perfect equality, 1 = maximum inequality) | - |
-| `α` | Output elasticity of capital (capital share of income) | - |
-| `s` | Savings rate | - |
-| `δ` | Capital depreciation rate | yr⁻¹ |
-| `k_damage` | Climate damage coefficient | °C⁻ᵝ |
-| `β` | Climate damage exponent | - |
-| `σ(t)` | Carbon intensity of GDP | tCO₂ $⁻¹ |
-| `θ₁(t)` | Abatement cost coefficient | - |
-| `θ₂` | Abatement cost exponent | - |
-| `k_climate` | Temperature sensitivity to cumulative emissions | °C tCO₂⁻¹ |
-| `f` | Fraction of redistributable resources allocated to abatement | - |
+Parameters are organized into groups as specified in the JSON configuration file.
+
+### Scalar Parameters (Time-Invariant)
+
+Economic parameters:
+
+| Parameter | Description | Units | JSON Key |
+|-----------|-------------|-------|----------|
+| `α` | Output elasticity of capital (capital share of income) | - | `alpha` |
+| `δ` | Capital depreciation rate | yr⁻¹ | `delta` |
+| `s` | Savings rate (fraction of net production saved) | - | `s` |
+
+Climate parameters:
+
+| Parameter | Description | Units | JSON Key |
+|-----------|-------------|-------|----------|
+| `k_damage_coeff` | Climate damage coefficient | °C⁻ᵏ_ᵈᵃᵐᵃᵍᵉ_ᵉˣᵖ | `k_damage_coeff` |
+| `k_damage_exp` | Climate damage exponent | - | `k_damage_exp` |
+| `k_climate` | Temperature sensitivity to cumulative emissions | °C tCO₂⁻¹ | `k_climate` |
+
+Utility and inequality parameters:
+
+| Parameter | Description | Units | JSON Key |
+|-----------|-------------|-------|----------|
+| `η` | Coefficient of relative risk aversion (CRRA) | - | `eta` |
+| `ρ` | Pure rate of time preference | yr⁻¹ | `rho` |
+| `G₁` | Initial Gini index (0 = perfect equality, 1 = max inequality) | - | `G1` |
+| `ΔL` | Fraction of income available for redistribution | - | `deltaL` |
+
+Abatement cost parameters:
+
+| Parameter | Description | Units | JSON Key |
+|-----------|-------------|-------|----------|
+| `θ₂` | Abatement cost exponent | - | `theta2` |
+
+### Time-Dependent Functions
+
+These functions are evaluated at each time step:
+
+| Function | Description | Units | JSON Key |
+|----------|-------------|-------|----------|
+| `A(t)` | Total factor productivity | - | `A` |
+| `L(t)` | Population | people | `L` |
+| `σ(t)` | Carbon intensity of GDP | tCO₂ $⁻¹ | `sigma` |
+| `θ₁(t)` | Abatement cost coefficient | - | `theta1` |
+
+Each function is specified by `type` and type-specific parameters (e.g., `initial_value`, `growth_rate`).
+
+### Control Variable
+
+| Variable | Description | Units | JSON Key |
+|----------|-------------|-------|----------|
+| `f(t)` | Fraction of redistributable resources allocated to abatement | - | `control_function` |
+
+The control function determines the allocation between emissions abatement and income redistribution (0 = all to redistribution, 1 = all to abatement).
+
+### Integration Parameters
+
+| Parameter | Description | Units | JSON Key |
+|-----------|-------------|-------|----------|
+| `t_start` | Start time for integration | yr | `t_start` |
+| `t_end` | End time for integration | yr | `t_end` |
+| `dt` | Time step for Euler integration | yr | `dt` |
+| `rtol` | Relative tolerance (reserved for future use) | - | `rtol` |
+| `atol` | Absolute tolerance (reserved for future use) | - | `atol` |
+
+### Initial Conditions (Computed Automatically)
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `K(0)` | `(s·A(0)/δ)^(1/(1-α))·L(0)` | Steady-state capital stock |
+| `Ecum(0)` | `0` | No cumulative emissions at start |
 
 ## Model Features
 
@@ -312,7 +369,7 @@ Each JSON configuration file must contain:
 2. **`description`** - Optional description of the scenario
 3. **`scalar_parameters`** - Time-invariant model constants:
    - Economic: `alpha`, `delta`, `s`
-   - Climate: `k_damage`, `beta`, `k_climate`
+   - Climate: `k_damage_coeff`, `k_damage_exp`, `k_climate`
    - Utility: `eta`, `rho`
    - Distribution: `G1`, `deltaL`
    - Abatement: `theta2`
@@ -327,6 +384,27 @@ Each JSON configuration file must contain:
 6. **`control_function`** - Allocation policy f(t):
    - `type`: "constant" or "piecewise_constant"
    - Type-specific parameters (e.g., `value` for constant)
+
+### Adding Comments with `_description` Fields
+
+Any JSON key starting with `_` (underscore) is treated as a comment/description and ignored during loading. This allows you to document parameters directly in the configuration file:
+
+```json
+"scalar_parameters": {
+  "_description": "Time-invariant model parameters",
+  "alpha": 0.3,
+  "_alpha": "Capital share of income",
+  "delta": 0.10,
+  "_delta": "Capital depreciation rate (10% per year)"
+}
+```
+
+You can add descriptions at any level:
+- **Section level**: `"_description"` to describe a whole section
+- **Parameter level**: `"_parameter_name"` to describe individual parameters
+- **Nested levels**: Works in nested dictionaries like time functions
+
+See `config_baseline.json` for extensive examples of documentation.
 
 ### Initial Conditions
 

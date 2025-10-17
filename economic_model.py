@@ -61,7 +61,7 @@ def calculate_temperature_change(Ecum, k_climate):
     return k_climate * Ecum
 
 
-def calculate_climate_damage_fraction(delta_T, k_damage, beta):
+def calculate_climate_damage_fraction(delta_T, k_damage_coeff, k_damage_exp):
     """
     Calculate fraction of production lost to climate damage.
 
@@ -69,9 +69,9 @@ def calculate_climate_damage_fraction(delta_T, k_damage, beta):
     ----------
     delta_T : float
         Global mean temperature increase (°C)
-    k_damage : float
-        Climate damage coefficient (°C^-β)
-    beta : float
+    k_damage_coeff : float
+        Climate damage coefficient (°C^-k_damage_exp)
+    k_damage_exp : float
         Climate damage exponent
 
     Returns
@@ -81,9 +81,9 @@ def calculate_climate_damage_fraction(delta_T, k_damage, beta):
 
     Notes
     -----
-    From equation (21): Ω(t) = k_damage · ΔT(t)^β
+    From equation (21): Ω(t) = k_damage_coeff · ΔT(t)^k_damage_exp
     """
-    return k_damage * (delta_T ** beta)
+    return k_damage_coeff * (delta_T ** k_damage_exp)
 
 
 def calculate_damaged_production(Y_gross, Omega):
@@ -289,8 +289,8 @@ def calculate_tendencies(state, params):
         - 'alpha': Output elasticity of capital
         - 'delta': Capital depreciation rate (yr^-1)
         - 's': Savings rate
-        - 'k_damage': Climate damage coefficient (°C^-β)
-        - 'beta': Climate damage exponent
+        - 'k_damage_coeff': Climate damage coefficient (°C^-k_damage_exp)
+        - 'k_damage_exp': Climate damage exponent
         - 'k_climate': Temperature sensitivity (°C tCO2^-1)
         - 'eta': Coefficient of relative risk aversion
         - 'A': Total factor productivity (current)
@@ -315,7 +315,7 @@ def calculate_tendencies(state, params):
     Calculation order follows equations 1.1-1.9, 2.1-2.2, 3.5, 4.3-4.4:
     1. Y_gross from K, L, A, α (Eq 1.1)
     2. ΔT from Ecum, k_climate (Eq 2.2)
-    3. Ω from ΔT, k_damage, β (Eq 1.2)
+    3. Ω from ΔT, k_damage_coeff, k_damage_exp (Eq 1.2)
     4. Y_net from Y_gross, Ω (Eq 1.3)
     5. y from Y_net, L, s (Eq 1.7)
     6. Δc from y, ΔL (Eq 4.3)
@@ -336,8 +336,8 @@ def calculate_tendencies(state, params):
     alpha = params['alpha']
     delta = params['delta']
     s = params['s']
-    k_damage = params['k_damage']
-    beta = params['beta']
+    k_damage_coeff = params['k_damage_coeff']
+    k_damage_exp = params['k_damage_exp']
     k_climate = params['k_climate']
     eta = params['eta']
     A = params['A']
@@ -356,7 +356,7 @@ def calculate_tendencies(state, params):
     delta_T = calculate_temperature_change(Ecum, k_climate)
 
     # Step 3: Calculate climate damage fraction (Eq 1.2)
-    Omega = calculate_climate_damage_fraction(delta_T, k_damage, beta)
+    Omega = calculate_climate_damage_fraction(delta_T, k_damage_coeff, k_damage_exp)
 
     # Step 4: Calculate production after climate damage (Eq 1.3)
     Y_damaged = calculate_damaged_production(Y_gross, Omega)
