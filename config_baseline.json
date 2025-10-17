@@ -1,0 +1,59 @@
+{
+  "run_name": "baseline",
+  "description": "Baseline scenario with moderate growth and 50-50 allocation",
+
+  "scalar_parameters": {
+    "alpha": 0.3,
+    "delta": 0.05,
+    "s": 0.2,
+    "k_damage": 0.002,
+    "beta": 2.0,
+    "k_climate": 1e-15,
+    "eta": 1.5,
+    "rho": 0.015,
+    "G1": 0.4,
+    "deltaL": 0.05,
+    "theta2": 2.0
+  },
+
+  "time_functions": {
+    "A": {
+      "type": "exponential_growth",
+      "initial_value": 1.0,
+      "growth_rate": 0.01
+    },
+    "L": {
+      "type": "logistic_growth",
+      "L0": 8e9,
+      "L_inf": 10e9,
+      "growth_rate": 0.02
+    },
+    "sigma": {
+      "type": "exponential_growth",
+      "initial_value": 5e-13,
+      "growth_rate": -0.02
+    },
+    "theta1": {
+      "type": "exponential_growth",
+      "initial_value": 0.05,
+      "growth_rate": -0.01
+    }
+  },
+
+  "integration_parameters": {
+    "t_start": 0.0,
+    "t_end": 100.0,
+    "rtol": 1e-6,
+    "atol": 1e-9
+  },
+
+  "initial_state": {
+    "K": 500e12,
+    "Ecum": 2000e12
+  },
+
+  "control_function": {
+    "type": "constant",
+    "value": 0.5
+  }
+}

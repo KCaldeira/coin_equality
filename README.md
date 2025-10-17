@@ -300,27 +300,62 @@ G_eff, remainder = G2_effective_pareto(f, deltaL, G1)
 print(f"Effective Gini: {G_eff:.4f}")
 ```
 
+## Parameter Organization
+
+The model uses JSON configuration files to specify all parameters. Configuration is loaded via `load_configuration(config_path)` in `parameters.py`.
+
+### Configuration File Structure
+
+Each JSON configuration file must contain:
+
+1. **`run_name`** - String identifier used for output directory naming
+2. **`description`** - Optional description of the scenario
+3. **`scalar_parameters`** - Time-invariant model constants:
+   - Economic: `alpha`, `delta`, `s`
+   - Climate: `k_damage`, `beta`, `k_climate`
+   - Utility: `eta`, `rho`
+   - Distribution: `G1`, `deltaL`
+   - Abatement: `theta2`
+
+4. **`time_functions`** - Time-dependent functions (A, L, sigma, theta1), each specified with:
+   - `type`: "constant", "exponential_growth", "logistic_growth", or "piecewise_linear"
+   - Type-specific parameters (e.g., `initial_value`, `growth_rate`)
+
+5. **`integration_parameters`** - Solver configuration:
+   - `t_start`, `t_end`, `rtol`, `atol`
+
+6. **`initial_state`** - Initial conditions:
+   - `K` (capital stock), `Ecum` (cumulative emissions)
+
+7. **`control_function`** - Allocation policy f(t):
+   - `type`: "constant" or "piecewise_constant"
+   - Type-specific parameters (e.g., `value` for constant)
+
+### Example Configuration
+
+See `config_baseline.json` for a complete example. To create new scenarios, copy and modify this file.
+
+### Loading Configuration
+
+```python
+from parameters import load_configuration
+
+config = load_configuration('config_baseline.json')
+# config.run_name contains the run identifier
+# config.scalar_params, config.time_functions, etc. are populated
+```
+
+The `evaluate_params_at_time(t, config)` helper combines all parameters into a dict for use with `calculate_tendencies()`.
+
 ## Next Steps
 
-### 1. Define Test Case Parameters and Exogenous Functions
+### 1. Create Time-Integration Routine
 
-Create a test configuration with:
-- Initial conditions: `K(0)`, `Ecum(0)`
-- Constant parameters: `α`, `δ`, `s`, `k_damage`, `β`, `k_climate`, `η`, `G₁`, `ΔL`
-- Time-dependent exogenous functions: `A(t)`, `L(t)`, `σ(t)`, `θ₁(t)`, `θ₂`
-
-These should be defined as Python functions or data structures that can be evaluated at any time `t`.
-
-### 2. Create Time-Integration Routine
-
-Develop a forward model that integrates the system from `t=0` to `t=T` given:
-- Initial state: `state_0 = {'K': K0, 'Ecum': Ecum0}`
-- Control trajectory: `f(t)` - the fraction allocated to abatement vs redistribution
-- Parameters: including time-dependent functions
+Develop a forward model that integrates the system from `t=0` to `t=T` using the `ModelConfiguration` object.
 
 Use `scipy.integrate.solve_ivp` or similar ODE solver. The control variable `f(t)` will later be optimized but initially should be tested with simple functions (e.g., constant, linear, step functions).
 
-### 3. Test Forward Model
+### 2. Test Forward Model
 
 Validate the forward integration:
 - Run with physically reasonable parameters
@@ -329,7 +364,7 @@ Validate the forward integration:
 - Compare different `f(t)` trajectories manually
 - Calculate and track utility over time using `y_eff(t)` and `G_eff(t)`
 
-### 4. Create Optimization Code
+### 3. Create Optimization Code
 
 Find the optimal control trajectory `f(t)` that maximizes the objective function:
 
@@ -375,7 +410,8 @@ coin_equality/
 ├── CLAUDE.md                          # AI coding style guide
 ├── requirements.txt                   # Python dependencies
 ├── income_distribution.py             # Core income distribution functions
-├── economic_model.py                  # Forward model and ODE system
+├── economic_model.py                  # Economic production and tendency calculations
+├── parameters.py                      # Parameter definitions and test configurations
 ├── coin_equality (methods) v0.1.pdf   # Detailed methods document
 └── [source code directories]
 ```
