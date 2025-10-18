@@ -626,22 +626,46 @@ See the **Testing the Forward Model** section above for detailed instructions on
 
 ## Next Steps
 
-### 1. Implement Constant f Optimization
+### 1. Implement Single Control Point Optimization
 
-Create an intermediate optimization step to find the optimal constant allocation fraction `f_constant` that maximizes the objective function:
+Create an optimization framework using a **control point parameterization** approach, starting with a single control point to find the optimal constant allocation fraction.
 
+**Objective:**
 ```
-max ∫₀^T e^(-ρt) · U(t) · L(t) dt,  subject to 0 ≤ f_constant ≤ 1
+max ∫₀^T e^(-ρt) · U(t) · L(t) dt,  subject to 0 ≤ f₀ ≤ 1
 ```
 
-where `f(t) = f_constant` for all t.
+where `f(t)` is determined by a single control point at t=0.
+
+**Control point parameterization design:**
+
+The control function `f(t)` is defined by discrete control points at specified times:
+- **Control points**: `[(t₀, f₀), (t₁, f₁), ..., (t_N, f_N)]`
+- **Interpolation rule**: For `tᵢ ≤ t < tᵢ₊₁`, linearly interpolate between `fᵢ` and `fᵢ₊₁`
+- **Extrapolation rule**: For `t ≥ t_N`, use `f(t) = f_N` (constant extrapolation beyond last control point)
+
+**Special case - single control point:**
+- Control points: `[(0, f₀)]`
+- Result: `f(t) = f₀` for all t (constant trajectory)
+- Optimization variable: single scalar `f₀`
+
+This design ensures the framework naturally handles both constant (1 control point) and time-varying (multiple control points) optimization.
 
 **Implementation approach:**
-- Use **NLopt with BOBYQA algorithm** for derivative-free optimization
-- Create a single-variable optimization routine that takes `f_constant` as input
-- Use the existing forward model with constant `f` in the control function
-- Implement objective function calculation (discounted utility integral)
-- Design the optimization framework to be easily extensible to multi-variable problems
+1. **Control point evaluation function:**
+   - Takes list of `(time, value)` control points and evaluation time `t`
+   - Returns `f(t)` using linear interpolation and constant extrapolation
+   - Special case: single control point returns constant for all `t`
+
+2. **Optimization using NLopt with BOBYQA:**
+   - Start with single control point at t=0
+   - Optimize the value `f₀` to maximize objective function
+   - Framework designed to extend to multiple control points in Step 2
+
+3. **Integration with existing model:**
+   - Modify control function to accept control point parameterization
+   - Use forward model to evaluate objective for given control points
+   - Calculate discounted utility integral
 
 **Why NLopt/BOBYQA:**
 - **Derivative-free**: Perfect for simulation-based objective functions
@@ -660,86 +684,100 @@ pip install nlopt
 import nlopt
 import numpy as np
 
+def evaluate_control_function(control_points, t):
+    """
+    Evaluate f(t) from control points using linear interpolation
+    and constant extrapolation beyond last point.
+
+    control_points: list of (time, value) tuples
+    t: evaluation time or array of times
+
+    For single control point at t=0, returns constant for all t.
+    """
+    pass
+
 class UtilityOptimizer:
-    def optimize_constant_f(self):
+    def optimize_single_control_point(self):
         opt = nlopt.opt(nlopt.LN_BOBYQA, 1)  # 1D optimization
-        opt.set_bounds([0], [1])             # 0 ≤ f ≤ 1
+        opt.set_bounds([0], [1])             # 0 ≤ f₀ ≤ 1
         opt.set_min_objective(self._objective_function)
         opt.set_maxeval(1000)
-        return opt.optimize([0.5])           # Start at f=0.5
+        return opt.optimize([0.5])           # Start at f₀=0.5
 ```
 
-**Key benefits of this intermediate step:**
-- Validates the optimization framework without complex control trajectories
-- Tests objective function calculation and gradient estimation
-- Provides benchmark results for comparison with time-dependent optimization
-- Establishes code structure that can be extended to multi-dimensional optimization
-- Allows testing of different optimization algorithms and convergence criteria
+**Key benefits of this approach:**
+- Complete control point framework implemented in Step 1 (no new Python code needed in Step 2)
+- Single control point naturally produces constant `f(t)`
+- Step 2 focuses purely on optimization refinement (convergence, multi-point strategies)
+- Easy extension: add more control points without changing evaluation code
 
 **Expected deliverables:**
-- `optimization.py` module with extensible optimization framework
-- Optimal constant `f_constant` value for baseline scenario
-- Sensitivity analysis showing objective function vs. `f_constant`
+- `optimization.py` module with control point evaluation and optimization framework
+- Optimal single control point value `f₀` for baseline scenario
+- Sensitivity analysis showing objective function vs. `f₀`
 - Comparison charts showing optimal constant vs. arbitrary constant values
 - Documentation of optimization results and convergence behavior
 
-### 2. Extend to Time-Dependent Optimization
+### 2. Refine Multi-Point Time-Dependent Optimization
 
-Find the optimal control trajectory `f(t)` that maximizes the objective function:
+Extend the single control point optimization to find optimal time-varying trajectories `f(t)` by using multiple control points. Since the control point framework is already implemented in Step 1, this step focuses on **optimization strategy and convergence**.
 
+**Objective:**
 ```
 max ∫₀^T e^(-ρt) · U(t) · L(t) dt
 ```
 
-where `U(t)` is calculated from `y_eff(t)`, `G_eff(t)`, and `η` (Eq. 3.5).
+where `f(t)` is defined by N control points: `[(t₀, f₀), (t₁, f₁), ..., (t_{N-1}, f_{N-1})]`
 
 **Implementation approach:**
 
-Building on the constant f optimization framework, extend to time-dependent control using **NLopt with AUGLAG + BOBYQA**:
+Use the existing control point evaluation framework from Step 1 with multiple control points:
 
-1. **Control point parameterization:**
-   - Define f values at discrete time points: `f = [f₀, f₁, ..., f_N]`
-   - Use interpolation between control points (linear or spline)
-   - Bounds: `0 ≤ fᵢ ≤ 1` for all control points
+1. **Multi-variable optimization setup:**
+   - Select control point times (e.g., evenly spaced or strategically placed)
+   - Optimize N control point values: `[f₀, f₁, ..., f_{N-1}]`
+   - Each fᵢ bounded: `0 ≤ fᵢ ≤ 1`
+   - Use existing `evaluate_control_function()` - no new code needed
 
-2. **NLopt AUGLAG + BOBYQA approach:**
+2. **NLopt optimization strategy:**
    ```python
-   # Multi-variable optimization with interpolation
-   def optimize_time_dependent_f(self, control_times):
+   def optimize_multiple_control_points(self, control_times):
        n_points = len(control_times)
-       opt = nlopt.opt(nlopt.AUGLAG, n_points)
-       local_opt = nlopt.opt(nlopt.LN_BOBYQA, n_points)
-       opt.set_local_optimizer(local_opt)
-
+       opt = nlopt.opt(nlopt.LN_BOBYQA, n_points)  # Start with BOBYQA
        opt.set_lower_bounds([0] * n_points)
        opt.set_upper_bounds([1] * n_points)
-       opt.set_min_objective(self._objective_time_dependent)
+       opt.set_min_objective(self._objective_function)  # Same objective as Step 1
+       opt.set_maxeval(10000)
        return opt.optimize(initial_guess)
    ```
 
-3. **Interpolation options:**
-   - **Linear**: `scipy.interpolate.interp1d(control_times, f_values, kind='linear')`
-   - **Spline**: `scipy.interpolate.UnivariateSpline(control_times, f_values)`
+3. **Refinement considerations (focus of this step):**
+   - **Number of control points**: Start with 2-3, gradually increase
+   - **Control point placement**: Uniform vs. adaptive spacing
+   - **Initial guess strategies**: Constant, linear ramp, or Step 1 optimal
+   - **Convergence criteria**: Balance accuracy vs. computational cost
+   - **Algorithm comparison**: BOBYQA vs. AUGLAG+BOBYQA for global search
+   - **Multi-modal objective**: Test different initial guesses to find global optimum
 
-**Alternative approaches for comparison:**
-   - `scipy.optimize.differential_evolution` - global optimization
-   - `scipy.optimize.dual_annealing` - global optimization
+4. **Alternative optimization algorithms to explore:**
+   - `nlopt.LN_BOBYQA` - Local derivative-free (baseline)
+   - `nlopt.AUGLAG` + local optimizer - Augmented Lagrangian for constraints
+   - `scipy.optimize.differential_evolution` - Global optimization
+   - `scipy.optimize.dual_annealing` - Simulated annealing
 
-3. **Optimal control solvers:**
-   - `pyomo` - optimization modeling in Python
-   - `casadi` - symbolic framework for optimal control
-   - `gekko` - dynamic optimization
+**Key research questions (no coding required):**
+- How many control points provide sufficient resolution?
+- Is the objective function unimodal or multi-modal?
+- What initial guesses lead to global vs. local optima?
+- Does optimal trajectory have recognizable structure (e.g., monotonic, switching)?
+- Computational cost vs. accuracy tradeoff
 
-4. **Direct methods:**
-   - Discretize `f(t)` at N time points: `f = [f₀, f₁, ..., f_N]`
-   - Use gradient-based optimization with adjoint methods for gradients
-   - Consider piecewise constant or piecewise linear control
-
-**Key considerations:**
-- Control variable bounds: 0 ≤ f(t) ≤ 1
-- Computational cost: each objective evaluation requires forward integration
-- Gradient availability: can we compute gradients via adjoint method?
-- Multi-modal objective: global vs local optimization
+**Expected deliverables:**
+- Optimal time-dependent trajectories for baseline scenario with varying N
+- Convergence studies showing objective value vs. number of control points
+- Comparison of optimization algorithms and initial guess strategies
+- Analysis of trajectory structure and economic interpretation
+- Computational performance metrics (evaluations required, wall-clock time)
 
 ## Project Structure
 
