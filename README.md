@@ -641,8 +641,12 @@ where `f(t)` is determined by a single control point at t=0.
 
 The control function `f(t)` is defined by discrete control points at specified times:
 - **Control points**: `[(t₀, f₀), (t₁, f₁), ..., (t_N, f_N)]`
-- **Interpolation rule**: For `tᵢ ≤ t < tᵢ₊₁`, linearly interpolate between `fᵢ` and `fᵢ₊₁`
-- **Extrapolation rule**: For `t ≥ t_N`, use `f(t) = f_N` (constant extrapolation beyond last control point)
+- **Interpolation rule**: Use Pchip (Piecewise Cubic Hermite Interpolating Polynomial) from `scipy.interpolate.PchipInterpolator`
+  - Provides C¹ continuity (continuous first derivatives)
+  - Shape-preserving and monotonicity-preserving
+  - Guarantees no overshoot beyond the range of control point values
+  - Ensures `f(t)` remains within [0,1] when all control points satisfy 0 ≤ fᵢ ≤ 1
+- **Extrapolation rule**: For `t > t_max` where `t_max = max(t₀, t₁, ..., t_N)`, use `f(t) = f(t_max)` (constant extrapolation beyond last control point)
 
 **Special case - single control point:**
 - Control points: `[(0, f₀)]`
@@ -686,12 +690,15 @@ import numpy as np
 
 def evaluate_control_function(control_points, t):
     """
-    Evaluate f(t) from control points using linear interpolation
+    Evaluate f(t) from control points using Pchip interpolation
     and constant extrapolation beyond last point.
 
     control_points: list of (time, value) tuples
     t: evaluation time or array of times
 
+    Uses scipy.interpolate.PchipInterpolator for shape-preserving
+    interpolation with continuous derivatives.
+    For t > t_max, returns f(t_max) (constant extrapolation).
     For single control point at t=0, returns constant for all t.
     """
     pass
@@ -800,12 +807,32 @@ coin_equality/
 
 ## References
 
-Caldeira, K., Bala, G., & Cao, L. (2023). "Climate sensitivity uncertainty and the need for energy without CO₂ emission." *Nature Climate Change*.
+Caldeira, K., Bala, G., & Cao, L. (2023). "Climate sensitivity uncertainty and the need for energy without CO₂ emission." *Environmental Research Letters*, 18(9), 094021. https://doi.org/10.1088/1748-9326/acf949
 
 ## License
 
-[To be specified]
+MIT License
+
+Copyright (c) 2025 Lamprini Papargyri, ..., and Ken Caldeira
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ## Authors
 
-[To be specified]
+Lamprini Papargyri, ..., and Ken Caldeira
