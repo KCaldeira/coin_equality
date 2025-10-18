@@ -9,7 +9,7 @@ This project develops a highly stylized model of an economy with income inequali
 1. **Income redistribution** - reducing inequality by transferring income from high-income to low-income individuals
 2. **Emissions abatement** - reducing carbon emissions to mitigate future climate damage
 
-The model extends the COIN framework presented in [Caldeira et al. (2023)](https://doi.org/10.1038/s41586-023-06017-3) to incorporate income inequality and diminishing marginal utility of income.
+The model extends the COIN framework presented in [Caldeira et al. (2023)](https://doi.org/10.1088/1748-9326/acf949) to incorporate income inequality and diminishing marginal utility of income.
 
 ## Model Structure
 
