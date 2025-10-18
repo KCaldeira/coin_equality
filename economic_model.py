@@ -10,270 +10,6 @@ from income_distribution import G2_effective_pareto
 from parameters import evaluate_params_at_time
 
 
-def calculate_gross_production(K, L, A, alpha):
-    """
-    Calculate gross production using Cobb-Douglas production function.
-
-    Parameters
-    ----------
-    K : float
-        Capital stock ($)
-    L : float
-        Labor force / population (people)
-    A : float
-        Total factor productivity ($^(1-α) yr^-1 people^(α-1))
-    alpha : float
-        Output elasticity of capital
-
-    Returns
-    -------
-    float
-        Gross production ($ yr^-1)
-
-    Notes
-    -----
-    From equation (18): Y_gross(t) = A(t) · K(t)^α · L(t)^(1-α)
-    """
-    return A * (K ** alpha) * (L ** (1 - alpha))
-
-
-def calculate_temperature_change(Ecum, k_climate):
-    """
-    Calculate global mean temperature increase from cumulative emissions.
-
-    Parameters
-    ----------
-    Ecum : float
-        Cumulative CO2 emissions (tCO2)
-    k_climate : float
-        Temperature sensitivity to cumulative emissions (°C tCO2^-1)
-
-    Returns
-    -------
-    float
-        Global mean temperature increase (°C)
-
-    Notes
-    -----
-    From equation (25): ΔT(t) = k_climate · ∫₀^t E(t') dt'
-    Since we track Ecum = ∫ E dt, this simplifies to: ΔT = k_climate · Ecum
-    """
-    return k_climate * Ecum
-
-
-def calculate_climate_damage_fraction(delta_T, k_damage_coeff, k_damage_exp):
-    """
-    Calculate fraction of production lost to climate damage.
-
-    Parameters
-    ----------
-    delta_T : float
-        Global mean temperature increase (°C)
-    k_damage_coeff : float
-        Climate damage coefficient (°C^-k_damage_exp)
-    k_damage_exp : float
-        Climate damage exponent
-
-    Returns
-    -------
-    float
-        Fraction of gross production lost to climate damage
-
-    Notes
-    -----
-    From equation (21): Ω(t) = k_damage_coeff · ΔT(t)^k_damage_exp
-    """
-    return k_damage_coeff * (delta_T ** k_damage_exp)
-
-
-def calculate_damaged_production(Y_gross, Omega):
-    """
-    Calculate production after accounting for climate damage.
-
-    Parameters
-    ----------
-    Y_gross : float
-        Gross production ($ yr^-1)
-    Omega : float
-        Fraction of production lost to climate damage
-
-    Returns
-    -------
-    float
-        Production net of climate damage ($ yr^-1)
-
-    Notes
-    -----
-    From equation (19): Y_damaged(t) = (1 - Ω(t)) · Y_gross(t)
-    """
-    return (1 - Omega) * Y_gross
-
-
-def calculate_abatement_cost_fraction(mu, theta1, theta2):
-    """
-    Calculate fraction of gross production allocated to emissions abatement.
-
-    Parameters
-    ----------
-    mu : float
-        Fraction of emissions abated
-    theta1 : float
-        Abatement cost coefficient
-    theta2 : float
-        Abatement cost exponent
-
-    Returns
-    -------
-    float
-        Fraction of gross production allocated to abatement
-
-    Notes
-    -----
-    From equation (24): Λ(t) = θ₁(t) · μ(t)^θ₂
-    """
-    return theta1 * (mu ** theta2)
-
-
-def calculate_net_production(Y_damaged, Lambda):
-    """
-    Calculate production net of climate damage and abatement costs.
-
-    Parameters
-    ----------
-    Y_damaged : float
-        Production net of climate damage ($ yr^-1)
-    Lambda : float
-        Fraction of gross production allocated to abatement
-
-    Returns
-    -------
-    float
-        Net production ($ yr^-1)
-
-    Notes
-    -----
-    From equation (20): Y_net(t) = (1 - Λ(t)) · Y_damaged(t)
-    """
-    return (1 - Lambda) * Y_damaged
-
-
-def calculate_emissions(sigma, mu, Y_gross):
-    """
-    Calculate CO2 emissions net of abatement.
-
-    Parameters
-    ----------
-    sigma : float
-        Carbon intensity of GDP (tCO2 $^-1)
-    mu : float
-        Fraction of emissions abated
-    Y_gross : float
-        Gross production ($ yr^-1)
-
-    Returns
-    -------
-    float
-        CO2 emissions (tCO2 yr^-1)
-
-    Notes
-    -----
-    From equation (23): E(t) = σ(t) · (1 - μ(t)) · Y_gross(t)
-    """
-    return sigma * (1 - mu) * Y_gross
-
-
-def calculate_capital_tendency(s, Y_net, delta, K):
-    """
-    Calculate rate of change of capital stock.
-
-    Parameters
-    ----------
-    s : float
-        Savings rate
-    Y_net : float
-        Net production ($ yr^-1)
-    delta : float
-        Capital depreciation rate (yr^-1)
-    K : float
-        Capital stock ($)
-
-    Returns
-    -------
-    float
-        Rate of change of capital stock ($ yr^-1)
-
-    Notes
-    -----
-    From equation (1.9): dK/dt = s·Y_net(t) - δ·K(t)
-    """
-    return s * Y_net - delta * K
-
-
-def calculate_effective_gini(f, deltaL, G1):
-    """
-    Calculate effective Gini index after partial redistribution.
-
-    Parameters
-    ----------
-    f : float
-        Fraction allocated to abatement (vs redistribution)
-    deltaL : float
-        Fraction of income available for redistribution
-    G1 : float
-        Initial Gini index
-
-    Returns
-    -------
-    float
-        Effective Gini index after allocation
-
-    Notes
-    -----
-    From equation (4.4): Uses Pareto-preserving two-step approach.
-    When f=0 (all to redistribution), Gini is minimized.
-    When f=1 (all to abatement), Gini is maximized.
-    """
-    G_eff, _ = G2_effective_pareto(f, deltaL, G1)
-    return G_eff
-
-
-def calculate_mean_utility(y_eff, G_eff, eta):
-    """
-    Calculate mean population utility using CRRA utility function.
-
-    Parameters
-    ----------
-    y_eff : float
-        Effective per-capita income (after abatement costs)
-    G_eff : float
-        Effective Gini index
-    eta : float
-        Coefficient of relative risk aversion
-
-    Returns
-    -------
-    float
-        Mean utility of the population
-
-    Notes
-    -----
-    From equation (3.5):
-    For η ≠ 1:
-        U = [y^(1-η)/(1-η)] · [(1+G)^η(1-G)^(1-η)/(1+G(2η-1))]^(1/(1-η))
-
-    For η = 1 (logarithmic utility):
-        U = ln(y) + ln((1-G)/(1+G)) + 2G/(1+G)
-    """
-    if np.abs(eta - 1.0) < 1e-10:
-        return np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
-
-    term1 = (y_eff ** (1 - eta)) / (1 - eta)
-    numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
-    denominator = 1 + G_eff * (2 * eta - 1)
-    term2 = (numerator / denominator) ** (1 / (1 - eta))
-    return term1 * term2
-
-
 def calculate_tendencies(state, params):
     """
     Calculate time derivatives and all derived variables.
@@ -296,7 +32,7 @@ def calculate_tendencies(state, params):
         - 'A': Total factor productivity (current)
         - 'L': Population (current)
         - 'sigma': Carbon intensity of GDP (current, tCO2 $^-1)
-        - 'theta1': Abatement cost coefficient (current)
+        - 'theta1': Abatement cost coefficient (current, $ tCO2^-1)
         - 'theta2': Abatement cost exponent
         - 'G1': Initial Gini index
         - 'delta_L': Fraction of income to redistribute
@@ -312,21 +48,23 @@ def calculate_tendencies(state, params):
 
     Notes
     -----
-    Calculation order follows equations 1.1-1.9, 2.1-2.2, 3.5, 4.3-4.4:
+    Calculation order follows equations 1.1-1.10, 2.1-2.2, 3.5, 4.3-4.4:
     1. Y_gross from K, L, A, α (Eq 1.1)
     2. ΔT from Ecum, k_climate (Eq 2.2)
     3. Ω from ΔT, k_damage_coeff, k_damage_exp (Eq 1.2)
-    4. Y_net from Y_gross, Ω (Eq 1.3)
-    5. y from Y_net, L, s (Eq 1.7)
+    4. Y_damaged from Y_gross, Ω (Eq 1.3)
+    5. y from Y_damaged, L, s (Eq 1.4)
     6. Δc from y, ΔL (Eq 4.3)
-    7. μ from f, Δc, θ₁, θ₂ (Eq 1.4)
-    8. Λ from θ₁, μ, θ₂ (Eq 1.5)
-    9. abatecost from Λ, Y_net (Eq 1.6)
-    10. y_eff from y, abatecost, L (Eq 1.8)
-    11. G_eff from f, ΔL, G₁ (Eq 4.4)
-    12. U from y_eff, G_eff, η (Eq 3.5)
-    13. E from σ, μ, Y_gross (Eq 2.1)
-    14. dK/dt from s, Y_net, δ, K (Eq 1.9)
+    7. E_pot from σ, Y_gross (Eq 2.1)
+    8. abatecost from f, Δc, L (Eq 1.5)
+    9. μ from abatecost, θ₁, θ₂, E_pot (Eq 1.6)
+    10. Λ from abatecost, Y_damaged (Eq 1.7)
+    11. Y_net from Y_damaged, Λ (Eq 1.8)
+    12. y_eff from y, abatecost, L (Eq 1.9)
+    13. G_eff from f, ΔL, G₁ (Eq 4.4)
+    14. U from y_eff, G_eff, η (Eq 3.5)
+    15. E from σ, μ, Y_gross (Eq 2.3)
+    16. dK/dt from s, Y_net, δ, K (Eq 1.10)
     """
     # Extract state variables
     K = state['K']
@@ -349,50 +87,60 @@ def calculate_tendencies(state, params):
     G1 = params['G1']
     f = params['f']
 
-    # Step 1: Calculate gross production (Eq 1.1)
-    Y_gross = calculate_gross_production(K, L, A, alpha)
+    # Eq 1.1: Gross production (Cobb-Douglas)
+    Y_gross = A * (K ** alpha) * (L ** (1 - alpha))
 
-    # Step 2: Calculate temperature change (Eq 2.2)
-    delta_T = calculate_temperature_change(Ecum, k_climate)
+    # Eq 2.2: Temperature change from cumulative emissions
+    delta_T = k_climate * Ecum
 
-    # Step 3: Calculate climate damage fraction (Eq 1.2)
-    Omega = calculate_climate_damage_fraction(delta_T, k_damage_coeff, k_damage_exp)
+    # Eq 1.2: Climate damage fraction
+    Omega = k_damage_coeff * (delta_T ** k_damage_exp)
 
-    # Step 4: Calculate production after climate damage (Eq 1.3)
-    Y_damaged = calculate_damaged_production(Y_gross, Omega)
+    # Eq 1.3: Production after climate damage
+    Y_damaged = (1 - Omega) * Y_gross
 
-    # Step 5: Calculate mean per-capita income (Eq 1.7)
+    # Eq 1.4: Mean per-capita income
     y = (1 - s) * Y_damaged / L
 
-    # Step 6: Calculate per-capita amount redistributed (Eq 4.3)
+    # Eq 4.3: Per-capita amount redistributed
     delta_c = y * delta_L
 
-    # Step 7: Calculate abatement fraction (Eq 1.4)
-    mu = (f * delta_c / theta1) ** (1 / theta2)
+    # Eq 2.1: Potential emissions (unabated)
+    Epot = sigma * Y_gross
 
-    # Step 8: Calculate abatement cost fraction (Eq 1.5)
-    Lambda = calculate_abatement_cost_fraction(mu, theta1, theta2)
+    # Eq 1.5: Abatement cost (what society allocates to abatement)
+    abatecost = f * delta_c * L
 
-    # Step 9: Calculate abatement cost (Eq 1.6)
-    abatecost = Lambda * Y_damaged
+    # Eq 1.6: Abatement fraction
+    mu = (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2)
 
-    # Step 10: Calculate net production after abatement costs
-    Y_net = calculate_net_production(Y_damaged, Lambda)
+    # Eq 1.7: Abatement cost fraction
+    Lambda = abatecost / Y_damaged
 
-    # Step 11: Calculate effective per-capita income (Eq 1.8)
+    # Eq 1.8: Net production after abatement costs
+    Y_net = (1 - Lambda) * Y_damaged
+
+    # Eq 1.9: Effective per-capita income
     y_eff = y - abatecost / L
 
-    # Step 12: Calculate effective Gini index (Eq 4.4)
-    G_eff = calculate_effective_gini(f, delta_L, G1)
+    # Eq 4.4: Effective Gini index
+    G_eff, _ = G2_effective_pareto(f, delta_L, G1)
 
-    # Step 13: Calculate mean utility (Eq 3.5)
-    U = calculate_mean_utility(y_eff, G_eff, eta)
+    # Eq 3.5: Mean utility
+    if np.abs(eta - 1.0) < 1e-10:
+        U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
+    else:
+        term1 = (y_eff ** (1 - eta)) / (1 - eta)
+        numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
+        denominator = 1 + G_eff * (2 * eta - 1)
+        term2 = (numerator / denominator) ** (1 / (1 - eta))
+        U = term1 * term2
 
-    # Step 14: Calculate emissions (Eq 2.1)
-    E = calculate_emissions(sigma, mu, Y_gross)
+    # Eq 2.3: Actual emissions (after abatement)
+    E = sigma * (1 - mu) * Y_gross
 
-    # Step 15: Calculate capital tendency (Eq 1.9)
-    dK_dt = calculate_capital_tendency(s, Y_net, delta, K)
+    # Eq 1.10: Capital tendency
+    dK_dt = s * Y_net - delta * K
 
     return {
         'dK_dt': dK_dt,
@@ -421,8 +169,7 @@ def integrate_model(config):
     Parameters
     ----------
     config : ModelConfiguration
-        Complete model configuration including initial state, parameters,
-        and time-dependent functions
+        Complete model configuration including parameters and time-dependent functions
 
     Returns
     -------
@@ -440,6 +187,10 @@ def integrate_model(config):
     -----
     Uses simple Euler integration: state(t+dt) = state(t) + dt * tendency(t)
     This ensures all functional relationships are satisfied exactly at output points.
+
+    Initial conditions are computed automatically:
+    - Ecum(0) = 0 (no cumulative emissions)
+    - K(0) = (s·A(0)/δ)^(1/(1-α))·L(0) (steady-state capital)
     """
     # Extract integration parameters
     t_start = config.integration_params.t_start
@@ -450,8 +201,19 @@ def integrate_model(config):
     t_array = np.arange(t_start, t_end + dt, dt)
     n_steps = len(t_array)
 
-    # Initialize state
-    state = config.initial_state.copy()
+    # Calculate initial state
+    A0 = config.time_functions['A'](t_start)
+    L0 = config.time_functions['L'](t_start)
+    s = config.scalar_params.s
+    delta = config.scalar_params.delta
+    alpha = config.scalar_params.alpha
+
+    K0 = ((s * A0 / delta) ** (1 / (1 - alpha))) * L0
+
+    state = {
+        'K': K0,
+        'Ecum': 0.0
+    }
 
     # Initialize storage for all variables
     results = {

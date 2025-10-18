@@ -31,20 +31,23 @@ where:
 
 For the differential equation solver, variables are calculated in this order:
 
-1. **Y_gross** from K, L, A, α (Cobb-Douglas production)
-2. **ΔT** from Ecum, k_climate (temperature from cumulative emissions)
-3. **Ω** from ΔT, k_damage, β (climate damage fraction)
-4. **Y_net** from Y_gross, Ω (production after climate damage)
-5. **y** from Y_net, L, s (mean per-capita income)
-6. **Δc** from y, ΔL (per-capita amount redistributable)
-7. **μ** from f, Δc, θ₁, θ₂ (fraction of emissions abated)
-8. **E** from σ, μ, Y_gross (emissions net of abatement)
-9. **dK/dt** from s, Y_net, δ, K (capital tendency)
-10. **dEcum/dt = E** (cumulative emissions tendency)
-
-Additionally, for utility calculations:
-- **G_eff** from f, ΔL, G₁ (effective Gini index)
-- **U** from y_eff, G_eff, η (mean utility)
+1. **Y_gross** from K, L, A, α (Eq 1.1: Cobb-Douglas production)
+2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions)
+3. **Ω** from ΔT, k_damage_coeff, k_damage_exp (Eq 1.2: climate damage fraction)
+4. **Y_damaged** from Y_gross, Ω (Eq 1.3: production after climate damage)
+5. **y** from Y_damaged, L, s (Eq 1.4: mean per-capita income)
+6. **Δc** from y, ΔL (Eq 4.3: per-capita amount redistributable)
+7. **E_pot** from σ, Y_gross (Eq 2.1: potential emissions)
+8. **abatecost** from f, Δc, L (Eq 1.5: abatement expenditure)
+9. **μ** from abatecost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated)
+10. **Λ** from abatecost, Y_damaged (Eq 1.7: abatement cost fraction)
+11. **Y_net** from Y_damaged, Λ (Eq 1.8: production after abatement costs)
+12. **y_eff** from y, abatecost, L (Eq 1.9: effective per-capita income)
+13. **G_eff** from f, ΔL, G₁ (Eq 4.4: effective Gini index)
+14. **U** from y_eff, G_eff, η (Eq 3.5: mean utility)
+15. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
+16. **dK/dt** from s, Y_net, δ, K (Eq 1.10: capital tendency)
+17. **dEcum/dt = E** (cumulative emissions tendency)
 
 ### Core Components
 
@@ -57,70 +60,85 @@ Y_gross(t) = A(t) · K(t)^α · L(t)^(1-α)
 
 **Eq. (1.2) - Climate Damage:**
 ```
-Ω(t) = k_damage · ΔT(t)^β
+Ω(t) = k_damage_coeff · ΔT(t)^k_damage_exp
 ```
 where `Ω(t)` is the fraction of gross production lost to climate damage.
 
-**Eq. (1.3) - Net Production (after climate damage):**
+**Eq. (1.3) - Damaged Production:**
 ```
-Y_net(t) = (1 - Ω(t)) · Y_gross(t)
+Y_damaged(t) = (1 - Ω(t)) · Y_gross(t)
+```
+This is production after accounting for climate damage but before abatement costs.
+
+**Eq. (1.4) - Mean Per-Capita Income:**
+```
+y(t) = (1 - s) · Y_damaged(t) / L(t)
 ```
 
-**Eq. (1.4) - Abatement Fraction:**
-
-The fraction of emissions abated, `μ(t)`, is determined by the allocation between redistribution and abatement:
+**Eq. (1.5) - Abatement Cost:**
 ```
-μ(t) = [f·Δc(t)·L(t) / (θ₁(t)·L(t))]^(1/θ₂)
-     = [f·Δc(t) / θ₁(t)]^(1/θ₂)
+abatecost(t) = f · Δc(t) · L(t)
 ```
-where:
-- `Δc(t)` = per-capita amount of income that could be redistributed
+This is the total amount society allocates to emissions abatement, where:
 - `f` = fraction of redistributable resources allocated to abatement (0 ≤ f ≤ 1)
-- `θ₁(t)` = abatement cost coefficient
+- `Δc(t)` = per-capita amount of income available for redistribution
+- `L(t)` = population
+
+**Eq. (1.6) - Abatement Fraction:**
+```
+μ(t) = [abatecost(t) · θ₂ / (E_pot(t) · θ₁(t))]^(1/θ₂)
+```
+The fraction of potential emissions that are abated, where:
+- `E_pot(t) = σ(t) · Y_gross(t)` = potential (unabated) emissions
+- `θ₁(t)` = marginal cost of abatement as μ→1 ($ tCO₂⁻¹)
 - `θ₂` = abatement cost exponent
 
-**Eq. (1.5) - Abatement Cost Fraction:**
-```
-Λ(t) = θ₁(t) · μ(t)^θ₂
-```
-This represents the fraction of gross production allocated to emissions abatement.
+This formulation differs from Nordhaus in that reducing carbon intensity σ(t) reduces the cost of abating remaining emissions, since there are fewer emissions to abate.
 
-**Eq. (1.6) - Abatement Cost:**
+**Eq. (1.7) - Abatement Cost Fraction:**
 ```
-abatecost(t) = Λ(t) · Y_net(t)
+Λ(t) = abatecost(t) / Y_damaged(t)
 ```
+This represents the fraction of damaged production allocated to emissions abatement.
 
-**Eq. (1.7) - Mean Per-Capita Income:**
+**Eq. (1.8) - Net Production:**
 ```
-y(t) = (1 - s) · Y_net(t) / L(t)
+Y_net(t) = (1 - Λ(t)) · Y_damaged(t)
 ```
+Production after both climate damage and abatement costs.
 
-**Eq. (1.8) - Effective Per-Capita Income:**
+**Eq. (1.9) - Effective Per-Capita Income:**
 ```
 y_eff(t) = y(t) - abatecost(t) / L(t)
 ```
 This is the per-capita income after subtracting abatement costs, used for utility calculations.
 
-**Eq. (1.9) - Capital Accumulation:**
+**Eq. (1.10) - Capital Accumulation:**
 ```
 dK/dt = s · Y_net(t) - δ · K(t)
 ```
 
 #### 2. Climate Model
 
-**Eq. (2.1) - Emissions:**
+**Eq. (2.1) - Potential Emissions:**
 ```
-E_base(t) = σ(t) · Y_gross(t)
-E(t) = σ(t) · (1 - μ(t)) · Y_gross(t)
+E_pot(t) = σ(t) · Y_gross(t)
 ```
+This is the emissions rate without any abatement.
 
 **Eq. (2.2) - Temperature Change:**
 ```
 ΔT(t) = k_climate · ∫₀^t E(t') dt'
        = k_climate · Ecum(t)
 ```
-
 Temperature change is proportional to cumulative carbon dioxide emissions.
+
+**Eq. (2.3) - Actual Emissions:**
+```
+E(t) = σ(t) · (1 - μ(t)) · Y_gross(t)
+     = (1 - μ(t)) · E_pot(t)
+```
+This is the actual emissions rate after abatement.
 
 #### 3. Income Distribution and Utility
 
@@ -199,9 +217,8 @@ where:
 - `0 < f < 1`: mixed allocation
 
 **Fraction of Emissions Abated:**
-```
-μ(t) = [f·Δc(t)·L(t) / (θ₁(t)·L(t))]^(1/θ₂)
-```
+
+See Eq. (1.6) above. The abatement fraction is determined by the amount society allocates to abatement relative to potential emissions and the marginal abatement cost.
 
 ## Key Parameters
 
@@ -249,7 +266,7 @@ These functions are evaluated at each time step:
 | `A(t)` | Total factor productivity | - | `A` |
 | `L(t)` | Population | people | `L` |
 | `σ(t)` | Carbon intensity of GDP | tCO₂ $⁻¹ | `sigma` |
-| `θ₁(t)` | Abatement cost coefficient | - | `theta1` |
+| `θ₁(t)` | Marginal abatement cost as μ→1 | $ tCO₂⁻¹ | `theta1` |
 
 Each function is specified by `type` and type-specific parameters (e.g., `initial_value`, `growth_rate`).
 

@@ -32,9 +32,9 @@
     "A": {
       "_description": "Total factor productivity (TFP)",
       "type": "exponential_growth",
-      "initial_value": 464.8589341,
+      "initial_value": 454.174,
       "growth_rate": 0.01,
-      "_growth_rate": "Initial condition should give capital stock of $250trillion with alpha = 0.3 and L = 10e9; 1% annual TFP growth"
+      "_growth_rate": "TFP consistent with steady state at s = 0.3, alpha = 0.3, delta = 0.1 and L = 10e9; 1% annual TFP growth"
     },
     "L": {
       "_description": "Population",
@@ -51,10 +51,10 @@
       "_growth_rate": "Declining at 2% per year (decarbonization)"
     },
     "theta1": {
-      "_description": "Abatement cost coefficient",
+      "_description": "Abatement cost per ton of CO2 for the last ton abated ($/tCO2)",
       "type": "exponential_growth",
-      "initial_value": 0.05,
-      "growth_rate": -0.01,
+      "initial_value": 1000,
+      "growth_rate": -0.02,
       "_growth_rate": "Assume 5% of global GDP to abate all emissions. Declining at 1% per year (technological progress)"
     }
   },
@@ -62,7 +62,7 @@
   "integration_parameters": {
     "_description": "Time integration settings",
     "t_start": 0.0,
-    "t_end": 100.0,
+    "t_end": 100,
     "_t_end": "Integrate for 100 years",
     "dt": 1.0,
     "_dt": "1-year time step (Euler method)",

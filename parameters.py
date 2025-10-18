@@ -254,8 +254,8 @@ class ModelConfiguration:
         Required keys: 'A', 'L', 'sigma', 'theta1'
     integration_params : IntegrationParameters
         Integration and optimization control parameters
-    initial_state : dict
-        Initial conditions. Required keys: 'K', 'Ecum'
+    initial_state : dict or None
+        Initial conditions (computed automatically by integrate_model if None)
     control_function : callable
         Control function f(t) returning fraction allocated to abatement
     """
@@ -460,9 +460,9 @@ def load_configuration(config_path):
     - integration_parameters: dict with t_start, t_end, dt, rtol, atol
     - control_function: dict with type and parameters
 
-    Initial state is computed automatically:
+    Initial state is computed automatically by integrate_model():
     - Ecum(0) = 0 (no cumulative emissions at start)
-    - K(0) = steady-state capital with no climate damage or abatement
+    - K(0) = (s·A(0)/δ)^(1/(1-α))·L(0) (steady-state capital)
 
     Keys starting with '_' are treated as comments/descriptions and ignored.
 
@@ -493,29 +493,11 @@ def load_configuration(config_path):
     # Extract run name
     run_name = config_data['run_name']
 
-    # Calculate initial state automatically
-    t0 = integration_params.t_start
-    A0 = time_functions['A'](t0)
-    L0 = time_functions['L'](t0)
-
-    K0 = calculate_initial_capital(
-        s=scalar_params.s,
-        A0=A0,
-        L0=L0,
-        delta=scalar_params.delta,
-        alpha=scalar_params.alpha
-    )
-
-    initial_state = {
-        'K': K0,
-        'Ecum': 0.0
-    }
-
     return ModelConfiguration(
         run_name=run_name,
         scalar_params=scalar_params,
         time_functions=time_functions,
         integration_params=integration_params,
-        initial_state=initial_state,
+        initial_state=None,
         control_function=control_function,
     )
