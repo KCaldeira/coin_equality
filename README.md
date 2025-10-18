@@ -451,9 +451,96 @@ config = load_configuration('config_baseline.json')
 
 The `evaluate_params_at_time(t, config)` helper combines all parameters into a dict for use with `calculate_tendencies()`.
 
-### Testing
+### Testing the Forward Model
 
-Run `python test_integration.py` to verify the model integration with the baseline configuration.
+The project includes a comprehensive test script to verify the forward model integration and demonstrate the complete workflow from configuration loading through output generation.
+
+#### Quick Start
+
+To test the model with the baseline configuration:
+
+```bash
+python test_integration.py config_baseline.json
+```
+
+This command will:
+1. Load the baseline configuration from `config_baseline.json`
+2. Display key model parameters and setup information
+3. Run the forward integration over the specified time period
+4. Show detailed results summary (initial state, final state, changes)
+5. Generate timestamped output directory with CSV data and PDF plots
+
+#### Command Line Usage
+
+The test script requires a configuration file argument:
+
+```bash
+python test_integration.py <config_file>
+```
+
+**Examples:**
+```bash
+# Test with baseline scenario
+python test_integration.py config_baseline.json
+
+# Test with high inequality scenario
+python test_integration.py config_high_inequality.json
+
+# Test with custom configuration
+python test_integration.py my_custom_config.json
+```
+
+If you run the script without arguments, it will display usage instructions.
+
+#### Understanding the Output
+
+The test script provides detailed console output including:
+
+- **Configuration Summary**: Run name, time span, key parameters
+- **Integration Progress**: Confirmation of successful model execution
+- **Results Summary**:
+  - Initial state (t=0): all key variables at start
+  - Final state (t=end): all key variables at end of simulation
+  - Changes: percentage and absolute changes over simulation period
+- **Output Files**: Paths to generated CSV and PDF files
+
+#### Generated Files
+
+Each test run creates a timestamped directory:
+```
+./data/output/{run_name}_YYYYMMDD-HHMMSS/
+├── results.csv    # Complete time series data (all variables)
+└── plots.pdf      # Multi-page charts organized by variable type
+```
+
+The PDF contains four organized sections:
+1. **Dimensionless Ratios** - Policy variables and summary outcomes
+2. **Dollar Variables** - Economic flows and stocks
+3. **Physical Variables** - Climate and emissions data
+4. **Specified Functions** - Exogenous model inputs
+
+#### Troubleshooting
+
+**Common issues:**
+- **Missing config file**: Ensure the JSON file exists and path is correct
+- **JSON syntax errors**: Validate JSON syntax in configuration file
+- **Missing dependencies**: Run `pip install -r requirements.txt`
+- **Permission errors**: Ensure write access to `./data/output/` directory
+
+#### Testing Different Scenarios
+
+Create new test scenarios by copying and modifying configuration files:
+
+```bash
+# Copy baseline configuration
+cp config_baseline.json config_my_test.json
+
+# Edit parameters in config_my_test.json
+# Then test with:
+python test_integration.py config_my_test.json
+```
+
+This testing framework validates the complete model pipeline and provides immediate visual feedback on model behavior through the generated charts.
 
 ## Time Integration
 
@@ -535,7 +622,7 @@ output_paths = save_results(results, config.run_name)
 print(f"Results saved to: {output_paths['output_dir']}")
 ```
 
-Run `python test_integration.py` to see a complete example with output generation.
+See the **Testing the Forward Model** section above for detailed instructions on using `test_integration.py`.
 
 ## Next Steps
 
