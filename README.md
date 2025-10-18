@@ -599,9 +599,9 @@ This creates a directory: `./data/output/{run_name}_YYYYMMDD-HHMMSS/`
 - Can be loaded into Excel, Python (pandas), R, etc.
 
 **PDF File (`plots.pdf`):**
-- Multi-page PDF with all time series plots
-- 6 plots per page (2 rows × 3 columns)
-- Each plot shows one variable vs time
+- Multi-page PDF with organized time series plots
+- Variables grouped by type (dimensionless ratios, dollar variables, etc.)
+- Individual plots for single variables, combined plots for related variables with legends
 - Automatically uses scientific notation for large/small values
 
 ### Example Workflow
@@ -626,16 +626,64 @@ See the **Testing the Forward Model** section above for detailed instructions on
 
 ## Next Steps
 
-### 1. Test Forward Model
+### 1. Implement Constant f Optimization
 
-Validate the forward integration:
-- Run with physically reasonable parameters
-- Check conservation properties and bounds (0 ≤ f(t) ≤ 1, K > 0, etc.)
-- Verify sensitivity to key parameters
-- Compare different `f(t)` trajectories manually
-- Calculate and track utility over time using `y_eff(t)` and `G_eff(t)`
+Create an intermediate optimization step to find the optimal constant allocation fraction `f_constant` that maximizes the objective function:
 
-### 2. Create Optimization Code
+```
+max ∫₀^T e^(-ρt) · U(t) · L(t) dt,  subject to 0 ≤ f_constant ≤ 1
+```
+
+where `f(t) = f_constant` for all t.
+
+**Implementation approach:**
+- Use **NLopt with BOBYQA algorithm** for derivative-free optimization
+- Create a single-variable optimization routine that takes `f_constant` as input
+- Use the existing forward model with constant `f` in the control function
+- Implement objective function calculation (discounted utility integral)
+- Design the optimization framework to be easily extensible to multi-variable problems
+
+**Why NLopt/BOBYQA:**
+- **Derivative-free**: Perfect for simulation-based objective functions
+- **Bound-constrained**: Natural handling of `0 ≤ f ≤ 1` constraints
+- **Robust for expensive functions**: Designed for cases where each objective evaluation requires significant computation
+- **Scales well**: Easy transition from single-variable to multi-variable optimization
+- **Professional-grade**: Widely used in research and industry applications
+
+**Installation:**
+```bash
+pip install nlopt
+```
+
+**Basic framework structure:**
+```python
+import nlopt
+import numpy as np
+
+class UtilityOptimizer:
+    def optimize_constant_f(self):
+        opt = nlopt.opt(nlopt.LN_BOBYQA, 1)  # 1D optimization
+        opt.set_bounds([0], [1])             # 0 ≤ f ≤ 1
+        opt.set_min_objective(self._objective_function)
+        opt.set_maxeval(1000)
+        return opt.optimize([0.5])           # Start at f=0.5
+```
+
+**Key benefits of this intermediate step:**
+- Validates the optimization framework without complex control trajectories
+- Tests objective function calculation and gradient estimation
+- Provides benchmark results for comparison with time-dependent optimization
+- Establishes code structure that can be extended to multi-dimensional optimization
+- Allows testing of different optimization algorithms and convergence criteria
+
+**Expected deliverables:**
+- `optimization.py` module with extensible optimization framework
+- Optimal constant `f_constant` value for baseline scenario
+- Sensitivity analysis showing objective function vs. `f_constant`
+- Comparison charts showing optimal constant vs. arbitrary constant values
+- Documentation of optimization results and convergence behavior
+
+### 2. Extend to Time-Dependent Optimization
 
 Find the optimal control trajectory `f(t)` that maximizes the objective function:
 
@@ -645,15 +693,35 @@ max ∫₀^T e^(-ρt) · U(t) · L(t) dt
 
 where `U(t)` is calculated from `y_eff(t)`, `G_eff(t)`, and `η` (Eq. 3.5).
 
-**Optimization approaches to consider:**
+**Implementation approach:**
 
-1. **MIDACO Solver** (used previously): https://www.midaco-solver.com/
-   - Commercial global optimization solver
-   - Handles mixed-integer nonlinear problems
-   - Good for constrained optimization
+Building on the constant f optimization framework, extend to time-dependent control using **NLopt with AUGLAG + BOBYQA**:
 
-2. **scipy.optimize alternatives:**
-   - `scipy.optimize.minimize` - local optimization with constraints
+1. **Control point parameterization:**
+   - Define f values at discrete time points: `f = [f₀, f₁, ..., f_N]`
+   - Use interpolation between control points (linear or spline)
+   - Bounds: `0 ≤ fᵢ ≤ 1` for all control points
+
+2. **NLopt AUGLAG + BOBYQA approach:**
+   ```python
+   # Multi-variable optimization with interpolation
+   def optimize_time_dependent_f(self, control_times):
+       n_points = len(control_times)
+       opt = nlopt.opt(nlopt.AUGLAG, n_points)
+       local_opt = nlopt.opt(nlopt.LN_BOBYQA, n_points)
+       opt.set_local_optimizer(local_opt)
+
+       opt.set_lower_bounds([0] * n_points)
+       opt.set_upper_bounds([1] * n_points)
+       opt.set_min_objective(self._objective_time_dependent)
+       return opt.optimize(initial_guess)
+   ```
+
+3. **Interpolation options:**
+   - **Linear**: `scipy.interpolate.interp1d(control_times, f_values, kind='linear')`
+   - **Spline**: `scipy.interpolate.UnivariateSpline(control_times, f_values)`
+
+**Alternative approaches for comparison:**
    - `scipy.optimize.differential_evolution` - global optimization
    - `scipy.optimize.dual_annealing` - global optimization
 

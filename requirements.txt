@@ -10,6 +10,7 @@ matplotlib>=3.7.0
 
 # Optimization and numerical methods
 # (scipy already included above)
+nlopt>=2.7.0
 
 # Testing (optional)
 pytest>=7.3.0
