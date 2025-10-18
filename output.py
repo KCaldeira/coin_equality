@@ -10,6 +10,79 @@ from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.ticker import FuncFormatter
+
+
+# Variable metadata for better plot labels and descriptions
+VARIABLE_METADATA = {
+    't': {'description': 'Time', 'units': 'yr', 'group': 'time'},
+    'A': {'description': 'Total Factor Productivity', 'units': '', 'group': 'economic'},
+    'E': {'description': 'Actual Emissions', 'units': 'GtCO₂/yr', 'group': 'climate'},
+    'Ecum': {'description': 'Cumulative Emissions', 'units': 'GtCO₂', 'group': 'climate'},
+    'G_eff': {'description': 'Effective Gini Index', 'units': '', 'group': 'inequality'},
+    'K': {'description': 'Capital Stock', 'units': '$', 'group': 'economic'},
+    'L': {'description': 'Population', 'units': 'people', 'group': 'economic'},
+    'Lambda': {'description': 'Abatement Cost Fraction', 'units': '', 'group': 'abatement'},
+    'Omega': {'description': 'Climate Damage Fraction', 'units': '', 'group': 'climate'},
+    'U': {'description': 'Mean Population Utility', 'units': '', 'group': 'inequality'},
+    'Y_damaged': {'description': 'GDP After Climate Damage', 'units': '$', 'group': 'economic'},
+    'Y_gross': {'description': 'Gross GDP', 'units': '$', 'group': 'economic'},
+    'Y_net': {'description': 'Net GDP', 'units': '$', 'group': 'economic'},
+    'abatecost': {'description': 'Abatement Expenditure', 'units': '$', 'group': 'abatement'},
+    'dEcum_dt': {'description': 'Emissions Rate', 'units': 'GtCO₂/yr', 'group': 'climate'},
+    'dK_dt': {'description': 'Capital Growth Rate', 'units': '$/yr', 'group': 'economic'},
+    'delta_T': {'description': 'Temperature Change', 'units': '°C', 'group': 'climate'},
+    'delta_c': {'description': 'Per-Capita Redistributable Income', 'units': '$/person', 'group': 'inequality'},
+    'f': {'description': 'Abatement Allocation Fraction', 'units': '', 'group': 'policy'},
+    'mu': {'description': 'Emissions Abatement Fraction', 'units': '', 'group': 'abatement'},
+    'sigma': {'description': 'Carbon Intensity of GDP', 'units': 'tCO₂/$', 'group': 'climate'},
+    'theta1': {'description': 'Marginal Abatement Cost', 'units': '$/tCO₂', 'group': 'abatement'},
+    'y': {'description': 'Mean Per-Capita Income', 'units': '$/person', 'group': 'economic'},
+    'y_eff': {'description': 'Effective Per-Capita Income', 'units': '$/person', 'group': 'economic'}
+}
+
+# Variable grouping for organized layout with combined charts
+# Ordered by: dimensionless ratios, dollar variables, everything else, specified functions
+VARIABLE_GROUPS = {
+    'dimensionless_ratios': [
+        {'type': 'single', 'variables': ['f']},
+        {'type': 'single', 'variables': ['mu']},
+        {'type': 'combined', 'title': 'Economic Impact Fractions', 'variables': ['Omega', 'Lambda'], 'units': 'fraction'},
+        {'type': 'single', 'variables': ['G_eff']},
+        {'type': 'single', 'variables': ['U']}
+    ],
+    'dollar_variables': [
+        {'type': 'combined', 'title': 'GDP Components', 'variables': ['Y_gross', 'Y_damaged', 'Y_net'], 'units': '$'},
+        {'type': 'single', 'variables': ['K']},
+        {'type': 'single', 'variables': ['abatecost']},
+        {'type': 'single', 'variables': ['dK_dt']},
+        {'type': 'combined', 'title': 'Per-Capita Income', 'variables': ['y', 'y_eff'], 'units': '$/person'},
+        {'type': 'single', 'variables': ['delta_c']}
+    ],
+    'physical_variables': [
+        {'type': 'combined', 'title': 'Emissions', 'variables': ['E', 'dEcum_dt'], 'units': 'GtCO₂/yr'},
+        {'type': 'single', 'variables': ['Ecum']},
+        {'type': 'single', 'variables': ['delta_T']}
+    ],
+    'specified_functions': [
+        {'type': 'single', 'variables': ['L']},
+        {'type': 'single', 'variables': ['A']},
+        {'type': 'single', 'variables': ['sigma']},
+        {'type': 'single', 'variables': ['theta1']}
+    ]
+}
+
+
+def format_scientific_notation(x, pos=None):
+    """Custom formatter for scientific notation with proper spacing."""
+    if x == 0:
+        return '0'
+    exp = int(np.floor(np.log10(abs(x))))
+    mantissa = x / (10 ** exp)
+    if abs(exp) <= 2:
+        return f'{x:.3g}'
+    else:
+        return f'{mantissa:.1f}×10^{exp}'
 
 
 def create_output_directory(run_name):
@@ -84,7 +157,7 @@ def write_results_csv(results, output_dir, filename='results.csv'):
 
 def plot_results_pdf(results, output_dir, filename='plots.pdf'):
     """
-    Create PDF with time series plots of all variables.
+    Create PDF with time series plots of all variables, organized by topic with combined charts.
 
     Parameters
     ----------
@@ -102,56 +175,184 @@ def plot_results_pdf(results, output_dir, filename='plots.pdf'):
 
     Notes
     -----
-    Creates multi-page PDF with 6 plots per page (2 rows x 3 columns).
-    Each plot shows one variable vs time.
+    Creates multi-page PDF organized by variable groups (economic, climate, etc.).
+    Supports both single-variable and multi-variable combined charts.
     """
     pdf_path = os.path.join(output_dir, filename)
 
     # Get time array
     t = results['t']
 
-    # Get all variable names except 't'
-    var_names = sorted([k for k in results.keys() if k != 't'])
-
-    # Create PDF
+    # Create PDF with organized plots by groups
     with PdfPages(pdf_path) as pdf:
-        # Process variables in groups of 6
-        plots_per_page = 6
-        n_vars = len(var_names)
 
-        for page_start in range(0, n_vars, plots_per_page):
-            # Create figure for this page
-            fig, axes = plt.subplots(2, 3, figsize=(11, 8.5))
-            fig.suptitle('COIN_equality Model Results', fontsize=14, fontweight='bold')
+        # Plot each group on separate pages
+        for group_name, chart_specs in VARIABLE_GROUPS.items():
+            # Filter chart specs to only include those with available variables
+            available_charts = []
+            for spec in chart_specs:
+                available_vars = [var for var in spec['variables'] if var in results]
+                if available_vars:
+                    spec_copy = spec.copy()
+                    spec_copy['variables'] = available_vars
+                    available_charts.append(spec_copy)
 
-            # Flatten axes array for easier iteration
-            axes_flat = axes.flatten()
+            if not available_charts:
+                continue
 
-            # Plot up to 6 variables on this page
-            page_end = min(page_start + plots_per_page, n_vars)
-            for i, var_idx in enumerate(range(page_start, page_end)):
-                var_name = var_names[var_idx]
-                ax = axes_flat[i]
+            # Determine optimal subplot layout
+            n_charts = len(available_charts)
+            if n_charts <= 4:
+                rows, cols = 2, 2
+                figsize = (12, 8)
+            elif n_charts <= 6:
+                rows, cols = 2, 3
+                figsize = (15, 8)
+            elif n_charts <= 9:
+                rows, cols = 3, 3
+                figsize = (15, 12)
+            else:
+                # Split large groups across multiple pages
+                charts_per_page = 6
+                for page_start in range(0, n_charts, charts_per_page):
+                    page_charts = available_charts[page_start:page_start + charts_per_page]
+                    _create_plot_page_new(t, results, page_charts, group_name, pdf, page_start//charts_per_page + 1)
+                continue
 
-                # Plot the time series
-                ax.plot(t, results[var_name], linewidth=1.5)
-                ax.set_xlabel('Time (yr)', fontsize=10)
-                ax.set_ylabel(var_name, fontsize=10)
-                ax.set_title(var_name, fontsize=11, fontweight='bold')
-                ax.grid(True, alpha=0.3)
-
-                # Use scientific notation for large/small numbers
-                ax.ticklabel_format(style='scientific', axis='y', scilimits=(-3, 3))
-
-            # Hide unused subplots on last page
-            for i in range(page_end - page_start, plots_per_page):
-                axes_flat[i].set_visible(False)
-
-            plt.tight_layout()
-            pdf.savefig(fig)
-            plt.close(fig)
+            # Create single page for this group
+            _create_plot_page_new(t, results, available_charts, group_name, pdf, layout=(rows, cols), figsize=figsize)
 
     return pdf_path
+
+
+def _create_plot_page_new(t, results, chart_specs, group_name, pdf, page_num=None, layout=None, figsize=None):
+    """
+    Create a single page of plots for a variable group with support for combined charts.
+
+    Parameters
+    ----------
+    t : array
+        Time array
+    results : dict
+        Results dictionary
+    chart_specs : list
+        List of chart specifications (single or combined)
+    group_name : str
+        Name of the variable group
+    pdf : PdfPages
+        PDF object to add page to
+    page_num : int, optional
+        Page number for multi-page groups
+    layout : tuple, optional
+        (rows, cols) layout. If None, defaults to (2, 3)
+    figsize : tuple, optional
+        Figure size. If None, defaults to (15, 10)
+    """
+    if layout is None:
+        layout = (2, 3)
+    if figsize is None:
+        figsize = (15, 10)
+
+    rows, cols = layout
+    n_charts = len(chart_specs)
+
+    # Create figure
+    fig, axes = plt.subplots(rows, cols, figsize=figsize)
+
+    # Create title
+    title = f'COIN_equality Model Results - {group_name.title()} Variables'
+    if page_num is not None:
+        title += f' (Page {page_num})'
+    fig.suptitle(title, fontsize=16, fontweight='bold', y=0.95)
+
+    # Handle single subplot case
+    if rows * cols == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten()
+
+    # Define colors for multi-line plots
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+
+    # Plot each chart
+    for i, chart_spec in enumerate(chart_specs):
+        if i >= len(axes):
+            break
+
+        ax = axes[i]
+        chart_type = chart_spec['type']
+        var_list = chart_spec['variables']
+
+        if chart_type == 'single':
+            # Single variable plot
+            var_name = var_list[0]
+            meta = VARIABLE_METADATA.get(var_name, {})
+            description = meta.get('description', var_name)
+            units = meta.get('units', '')
+
+            # Plot the time series
+            ax.plot(t, results[var_name], linewidth=2, color=colors[0], alpha=0.8)
+
+            # Set labels
+            ax.set_xlabel('Time (yr)', fontsize=11)
+            if units:
+                ylabel = f'{description}\n({units})'
+            else:
+                ylabel = description
+            ax.set_ylabel(ylabel, fontsize=11)
+            ax.set_title(var_name, fontsize=12, fontweight='bold', pad=10)
+
+        elif chart_type == 'combined':
+            # Combined variables plot
+            chart_title = chart_spec.get('title', 'Combined Variables')
+            chart_units = chart_spec.get('units', '')
+
+            # Plot each variable with different colors
+            for j, var_name in enumerate(var_list):
+                meta = VARIABLE_METADATA.get(var_name, {})
+                description = meta.get('description', var_name)
+
+                color = colors[j % len(colors)]
+                ax.plot(t, results[var_name], linewidth=2, color=color, alpha=0.8,
+                       label=description)
+
+            # Set labels
+            ax.set_xlabel('Time (yr)', fontsize=11)
+            if chart_units:
+                ylabel = f'{chart_title}\n({chart_units})'
+            else:
+                ylabel = chart_title
+            ax.set_ylabel(ylabel, fontsize=11)
+            ax.set_title(chart_title, fontsize=12, fontweight='bold', pad=10)
+
+            # Add legend
+            ax.legend(fontsize=9, loc='best', framealpha=0.8)
+
+        # Improve grid and formatting
+        ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+        ax.tick_params(axis='both', which='major', labelsize=10)
+
+        # Use custom scientific notation formatting
+        all_data = np.concatenate([results[var] for var in var_list])
+        max_val = np.max(np.abs(all_data))
+
+        if max_val == 0:
+            pass  # No formatting needed for zero data
+        elif max_val > 1e4 or max_val < 1e-2:
+            ax.yaxis.set_major_formatter(FuncFormatter(format_scientific_notation))
+
+        # Set background color
+        ax.set_facecolor('#fafafa')
+
+    # Hide unused subplots
+    for i in range(n_charts, len(axes)):
+        axes[i].set_visible(False)
+
+    # Adjust layout and save
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.9)
+    pdf.savefig(fig, dpi=150, bbox_inches='tight')
+    plt.close(fig)
 
 
 def save_results(results, run_name):

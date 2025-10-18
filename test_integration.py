@@ -4,10 +4,10 @@ Test script for COIN_equality model integration.
 Demonstrates loading configuration, running the forward model, and saving outputs.
 
 Usage:
-    python test_integration.py [config_file]
+    python test_integration.py <config_file>
 
 Arguments:
-    config_file: Path to JSON configuration file (default: config_baseline.json)
+    config_file: Path to JSON configuration file (required)
 """
 
 import sys
@@ -16,11 +16,13 @@ from economic_model import integrate_model
 from output import save_results
 
 def main():
-    # Get config file from command line or use default
-    if len(sys.argv) > 1:
-        config_file = sys.argv[1]
-    else:
-        config_file = 'config_baseline.json'
+    # Get config file from command line (required)
+    if len(sys.argv) != 2:
+        print("Usage: python test_integration.py <config_file>")
+        print("Example: python test_integration.py config_baseline.json")
+        sys.exit(1)
+
+    config_file = sys.argv[1]
 
     # Load configuration
     print(f'Loading configuration from: {config_file}')
