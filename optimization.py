@@ -120,6 +120,8 @@ class UtilityOptimizer:
         self.n_evaluations = 0
         self.best_objective = -np.inf
         self.best_control_values = None
+        self.degenerate_case = False
+        self.degenerate_reason = None
 
     def calculate_objective(self, control_values, control_times):
         """
@@ -201,6 +203,22 @@ class UtilityOptimizer:
         self.n_evaluations = 0
         self.best_objective = -np.inf
         self.best_control_values = None
+        self.degenerate_case = False
+        self.degenerate_reason = None
+
+        deltaL = self.base_config.scalar_params.deltaL
+        if abs(deltaL) < 1e-15:
+            self.degenerate_case = True
+            self.degenerate_reason = "deltaL = 0: No income available for redistribution or abatement. Control values have no effect on outcome."
+            control_times = [self.base_config.integration_params.t_start]
+            obj = self.calculate_objective([initial_guess], control_times)
+            return {
+                'optimal_value': float(initial_guess),
+                'optimal_objective': obj,
+                'n_evaluations': self.n_evaluations,
+                'control_points': [(control_times[0], initial_guess)],
+                'status': 'degenerate'
+            }
 
         control_times = [self.base_config.integration_params.t_start]
 
@@ -288,6 +306,24 @@ class UtilityOptimizer:
         self.n_evaluations = 0
         self.best_objective = -np.inf
         self.best_control_values = None
+        self.degenerate_case = False
+        self.degenerate_reason = None
+
+        deltaL = self.base_config.scalar_params.deltaL
+        if abs(deltaL) < 1e-15:
+            self.degenerate_case = True
+            self.degenerate_reason = "deltaL = 0: No income available for redistribution or abatement. Control values have no effect on outcome."
+            control_times_array = np.array(control_times)
+            initial_guess_array = np.array(initial_guess)
+            obj = self.calculate_objective(initial_guess_array, control_times_array)
+            control_points = list(zip(control_times_array, initial_guess_array))
+            return {
+                'optimal_values': initial_guess_array,
+                'optimal_objective': obj,
+                'n_evaluations': self.n_evaluations,
+                'control_points': control_points,
+                'status': 'degenerate'
+            }
 
         n_points = len(control_times)
         control_times = np.array(control_times)

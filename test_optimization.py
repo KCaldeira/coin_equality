@@ -16,7 +16,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from parameters import load_configuration, ModelConfiguration
 from optimization import UtilityOptimizer, create_control_function_from_points
 from economic_model import integrate_model
-from output import save_results, write_optimization_summary
+from output import save_results, write_optimization_summary, copy_config_file
 
 
 def print_header(text):
@@ -290,35 +290,62 @@ def main():
 
     config_path = sys.argv[1]
 
-    print_header("SINGLE CONTROL POINT OPTIMIZATION TEST")
-    print(f"Configuration file: {config_path}")
-
     config = load_configuration(config_path)
+    control_times = config.optimization_params.control_times
+    n_control_points = len(control_times)
+
+    print_header(f"OPTIMIZATION TEST ({n_control_points} CONTROL POINTS)")
+    print(f"Configuration file: {config_path}")
     print(f"Run name: {config.run_name}")
     print(f"Time span: {config.integration_params.t_start} to {config.integration_params.t_end} years")
     print(f"Time step: {config.integration_params.dt} years")
 
     optimizer = UtilityOptimizer(config)
 
-    sensitivity_results = run_sensitivity_analysis(optimizer, n_points=21)
-
-    initial_guess = config.control_function(0.0)
+    initial_guess = config.optimization_params.initial_guess
     max_evaluations = config.optimization_params.max_evaluations
-    opt_results = run_optimization(optimizer, initial_guess, max_evaluations)
 
-    f_opt = opt_results['optimal_value']
-    comparison_scenarios = {
-        'Optimal': f_opt,
-        'All redistribution (f=0)': 0.0,
-        'Balanced (f=0.5)': 0.5,
-        'All abatement (f=1)': 1.0,
-    }
+    if len(control_times) == 1:
+        print(f"\n==> Running SINGLE control point optimization")
+        print(f"    Control time: {control_times[0]}")
+        print(f"    Initial guess: f = {initial_guess[0]}")
+        sensitivity_results = run_sensitivity_analysis(optimizer, n_points=21)
+        opt_results = run_optimization(optimizer, initial_guess[0], max_evaluations)
+    else:
+        print(f"\n==> Running MULTI-POINT control optimization")
+        print(f"    Number of control points: {len(control_times)}")
+        print(f"    Control times: {control_times}")
+        print(f"    Initial guess: {initial_guess}")
+        sensitivity_results = None
+        opt_results = optimizer.optimize_multiple_control_points(control_times, initial_guess, max_evaluations)
 
-    comparison_results = compare_scenarios(
-        config,
-        list(comparison_scenarios.values()),
-        list(comparison_scenarios.keys())
-    )
+        if opt_results['status'] == 'degenerate':
+            print(f"\n*** DEGENERATE CASE DETECTED ***")
+            print(f"No income available for redistribution or abatement (deltaL = 0)")
+            print(f"Control values have no effect on outcome.")
+            print(f"Returning initial guess values.")
+
+        print(f"\nOptimal control values:")
+        for t, f_val in opt_results['control_points']:
+            print(f"  t={t:6.1f} yr: f={f_val:.6f}")
+        print(f"Optimal objective:      {opt_results['optimal_objective']:.6e}")
+        print(f"Function evaluations:   {opt_results['n_evaluations']}")
+
+    if len(control_times) == 1:
+        f_opt = opt_results['optimal_value']
+        comparison_scenarios = {
+            'Optimal': f_opt,
+            'All redistribution (f=0)': 0.0,
+            'Balanced (f=0.5)': 0.5,
+            'All abatement (f=1)': 1.0,
+        }
+        comparison_results = compare_scenarios(
+            config,
+            list(comparison_scenarios.values()),
+            list(comparison_scenarios.keys())
+        )
+    else:
+        comparison_results = None
 
     print_header("SAVING RESULTS")
 
@@ -345,22 +372,33 @@ def main():
     opt_csv_path = write_optimization_summary(opt_results, sensitivity_results, output_paths['output_dir'], 'optimization_summary.csv')
     print(f"  Optimization CSV: {opt_csv_path}")
 
-    print("\nCreating comparison visualization plots...")
-    output_pdf = f'optimization_comparison_{config.run_name}.pdf'
-    create_visualization_plots(sensitivity_results, opt_results, comparison_results, output_pdf)
-    print(f"  Comparison PDF:   {output_pdf}")
+    print("\nCopying configuration file...")
+    config_copy_path = copy_config_file(config_path, output_paths['output_dir'])
+    print(f"  Configuration:    {config_copy_path}")
+
+    if comparison_results:
+        print("\nCreating comparison visualization plots...")
+        output_pdf = f'optimization_comparison_{config.run_name}.pdf'
+        create_visualization_plots(sensitivity_results, opt_results, comparison_results, output_pdf)
+        print(f"  Comparison PDF:   {output_pdf}")
 
     print_header("SUMMARY")
-    print(f"Optimal constant allocation: f₀ = {f_opt:.6f}")
-    print(f"Optimal objective value: {opt_results['optimal_objective']:.6e}")
-    print(f"\nComparison with other strategies:")
-    for label, data in comparison_results.items():
-        obj_diff = data['objective'] - opt_results['optimal_objective']
-        pct_diff = 100 * obj_diff / abs(opt_results['optimal_objective'])
-        if label == 'Optimal':
-            print(f"  {label:30s}: objective = {data['objective']:.6e} (optimal)")
-        else:
-            print(f"  {label:30s}: objective = {data['objective']:.6e} ({pct_diff:+.2f}% from optimal)")
+    if len(control_times) == 1:
+        print(f"Optimal constant allocation: f₀ = {f_opt:.6f}")
+        print(f"Optimal objective value: {opt_results['optimal_objective']:.6e}")
+        print(f"\nComparison with other strategies:")
+        for label, data in comparison_results.items():
+            obj_diff = data['objective'] - opt_results['optimal_objective']
+            pct_diff = 100 * obj_diff / abs(opt_results['optimal_objective'])
+            if label == 'Optimal':
+                print(f"  {label:30s}: objective = {data['objective']:.6e} (optimal)")
+            else:
+                print(f"  {label:30s}: objective = {data['objective']:.6e} ({pct_diff:+.2f}% from optimal)")
+    else:
+        print(f"Optimal control trajectory:")
+        for t, f_val in opt_results['control_points']:
+            print(f"  t={t:6.1f} yr: f={f_val:.6f}")
+        print(f"\nOptimal objective value: {opt_results['optimal_objective']:.6e}")
 
     print(f"\nAll results saved to: {output_paths['output_dir']}")
     print_header("OPTIMIZATION TEST COMPLETE")

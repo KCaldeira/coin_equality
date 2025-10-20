@@ -21,7 +21,7 @@
     "_rho": "Pure rate of time preference (1 % per year)",
     "Gini_initial": 0.67,
     "_Gini_initial": "Initial Gini index (moderate inequality)",
-    "deltaL": 0.02,
+    "deltaL": 0.0,
     "_deltaL": "Fraction of income available for redistribution (5%)",
     "theta2": 2.0,
     "_theta2": "Abatement cost exponent (quadratic)"

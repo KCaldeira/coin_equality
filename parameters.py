@@ -247,8 +247,18 @@ class OptimizationParameters:
     ----------
     max_evaluations : int
         Maximum number of objective function evaluations
+    control_times : list of float
+        Times (years) where control points are placed.
+        For single-point: [0]
+        For multi-point: e.g., [0, 25, 50, 75, 100]
+    initial_guess : list of float
+        Initial f values at each control time.
+        Must have same length as control_times.
+        Each value must satisfy 0 ≤ f ≤ 1.
     """
     max_evaluations: int
+    control_times: list
+    initial_guess: list
 
 
 @dataclass

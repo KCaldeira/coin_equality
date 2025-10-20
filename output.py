@@ -6,6 +6,7 @@ Creates CSV files and PDF plots of model results in timestamped directories.
 
 import os
 import csv
+import shutil
 from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
@@ -109,6 +110,33 @@ def create_output_directory(run_name):
     return output_dir
 
 
+def copy_config_file(config_path, output_dir):
+    """
+    Copy configuration JSON file to output directory.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to input configuration file
+    output_dir : str
+        Directory to copy file to
+
+    Returns
+    -------
+    str
+        Path to copied configuration file
+
+    Notes
+    -----
+    Preserves the original filename and formatting.
+    Ensures reproducibility by keeping exact copy of configuration used.
+    """
+    filename = os.path.basename(config_path)
+    output_path = os.path.join(output_dir, filename)
+    shutil.copy2(config_path, output_path)
+    return output_path
+
+
 def write_optimization_summary(opt_results, sensitivity_results, output_dir, filename='optimization_summary.csv'):
     """
     Write optimization summary statistics to CSV file.
@@ -156,6 +184,12 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
         writer.writerow(['Optimal objective', f"{opt_results['optimal_objective']:.6e}"])
         writer.writerow(['Function evaluations', opt_results['n_evaluations']])
         writer.writerow(['Status', opt_results['status']])
+
+        if opt_results['status'] == 'degenerate':
+            writer.writerow([])
+            writer.writerow(['WARNING: DEGENERATE CASE'])
+            writer.writerow(['Reason', 'No income available for redistribution or abatement (deltaL = 0)'])
+            writer.writerow(['Note', 'Control values have no effect on outcome. Returning initial guess.'])
         writer.writerow([])
 
         writer.writerow(['Control Points'])

@@ -19,15 +19,6 @@ def crossing_rank_from_G(Gini_initial, G2):
     s = ((1.0 + Gini_initial) * (1.0 + G2)) / (2.0 * (G2 - Gini_initial))
     return 1.0 - (r ** s)
 
-def deltaL_G1_G2(Gini_initial, G2):  # ΔL at the crossing, Pareto→Pareto, log-stable
-    N = (1.0 - G2) * (1.0 + Gini_initial)
-    D = (1.0 + G2) * (1.0 - Gini_initial)
-    num = N - D
-    r = N / D
-    # sign * exp( log|num| - log D + (N/(D-N)) * log r )
-    sign = 1.0 if num >= 0 else -1.0
-    return sign * math.exp(math.log(abs(num)) - math.log(D) + (N / (D - N)) * math.log(r))
-
 def _phi(r):  # helper for bracketing cap; φ(r) = (r-1) r^{1/(r-1)-1}
     if r <= 0:
         return float("-inf")
@@ -44,6 +35,10 @@ def G2_from_deltaL(deltaL, Gini_initial):
     """
     if not (0 < Gini_initial < 1):
         raise ValueError("Gini_initial must be in (0,1).")
+
+    if abs(deltaL) < 1e-15:
+        return Gini_initial, 0.0
+
     A1 = (1.0 - Gini_initial) / (1.0 + Gini_initial)
     r_max = 1.0 / A1  # corresponds to G2 -> 0
     deltaL_max = _phi(r_max)

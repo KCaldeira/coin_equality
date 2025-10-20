@@ -329,8 +329,6 @@ The `income_distribution.py` module provides the core mathematical functions for
 
 - **`crossing_rank_from_G(Gini_initial, G2)`** - Computes the population rank `F*` where income remains unchanged during redistribution from `Gini_initial` to `G2` (equation 10)
 
-- **`deltaL_G1_G2(Gini_initial, G2)`** - Calculates the fraction of total income `ΔL` redistributed when Gini shifts from `Gini_initial` to `G2` (equation 11). Uses log-space arithmetic for numerical stability.
-
 ### Inverse Problem: Finding G2 from ΔL
 
 - **`_phi(r)`** - Helper function for numerical root finding; computes `φ(r) = (r-1) · r^(1/(r-1)-1)` with proper handling of edge cases
@@ -626,108 +624,88 @@ See the **Testing the Forward Model** section above for detailed instructions on
 
 ## Next Steps
 
-### 1. Implement Single Control Point Optimization
+### 1. ✅ Single Control Point Optimization (COMPLETED)
 
-Create an optimization framework using a **control point parameterization** approach, starting with a single control point to find the optimal constant allocation fraction.
+**Status:** Implemented and tested successfully.
 
-**Objective:**
+**Implementation summary:**
+
+The optimization framework uses a **control point parameterization** approach that maximizes discounted aggregate utility:
+
 ```
-max ∫₀^T e^(-ρt) · U(t) · L(t) dt,  subject to 0 ≤ f₀ ≤ 1
+max ∫₀^T e^(-ρt) · U(t) · L(t) dt,  subject to 0 ≤ f ≤ 1
 ```
 
-where `f(t)` is determined by a single control point at t=0.
+**Key components:**
 
-**Control point parameterization design:**
+1. **`optimization.py`** - Core optimization module
+   - `evaluate_control_function()` - Pchip interpolation with constant extrapolation
+   - `UtilityOptimizer` class with `optimize_single_control_point()` and `optimize_multiple_control_points()`
+   - Uses NLopt BOBYQA algorithm (derivative-free, bound-constrained)
+   - Objective: maximize discounted utility integral using trapezoidal rule
 
-The control function `f(t)` is defined by discrete control points at specified times:
-- **Control points**: `[(t₀, f₀), (t₁, f₁), ..., (t_N, f_N)]`
-- **Interpolation rule**: Use Pchip (Piecewise Cubic Hermite Interpolating Polynomial) from `scipy.interpolate.PchipInterpolator`
-  - Provides C¹ continuity (continuous first derivatives)
-  - Shape-preserving and monotonicity-preserving
-  - Guarantees no overshoot beyond the range of control point values
-  - Ensures `f(t)` remains within [0,1] when all control points satisfy 0 ≤ fᵢ ≤ 1
-- **Extrapolation rule**: For `t > t_max` where `t_max = max(t₀, t₁, ..., t_N)`, use `f(t) = f(t_max)` (constant extrapolation beyond last control point)
+2. **`test_optimization.py`** - Complete optimization workflow
+   - Sensitivity analysis across f ∈ [0, 1]
+   - Single control point optimization
+   - Scenario comparison (optimal vs. fixed allocations)
+   - Saves results to timestamped directory with:
+     - `results.csv` - forward model time series
+     - `plots.pdf` - comprehensive visualization "book"
+     - `optimization_summary.csv` - optimization statistics
 
-**Special case - single control point:**
-- Control points: `[(0, f₀)]`
-- Result: `f(t) = f₀` for all t (constant trajectory)
-- Optimization variable: single scalar `f₀`
+3. **Configuration in JSON** - `optimization_parameters` section
+   ```json
+   "optimization_parameters": {
+     "max_evaluations": 1000
+   }
+   ```
+   - Initial guess taken from `control_function.value`
+   - All parameters required (fail-fast philosophy)
 
-This design ensures the framework naturally handles both constant (1 control point) and time-varying (multiple control points) optimization.
+**Baseline results:**
+- Optimal constant allocation: f₀ = 0.621 (62% to abatement, 38% to redistribution)
+- Converges in 15 function evaluations
+- Objective: -7.043×10⁹ (discounted aggregate utility)
+
+**Control point framework:**
+- Uses Pchip interpolation (C¹ continuity, shape-preserving, monotonic)
+- Constant extrapolation beyond last control point
+- Single control point → constant trajectory
+- Multiple control points → time-varying trajectory
+- Framework ready for Step 2 multi-point optimization
+
+### 2. Multi-Point Time-Dependent Optimization
+
+Extend the single control point optimization to find optimal time-varying trajectories `f(t)` by using multiple control points.
+
+**Configuration structure:**
+
+The JSON configuration supports both single and multi-point optimization through the `optimization_parameters` section:
+
+```json
+"optimization_parameters": {
+  "max_evaluations": 10000,
+  "control_times": [0, 25, 50, 75, 100],
+  "initial_guess": [0.5, 0.5, 0.5, 0.5, 0.5]
+}
+```
+
+**Configuration rules:**
+- `control_times`: Array of times (years) where control points are placed
+  - Must be in ascending order
+  - For single-point optimization: `[0]`
+  - For multi-point: any number of times, e.g., `[0, 25, 50, 75, 100]`
+- `initial_guess`: Array of initial f values, one per control time
+  - Must have same length as `control_times`
+  - Each value must satisfy 0 ≤ f ≤ 1
+  - For single-point: `[0.5]` (or read from `control_function.value`)
+- `max_evaluations`: Maximum objective function evaluations
+  - Single-point: ~1000 typically sufficient
+  - Multi-point: scale with problem size (e.g., 10000 for 5 points)
 
 **Implementation approach:**
-1. **Control point evaluation function:**
-   - Takes list of `(time, value)` control points and evaluation time `t`
-   - Returns `f(t)` using linear interpolation and constant extrapolation
-   - Special case: single control point returns constant for all `t`
 
-2. **Optimization using NLopt with BOBYQA:**
-   - Start with single control point at t=0
-   - Optimize the value `f₀` to maximize objective function
-   - Framework designed to extend to multiple control points in Step 2
-
-3. **Integration with existing model:**
-   - Modify control function to accept control point parameterization
-   - Use forward model to evaluate objective for given control points
-   - Calculate discounted utility integral
-
-**Why NLopt/BOBYQA:**
-- **Derivative-free**: Perfect for simulation-based objective functions
-- **Bound-constrained**: Natural handling of `0 ≤ f ≤ 1` constraints
-- **Robust for expensive functions**: Designed for cases where each objective evaluation requires significant computation
-- **Scales well**: Easy transition from single-variable to multi-variable optimization
-- **Professional-grade**: Widely used in research and industry applications
-
-**Installation:**
-```bash
-pip install nlopt
-```
-
-**Basic framework structure:**
-```python
-import nlopt
-import numpy as np
-
-def evaluate_control_function(control_points, t):
-    """
-    Evaluate f(t) from control points using Pchip interpolation
-    and constant extrapolation beyond last point.
-
-    control_points: list of (time, value) tuples
-    t: evaluation time or array of times
-
-    Uses scipy.interpolate.PchipInterpolator for shape-preserving
-    interpolation with continuous derivatives.
-    For t > t_max, returns f(t_max) (constant extrapolation).
-    For single control point at t=0, returns constant for all t.
-    """
-    pass
-
-class UtilityOptimizer:
-    def optimize_single_control_point(self):
-        opt = nlopt.opt(nlopt.LN_BOBYQA, 1)  # 1D optimization
-        opt.set_bounds([0], [1])             # 0 ≤ f₀ ≤ 1
-        opt.set_min_objective(self._objective_function)
-        opt.set_maxeval(1000)
-        return opt.optimize([0.5])           # Start at f₀=0.5
-```
-
-**Key benefits of this approach:**
-- Complete control point framework implemented in Step 1 (no new Python code needed in Step 2)
-- Single control point naturally produces constant `f(t)`
-- Step 2 focuses purely on optimization refinement (convergence, multi-point strategies)
-- Easy extension: add more control points without changing evaluation code
-
-**Expected deliverables:**
-- `optimization.py` module with control point evaluation and optimization framework
-- Optimal single control point value `f₀` for baseline scenario
-- Sensitivity analysis showing objective function vs. `f₀`
-- Comparison charts showing optimal constant vs. arbitrary constant values
-- Documentation of optimization results and convergence behavior
-
-### 2. Refine Multi-Point Time-Dependent Optimization
-
-Extend the single control point optimization to find optimal time-varying trajectories `f(t)` by using multiple control points. Since the control point framework is already implemented in Step 1, this step focuses on **optimization strategy and convergence**.
+Since the control point framework is already implemented in Step 1, this step focuses on **optimization strategy and convergence**.
 
 **Objective:**
 ```
