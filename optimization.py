@@ -174,7 +174,7 @@ class UtilityOptimizer:
 
         return -objective_value
 
-    def optimize_single_control_point(self, initial_guess=0.5, max_evaluations=1000):
+    def optimize_single_control_point(self, initial_guess, max_evaluations):
         """
         Optimize allocation with a single control point (constant trajectory).
 
@@ -183,9 +183,9 @@ class UtilityOptimizer:
         Parameters
         ----------
         initial_guess : float
-            Initial guess for f₀ (default: 0.5)
+            Initial guess for f₀
         max_evaluations : int
-            Maximum number of objective function evaluations (default: 1000)
+            Maximum number of objective function evaluations
 
         Returns
         -------
@@ -259,7 +259,7 @@ class UtilityOptimizer:
             'n_evaluations': self.n_evaluations
         }
 
-    def optimize_multiple_control_points(self, control_times, initial_guess, max_evaluations=10000):
+    def optimize_multiple_control_points(self, control_times, initial_guess, max_evaluations):
         """
         Optimize allocation with multiple control points (time-varying trajectory).
 
@@ -272,7 +272,7 @@ class UtilityOptimizer:
         initial_guess : array_like
             Initial guess for control values at each control time
         max_evaluations : int
-            Maximum number of objective function evaluations (default: 10000)
+            Maximum number of objective function evaluations
 
         Returns
         -------

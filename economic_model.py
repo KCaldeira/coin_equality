@@ -34,7 +34,7 @@ def calculate_tendencies(state, params):
         - 'sigma': Carbon intensity of GDP (current, tCO2 $^-1)
         - 'theta1': Abatement cost coefficient (current, $ tCO2^-1)
         - 'theta2': Abatement cost exponent
-        - 'G1': Initial Gini index
+        - 'Gini_initial': Initial Gini index
         - 'delta_L': Fraction of income to redistribute
         - 'f': Fraction allocated to abatement vs redistribution
 
@@ -61,7 +61,7 @@ def calculate_tendencies(state, params):
     10. Λ from abatecost, Y_damaged (Eq 1.7)
     11. Y_net from Y_damaged, Λ (Eq 1.8)
     12. y_eff from y, abatecost, L (Eq 1.9)
-    13. G_eff from f, ΔL, G₁ (Eq 4.4)
+    13. G_eff from f, ΔL, Gini_initial (Eq 4.4)
     14. U from y_eff, G_eff, η (Eq 3.5)
     15. E from σ, μ, Y_gross (Eq 2.3)
     16. dK/dt from s, Y_net, δ, K (Eq 1.10)
@@ -84,7 +84,7 @@ def calculate_tendencies(state, params):
     theta1 = params['theta1']
     theta2 = params['theta2']
     delta_L = params['delta_L']
-    G1 = params['G1']
+    Gini_initial = params['Gini_initial']
     f = params['f']
 
     # Eq 1.1: Gross production (Cobb-Douglas)
@@ -124,7 +124,7 @@ def calculate_tendencies(state, params):
     y_eff = y - abatecost / L
 
     # Eq 4.4: Effective Gini index
-    G_eff, _ = G2_effective_pareto(f, delta_L, G1)
+    G_eff, _ = G2_effective_pareto(f, delta_L, Gini_initial)
 
     # Eq 3.5: Mean utility
     if np.abs(eta - 1.0) < 1e-10:

@@ -12,16 +12,16 @@ def L_pareto(F, G):  # Lorenz curve at F for Pareto-Lorenz with G
     a = a_from_G(G)
     return 1.0 - (1.0 - F)**(1.0 - 1.0/a)
 
-def crossing_rank_from_G(G1, G2):
-    if G1 == G2:
+def crossing_rank_from_G(Gini_initial, G2):
+    if Gini_initial == G2:
         return 0.5
-    r = ((1.0 - G2) * (1.0 + G1)) / ((1.0 + G2) * (1.0 - G1))
-    s = ((1.0 + G1) * (1.0 + G2)) / (2.0 * (G2 - G1))
+    r = ((1.0 - G2) * (1.0 + Gini_initial)) / ((1.0 + G2) * (1.0 - Gini_initial))
+    s = ((1.0 + Gini_initial) * (1.0 + G2)) / (2.0 * (G2 - Gini_initial))
     return 1.0 - (r ** s)
 
-def deltaL_G1_G2(G1, G2):  # ΔL at the crossing, Pareto→Pareto, log-stable
-    N = (1.0 - G2) * (1.0 + G1)
-    D = (1.0 + G2) * (1.0 - G1)
+def deltaL_G1_G2(Gini_initial, G2):  # ΔL at the crossing, Pareto→Pareto, log-stable
+    N = (1.0 - G2) * (1.0 + Gini_initial)
+    D = (1.0 + G2) * (1.0 - Gini_initial)
     num = N - D
     r = N / D
     # sign * exp( log|num| - log D + (N/(D-N)) * log r )
@@ -37,14 +37,14 @@ def _phi(r):  # helper for bracketing cap; φ(r) = (r-1) r^{1/(r-1)-1}
     log_abs = math.log(abs(r - 1.0)) + (1.0/(r - 1.0) - 1.0) * math.log(r)
     return sgn * math.exp(log_abs)
 
-def G2_from_deltaL(deltaL, G1):
+def G2_from_deltaL(deltaL, Gini_initial):
     """
-    Solve ΔL(G1,G2)=deltaL for G2 (bounded in (0,G1]).
+    Solve ΔL(Gini_initial,G2)=deltaL for G2 (bounded in (0,Gini_initial]).
     Caps at G2=0 if deltaL exceeds the Pareto-family maximum.
     """
-    if not (0 < G1 < 1):
-        raise ValueError("G1 must be in (0,1).")
-    A1 = (1.0 - G1) / (1.0 + G1)
+    if not (0 < Gini_initial < 1):
+        raise ValueError("Gini_initial must be in (0,1).")
+    A1 = (1.0 - Gini_initial) / (1.0 + Gini_initial)
     r_max = 1.0 / A1  # corresponds to G2 -> 0
     deltaL_max = _phi(r_max)
     if deltaL >= deltaL_max - 1e-15:
@@ -62,9 +62,9 @@ def G2_from_deltaL(deltaL, G1):
 
 # --- the two-step “Pareto-preserving” effective Gini ---
 
-def G2_effective_pareto(f, deltaL, G1):
+def G2_effective_pareto(f, deltaL, Gini_initial):
     """
-    Step 1: find G2 (full redistribution) from ΔL and G1.
+    Step 1: find G2 (full redistribution) from ΔL and Gini_initial.
     Step 2: keep the same crossing F*, compute ΔL_eff for partial allocation,
             then solve for G2_eff from ΔL_eff in the Pareto family.
     Returns (G2_eff, remainder_from_cap).
@@ -72,14 +72,14 @@ def G2_effective_pareto(f, deltaL, G1):
     if not (0 <= f <= 1):
         raise ValueError("f must be in [0,1].")
     # Step 1: full redistribution target in Pareto family
-    G2_full, rem = G2_from_deltaL(deltaL, G1)
+    G2_full, rem = G2_from_deltaL(deltaL, Gini_initial)
     if rem > 0:
         # You already hit the G2=0 cap with full ΔL; partial will remain at/above 0.
         return 0.0, rem
 
-    # Crossing rank for (G1 -> G2_full)
-    Fstar = crossing_rank_from_G(G1, G2_full)
-    L1_star = L_pareto(Fstar, G1)
+    # Crossing rank for (Gini_initial -> G2_full)
+    Fstar = crossing_rank_from_G(Gini_initial, G2_full)
+    L1_star = L_pareto(Fstar, Gini_initial)
 
     # Step 2: partial allocation: ΔL_eff at the same F*
     # L_new(F*) = [ L1_star + (1-f)ΔL ] / (1 - fΔL)
@@ -87,5 +87,5 @@ def G2_effective_pareto(f, deltaL, G1):
     deltaL_eff = deltaL * ((1.0 - f) + f * L1_star) / (1.0 - f * deltaL)
 
     # Solve for Pareto-equivalent G2_eff
-    G2_eff, rem_eff = G2_from_deltaL(deltaL_eff, G1)
+    G2_eff, rem_eff = G2_from_deltaL(deltaL_eff, Gini_initial)
     return G2_eff, rem_eff

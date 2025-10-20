@@ -19,8 +19,8 @@
     "_eta": "Coefficient of relative risk aversion",
     "rho": 0.01,
     "_rho": "Pure rate of time preference (1 % per year)",
-    "G1": 0.67,
-    "_G1": "Initial Gini index (moderate inequality)",
+    "Gini_initial": 0.67,
+    "_Gini_initial": "Initial Gini index (moderate inequality)",
     "deltaL": 0.02,
     "_deltaL": "Fraction of income available for redistribution (5%)",
     "theta2": 2.0,
@@ -76,5 +76,11 @@
     "type": "constant",
     "value": 0.5,
     "_value": "50% to abatement, 50% to redistribution"
+  },
+
+  "optimization_parameters": {
+    "_description": "Parameters for optimization runs",
+    "max_evaluations": 1000,
+    "_max_evaluations": "Maximum number of objective function evaluations for single control point optimization"
   }
 }

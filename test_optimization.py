@@ -64,7 +64,7 @@ def run_sensitivity_analysis(optimizer, n_points=21):
     return results
 
 
-def run_optimization(optimizer, initial_guess=0.5):
+def run_optimization(optimizer, initial_guess, max_evaluations):
     """
     Run single control point optimization.
 
@@ -73,7 +73,9 @@ def run_optimization(optimizer, initial_guess=0.5):
     optimizer : UtilityOptimizer
         Optimizer instance
     initial_guess : float
-        Initial guess for optimization (default: 0.5)
+        Initial guess for optimization
+    max_evaluations : int
+        Maximum number of objective function evaluations
 
     Returns
     -------
@@ -82,9 +84,10 @@ def run_optimization(optimizer, initial_guess=0.5):
     """
     print_header("SINGLE CONTROL POINT OPTIMIZATION")
     print(f"Initial guess: f₀ = {initial_guess}")
+    print(f"Max evaluations: {max_evaluations}")
     print("Running BOBYQA optimization...\n")
 
-    opt_results = optimizer.optimize_single_control_point(initial_guess)
+    opt_results = optimizer.optimize_single_control_point(initial_guess, max_evaluations)
 
     print_optimization_results(opt_results)
 
@@ -124,6 +127,7 @@ def compare_scenarios(config, f_values, labels):
             scalar_params=config.scalar_params,
             time_functions=config.time_functions,
             integration_params=config.integration_params,
+            optimization_params=config.optimization_params,
             initial_state=config.initial_state,
             control_function=create_control_function_from_points([(0, f_val)])
         )
@@ -301,7 +305,9 @@ def main():
 
     sensitivity_results = run_sensitivity_analysis(optimizer, n_points=21)
 
-    opt_results = run_optimization(optimizer, initial_guess=0.5)
+    initial_guess = config.control_function(0.0)
+    max_evaluations = config.optimization_params.max_evaluations
+    opt_results = run_optimization(optimizer, initial_guess, max_evaluations)
 
     f_opt = opt_results['optimal_value']
     comparison_scenarios = {

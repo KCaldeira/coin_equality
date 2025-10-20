@@ -40,7 +40,7 @@ def main():
     print(f'  s = {config.scalar_params.s}')
     print(f'  eta = {config.scalar_params.eta}')
     print(f'  rho = {config.scalar_params.rho}')
-    print(f'  G1 = {config.scalar_params.G1}')
+    print(f'  Gini_initial = {config.scalar_params.Gini_initial}')
     print(f'  deltaL = {config.scalar_params.deltaL}')
 
     # Run integration

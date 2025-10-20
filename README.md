@@ -248,7 +248,7 @@ Utility and inequality parameters:
 |-----------|-------------|-------|----------|
 | `η` | Coefficient of relative risk aversion (CRRA) | - | `eta` |
 | `ρ` | Pure rate of time preference | yr⁻¹ | `rho` |
-| `G₁` | Initial Gini index (0 = perfect equality, 1 = max inequality) | - | `G1` |
+| `G₁` | Initial Gini index (0 = perfect equality, 1 = max inequality) | - | `Gini_initial` |
 | `ΔL` | Fraction of income available for redistribution | - | `deltaL` |
 
 Abatement cost parameters:
@@ -327,23 +327,23 @@ The `income_distribution.py` module provides the core mathematical functions for
 
 ### Redistribution Mechanics
 
-- **`crossing_rank_from_G(G1, G2)`** - Computes the population rank `F*` where income remains unchanged during redistribution from `G1` to `G2` (equation 10)
+- **`crossing_rank_from_G(Gini_initial, G2)`** - Computes the population rank `F*` where income remains unchanged during redistribution from `Gini_initial` to `G2` (equation 10)
 
-- **`deltaL_G1_G2(G1, G2)`** - Calculates the fraction of total income `ΔL` redistributed when Gini shifts from `G1` to `G2` (equation 11). Uses log-space arithmetic for numerical stability.
+- **`deltaL_G1_G2(Gini_initial, G2)`** - Calculates the fraction of total income `ΔL` redistributed when Gini shifts from `Gini_initial` to `G2` (equation 11). Uses log-space arithmetic for numerical stability.
 
 ### Inverse Problem: Finding G2 from ΔL
 
 - **`_phi(r)`** - Helper function for numerical root finding; computes `φ(r) = (r-1) · r^(1/(r-1)-1)` with proper handling of edge cases
 
-- **`G2_from_deltaL(deltaL, G1)`** - **Solves the inverse problem**: given an initial Gini `G1` and a desired redistribution amount `ΔL`, numerically finds the target Gini `G2` that would result from full redistribution. Uses `scipy.optimize.root_scalar` with Brent's method. Returns `(G2, remainder)` where remainder is non-zero if `ΔL` exceeds the maximum possible for the Pareto family (caps at G2=0).
+- **`G2_from_deltaL(deltaL, Gini_initial)`** - **Solves the inverse problem**: given an initial Gini `Gini_initial` and a desired redistribution amount `ΔL`, numerically finds the target Gini `G2` that would result from full redistribution. Uses `scipy.optimize.root_scalar` with Brent's method. Returns `(G2, remainder)` where remainder is non-zero if `ΔL` exceeds the maximum possible for the Pareto family (caps at G2=0).
 
 ### Effective Gini Calculation
 
-- **`G2_effective_pareto(f, deltaL, G1)`** - **Main function** that calculates the effective Gini index when fraction `f` of redistributable resources is allocated to emissions abatement instead of redistribution.
+- **`G2_effective_pareto(f, deltaL, Gini_initial)`** - **Main function** that calculates the effective Gini index when fraction `f` of redistributable resources is allocated to emissions abatement instead of redistribution.
 
   **Algorithm:**
-  1. Solves for full-redistribution target `G2` from `ΔL` and `G1`
-  2. Computes crossing rank `F*` for the `(G1 → G2)` transition
+  1. Solves for full-redistribution target `G2` from `ΔL` and `Gini_initial`
+  2. Computes crossing rank `F*` for the `(Gini_initial → G2)` transition
   3. Calculates effective redistribution amount `ΔL_eff` at the same `F*` for partial allocation
   4. Solves for Pareto-equivalent `G2_eff` from `ΔL_eff`
 
@@ -360,7 +360,7 @@ The `income_distribution.py` module provides the core mathematical functions for
 from income_distribution import G2_effective_pareto
 
 # Initial Gini index
-G1 = 0.4
+Gini_initial = 0.4
 
 # Fraction of income to be redistributed (e.g., 5% of total income)
 deltaL = 0.05
@@ -369,7 +369,7 @@ deltaL = 0.05
 f = 0.5  # 50% to abatement, 50% to redistribution
 
 # Calculate effective Gini index
-G_eff, remainder = G2_effective_pareto(f, deltaL, G1)
+G_eff, remainder = G2_effective_pareto(f, deltaL, Gini_initial)
 
 print(f"Effective Gini: {G_eff:.4f}")
 ```
@@ -388,7 +388,7 @@ Each JSON configuration file must contain:
    - Economic: `alpha`, `delta`, `s`
    - Climate: `k_damage_coeff`, `k_damage_exp`, `k_climate`
    - Utility: `eta`, `rho`
-   - Distribution: `G1`, `deltaL`
+   - Distribution: `Gini_initial`, `deltaL`
    - Abatement: `theta2`
 
 4. **`time_functions`** - Time-dependent functions (A, L, sigma, theta1), each specified with:

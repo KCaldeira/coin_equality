@@ -193,8 +193,8 @@ class ScalarParameters:
         Coefficient of relative risk aversion (CRRA utility parameter)
     rho : float
         Pure rate of time preference (yr^-1)
-    G1 : float
-        Initial Gini index (0 < G1 < 1)
+    Gini_initial : float
+        Initial Gini index (0 < Gini_initial < 1)
     deltaL : float
         Fraction of income available for redistribution
     theta2 : float
@@ -208,7 +208,7 @@ class ScalarParameters:
     k_climate: float
     eta: float
     rho: float
-    G1: float
+    Gini_initial: float
     deltaL: float
     theta2: float
 
@@ -216,7 +216,7 @@ class ScalarParameters:
 @dataclass
 class IntegrationParameters:
     """
-    Parameters controlling time integration and optimization.
+    Parameters controlling time integration.
 
     Attributes
     ----------
@@ -239,6 +239,19 @@ class IntegrationParameters:
 
 
 @dataclass
+class OptimizationParameters:
+    """
+    Parameters controlling optimization.
+
+    Attributes
+    ----------
+    max_evaluations : int
+        Maximum number of objective function evaluations
+    """
+    max_evaluations: int
+
+
+@dataclass
 class ModelConfiguration:
     """
     Complete model configuration bundling all parameters.
@@ -253,7 +266,9 @@ class ModelConfiguration:
         Dictionary mapping parameter names to time-dependent callables.
         Required keys: 'A', 'L', 'sigma', 'theta1'
     integration_params : IntegrationParameters
-        Integration and optimization control parameters
+        Integration control parameters
+    optimization_params : OptimizationParameters
+        Optimization control parameters
     initial_state : dict or None
         Initial conditions (computed automatically by integrate_model if None)
     control_function : callable
@@ -263,6 +278,7 @@ class ModelConfiguration:
     scalar_params: ScalarParameters
     time_functions: dict
     integration_params: IntegrationParameters
+    optimization_params: OptimizationParameters
     initial_state: dict
     control_function: callable
 
@@ -307,7 +323,7 @@ def evaluate_params_at_time(t, config):
         'k_climate': sp.k_climate,
         'eta': sp.eta,
         'rho': sp.rho,
-        'G1': sp.G1,
+        'Gini_initial': sp.Gini_initial,
         'delta_L': sp.deltaL,
         'theta2': sp.theta2,
 
@@ -458,6 +474,7 @@ def load_configuration(config_path):
     - scalar_parameters: dict with all ScalarParameters fields
     - time_functions: dict with specs for A, L, sigma, theta1
     - integration_parameters: dict with t_start, t_end, dt, rtol, atol
+    - optimization_parameters: dict with max_evaluations
     - control_function: dict with type and parameters
 
     Initial state is computed automatically by integrate_model():
@@ -486,6 +503,10 @@ def load_configuration(config_path):
     integration_params_data = _filter_description_keys(config_data['integration_parameters'])
     integration_params = IntegrationParameters(**integration_params_data)
 
+    # Create optimization parameters (filter out description keys)
+    optimization_params_data = _filter_description_keys(config_data['optimization_parameters'])
+    optimization_params = OptimizationParameters(**optimization_params_data)
+
     # Create control function (filter out description keys)
     control_function_data = _filter_description_keys(config_data['control_function'])
     control_function = _create_control_function(control_function_data)
@@ -498,6 +519,7 @@ def load_configuration(config_path):
         scalar_params=scalar_params,
         time_functions=time_functions,
         integration_params=integration_params,
+        optimization_params=optimization_params,
         initial_state=None,
         control_function=control_function,
     )
