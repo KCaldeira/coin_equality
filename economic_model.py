@@ -127,7 +127,10 @@ def calculate_tendencies(state, params):
     G_eff, _ = G2_effective_pareto(f, delta_L, Gini_initial)
 
     # Eq 3.5: Mean utility
-    if np.abs(eta - 1.0) < 1e-10:
+    U_failure = -1e20
+    if y_eff <= 0:
+        U = U_failure
+    elif np.abs(eta - 1.0) < 1e-10:
         U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
     else:
         term1 = (y_eff ** (1 - eta)) / (1 - eta)
