@@ -135,11 +135,10 @@ class UtilityOptimizer:
         Returns
         -------
         float
-            Negative of discounted utility integral (for minimization)
+            Discounted utility integral
 
         Notes
         -----
-        Returns negative because NLopt minimizes by default.
         Uses trapezoidal integration for the discounted utility integral.
         """
         self.n_evaluations += 1
@@ -152,6 +151,7 @@ class UtilityOptimizer:
             scalar_params=self.base_config.scalar_params,
             time_functions=self.base_config.time_functions,
             integration_params=self.base_config.integration_params,
+            optimization_params=self.base_config.optimization_params,
             initial_state=self.base_config.initial_state,
             control_function=control_function
         )
@@ -166,13 +166,14 @@ class UtilityOptimizer:
         discount_factors = np.exp(-rho * t)
         integrand = discount_factors * U * L
 
+        # np.trapezoid for numerically integrates by drawing a straight line between points
         objective_value = np.trapezoid(integrand, t)
 
         if objective_value > self.best_objective:
             self.best_objective = objective_value
             self.best_control_values = control_values.copy()
 
-        return -objective_value
+        return objective_value
 
     def optimize_single_control_point(self, initial_guess, max_evaluations):
         """
@@ -209,7 +210,7 @@ class UtilityOptimizer:
         opt = nlopt.opt(nlopt.LN_BOBYQA, 1)
         opt.set_lower_bounds([0.0])
         opt.set_upper_bounds([1.0])
-        opt.set_min_objective(objective_wrapper)
+        opt.set_max_objective(objective_wrapper)
         opt.set_maxeval(max_evaluations)
         opt.set_xtol_rel(1e-6)
 
@@ -219,7 +220,7 @@ class UtilityOptimizer:
 
         return {
             'optimal_value': float(optimal_x[0]),
-            'optimal_objective': -optimal_f,
+            'optimal_objective': optimal_f,
             'n_evaluations': self.n_evaluations,
             'control_points': [(control_times[0], optimal_x[0])],
             'status': 'success'
@@ -250,7 +251,7 @@ class UtilityOptimizer:
 
         objectives = []
         for f_val in f_values:
-            obj = -self.calculate_objective([f_val], control_times)
+            obj = self.calculate_objective([f_val], control_times)
             objectives.append(obj)
 
         return {
@@ -297,7 +298,7 @@ class UtilityOptimizer:
         opt = nlopt.opt(nlopt.LN_BOBYQA, n_points)
         opt.set_lower_bounds(np.zeros(n_points))
         opt.set_upper_bounds(np.ones(n_points))
-        opt.set_min_objective(objective_wrapper)
+        opt.set_max_objective(objective_wrapper)
         opt.set_maxeval(max_evaluations)
         opt.set_xtol_rel(1e-6)
 
@@ -309,7 +310,7 @@ class UtilityOptimizer:
 
         return {
             'optimal_values': optimal_x,
-            'optimal_objective': -optimal_f,
+            'optimal_objective': optimal_f,
             'n_evaluations': self.n_evaluations,
             'control_points': control_points,
             'status': 'success'

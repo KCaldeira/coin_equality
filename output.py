@@ -109,6 +109,70 @@ def create_output_directory(run_name):
     return output_dir
 
 
+def write_optimization_summary(opt_results, sensitivity_results, output_dir, filename='optimization_summary.csv'):
+    """
+    Write optimization summary statistics to CSV file.
+
+    Parameters
+    ----------
+    opt_results : dict
+        Optimization results from UtilityOptimizer
+    sensitivity_results : dict or None
+        Sensitivity analysis results (optional)
+    output_dir : str
+        Directory to write CSV file
+    filename : str
+        Name of CSV file
+
+    Returns
+    -------
+    str
+        Path to created CSV file
+
+    Notes
+    -----
+    Creates a CSV file with optimization statistics including:
+    - Optimal control point values
+    - Objective function value
+    - Number of function evaluations
+    - Convergence status
+    - Sensitivity analysis statistics (if provided)
+    """
+    csv_path = os.path.join(output_dir, filename)
+
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Optimization Summary'])
+        writer.writerow([])
+
+        writer.writerow(['Parameter', 'Value'])
+
+        if 'optimal_value' in opt_results:
+            writer.writerow(['Optimal f value', f"{opt_results['optimal_value']:.6f}"])
+        elif 'optimal_values' in opt_results:
+            for i, val in enumerate(opt_results['optimal_values']):
+                writer.writerow([f'Optimal f value at control point {i}', f"{val:.6f}"])
+
+        writer.writerow(['Optimal objective', f"{opt_results['optimal_objective']:.6e}"])
+        writer.writerow(['Function evaluations', opt_results['n_evaluations']])
+        writer.writerow(['Status', opt_results['status']])
+        writer.writerow([])
+
+        writer.writerow(['Control Points'])
+        writer.writerow(['Time', 'f Value'])
+        for time, value in opt_results['control_points']:
+            writer.writerow([f"{time:.2f}", f"{value:.6f}"])
+
+        if sensitivity_results:
+            writer.writerow([])
+            writer.writerow(['Sensitivity Analysis'])
+            writer.writerow(['f Value', 'Objective'])
+            for f_val, obj in zip(sensitivity_results['f_values'], sensitivity_results['objectives']):
+                writer.writerow([f"{f_val:.6f}", f"{obj:.6e}"])
+
+    return csv_path
+
+
 def write_results_csv(results, output_dir, filename='results.csv'):
     """
     Write results dictionary to CSV file.

@@ -13,10 +13,10 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from parameters import load_configuration
-from optimization import UtilityOptimizer
+from parameters import load_configuration, ModelConfiguration
+from optimization import UtilityOptimizer, create_control_function_from_points
 from economic_model import integrate_model
-from output import save_results
+from output import save_results, write_optimization_summary
 
 
 def print_header(text):
@@ -118,9 +118,6 @@ def compare_scenarios(config, f_values, labels):
 
     for f_val, label in zip(f_values, labels):
         print(f"Running scenario: {label} (f={f_val:.4f})...")
-
-        from optimization import create_control_function_from_points
-        from parameters import ModelConfiguration
 
         scenario_config = ModelConfiguration(
             run_name=config.run_name,
@@ -323,8 +320,35 @@ def main():
         list(comparison_scenarios.keys())
     )
 
-    output_pdf = f'optimization_results_{config.run_name}.pdf'
+    print_header("SAVING RESULTS")
+
+    optimal_config = ModelConfiguration(
+        run_name=f"{config.run_name}_optimization",
+        scalar_params=config.scalar_params,
+        time_functions=config.time_functions,
+        integration_params=config.integration_params,
+        optimization_params=config.optimization_params,
+        initial_state=config.initial_state,
+        control_function=create_control_function_from_points(opt_results['control_points'])
+    )
+
+    print("Running forward model with optimal control...")
+    optimal_results = integrate_model(optimal_config)
+
+    print("\nSaving integration results (CSV and PDF)...")
+    output_paths = save_results(optimal_results, optimal_config.run_name)
+    print(f"  Output directory: {output_paths['output_dir']}")
+    print(f"  Results CSV:      {output_paths['csv_file']}")
+    print(f"  Results PDF:      {output_paths['pdf_file']}")
+
+    print("\nWriting optimization summary CSV...")
+    opt_csv_path = write_optimization_summary(opt_results, sensitivity_results, output_paths['output_dir'], 'optimization_summary.csv')
+    print(f"  Optimization CSV: {opt_csv_path}")
+
+    print("\nCreating comparison visualization plots...")
+    output_pdf = f'optimization_comparison_{config.run_name}.pdf'
     create_visualization_plots(sensitivity_results, opt_results, comparison_results, output_pdf)
+    print(f"  Comparison PDF:   {output_pdf}")
 
     print_header("SUMMARY")
     print(f"Optimal constant allocation: f₀ = {f_opt:.6f}")
@@ -332,10 +356,13 @@ def main():
     print(f"\nComparison with other strategies:")
     for label, data in comparison_results.items():
         obj_diff = data['objective'] - opt_results['optimal_objective']
-        pct_diff = 100 * obj_diff / opt_results['optimal_objective']
-        print(f"  {label:30s}: objective = {data['objective']:.6e} ({pct_diff:+.2f}%)")
+        pct_diff = 100 * obj_diff / abs(opt_results['optimal_objective'])
+        if label == 'Optimal':
+            print(f"  {label:30s}: objective = {data['objective']:.6e} (optimal)")
+        else:
+            print(f"  {label:30s}: objective = {data['objective']:.6e} ({pct_diff:+.2f}% from optimal)")
 
-    print(f"\nVisualization saved to: {output_pdf}")
+    print(f"\nAll results saved to: {output_paths['output_dir']}")
     print_header("OPTIMIZATION TEST COMPLETE")
 
 

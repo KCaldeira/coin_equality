@@ -72,10 +72,10 @@
   },
 
   "control_function": {
-    "_description": "Allocation policy between abatement and redistribution",
+    "_description": "Allocation policy between abatement and redistribution (also used as initial guess for optimization)",
     "type": "constant",
     "value": 0.5,
-    "_value": "50% to abatement, 50% to redistribution"
+    "_value": "50% to abatement, 50% to redistribution; this value is used as initial guess for single-point optimization"
   },
 
   "optimization_parameters": {
