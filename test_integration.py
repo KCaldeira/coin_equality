@@ -85,10 +85,13 @@ def main():
     print(f'\n' + '=' * 60)
     print(f'Saving Results')
     print(f'=' * 60)
-    output_paths = save_results(results, config.run_name)
+    plot_short_horizon = config.integration_params.plot_short_horizon
+    output_paths = save_results(results, config.run_name, plot_short_horizon)
     print(f'Output directory: {output_paths["output_dir"]}')
     print(f'CSV file:         {output_paths["csv_file"]}')
     print(f'PDF file:         {output_paths["pdf_file"]}')
+    if 'pdf_file_short' in output_paths:
+        print(f'Short-term PDF:   {output_paths["pdf_file_short"]}')
 
     print(f'\n' + '=' * 60)
 

@@ -363,10 +363,13 @@ def main():
     optimal_results = integrate_model(optimal_config)
 
     print("\nSaving integration results (CSV and PDF)...")
-    output_paths = save_results(optimal_results, optimal_config.run_name)
+    plot_short_horizon = config.integration_params.plot_short_horizon
+    output_paths = save_results(optimal_results, optimal_config.run_name, plot_short_horizon)
     print(f"  Output directory: {output_paths['output_dir']}")
     print(f"  Results CSV:      {output_paths['csv_file']}")
     print(f"  Results PDF:      {output_paths['pdf_file']}")
+    if 'pdf_file_short' in output_paths:
+        print(f"  Short-term PDF:   {output_paths['pdf_file_short']}")
 
     print("\nWriting optimization summary CSV...")
     opt_csv_path = write_optimization_summary(opt_results, sensitivity_results, output_paths['output_dir'], 'optimization_summary.csv')

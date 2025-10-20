@@ -230,12 +230,16 @@ class IntegrationParameters:
         Relative tolerance for ODE solver (reserved for future use)
     atol : float
         Absolute tolerance for ODE solver (reserved for future use)
+    plot_short_horizon : float
+        Time horizon (yr) for short-term detailed plots.
+        Creates second PDF with results from t_start to plot_short_horizon.
     """
     t_start: float
     t_end: float
     dt: float
     rtol: float
     atol: float
+    plot_short_horizon: float
 
 
 @dataclass

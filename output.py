@@ -453,7 +453,7 @@ def _create_plot_page_new(t, results, chart_specs, group_name, pdf, page_num=Non
     plt.close(fig)
 
 
-def save_results(results, run_name):
+def save_results(results, run_name, plot_short_horizon=None):
     """
     Save model results to CSV and PDF in timestamped directory.
 
@@ -463,6 +463,10 @@ def save_results(results, run_name):
         Results dictionary from integrate_model()
     run_name : str
         Name of the model run
+    plot_short_horizon : float or None
+        If provided, creates a second PDF with results up to this time (years).
+        Creates both plots_full.pdf and plots_short.pdf.
+        If None, creates single plots.pdf with all results.
 
     Returns
     -------
@@ -470,26 +474,39 @@ def save_results(results, run_name):
         Dictionary with paths:
         - 'output_dir': path to output directory
         - 'csv_file': path to CSV file
-        - 'pdf_file': path to PDF file
+        - 'pdf_file': path to full PDF file
+        - 'pdf_file_short': path to short-horizon PDF file (if plot_short_horizon provided)
 
     Notes
     -----
     Creates directory: ./data/output/{run_name}_YYYYMMDD-HHMMSS
-    Writes two files:
+    Writes files:
     - results.csv: all variables in tabular format
-    - plots.pdf: time series plots (6 per page)
+    - plots_full.pdf: time series plots for entire integration period
+    - plots_short.pdf: time series plots for short horizon (if plot_short_horizon provided)
     """
-    # Create output directory
     output_dir = create_output_directory(run_name)
-
-    # Write CSV
     csv_file = write_results_csv(results, output_dir)
 
-    # Create plots PDF
-    pdf_file = plot_results_pdf(results, output_dir)
-
-    return {
+    output_dict = {
         'output_dir': output_dir,
         'csv_file': csv_file,
-        'pdf_file': pdf_file,
     }
+
+    if plot_short_horizon is not None:
+        t = results['t']
+        mask = t <= plot_short_horizon
+
+        results_short = {key: val[mask] if isinstance(val, np.ndarray) else val
+                        for key, val in results.items()}
+
+        pdf_file_full = plot_results_pdf(results, output_dir, filename='plots_full.pdf')
+        pdf_file_short = plot_results_pdf(results_short, output_dir, filename='plots_short.pdf')
+
+        output_dict['pdf_file'] = pdf_file_full
+        output_dict['pdf_file_short'] = pdf_file_short
+    else:
+        pdf_file = plot_results_pdf(results, output_dir, filename='plots.pdf')
+        output_dict['pdf_file'] = pdf_file
+
+    return output_dict

@@ -68,7 +68,9 @@
     "_dt": "1-year time step (Euler method)",
     "rtol": 1e-6,
     "atol": 1e-9,
-    "_tolerances": "Reserved for future adaptive solvers"
+    "_tolerances": "Reserved for future adaptive solvers",
+    "plot_short_horizon": 100.0,
+    "_plot_short_horizon": "Time horizon (years) for short-term detailed plots. Creates second PDF book with results from t_start to this time."
   },
 
   "control_function": {
