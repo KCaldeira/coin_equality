@@ -127,10 +127,13 @@ def calculate_tendencies(state, params):
     G_eff, _ = G2_effective_pareto(f, delta_L, Gini_initial)
 
     # Eq 3.5: Mean utility
+    """
     U_failure = -1e20
     if y_eff <= 0:
         U = U_failure
-    elif np.abs(eta - 1.0) < 1e-10:
+    el
+    """
+    if np.abs(eta - 1.0) < 1e-10:
         U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
     else:
         term1 = (y_eff ** (1 - eta)) / (1 - eta)
@@ -286,6 +289,7 @@ def integrate_model(config):
         # Euler step: update state for next iteration (skip on last step)
         if i < n_steps - 1:
             state['K'] = state['K'] + dt * outputs['dK_dt']
-            state['Ecum'] = state['Ecum'] + dt * outputs['dEcum_dt']
+            # do not allow cumulative emissions to go negative, making it colder than the initial condition
+            state['Ecum'] = max(0.0, state['Ecum'] + dt * outputs['dEcum_dt'])
 
     return results

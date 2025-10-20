@@ -559,6 +559,24 @@ The `integrate_model(config)` function:
 - Time step `dt` is specified in the JSON configuration
 - Returns a dictionary containing time series for all model variables
 
+### Implementation Notes
+
+**Negative Emissions and Cumulative Emissions Floor:**
+
+The model allows negative emissions E(t) (carbon removal through direct air capture, afforestation, etc.), but prevents cumulative emissions Ecum from going negative:
+
+```python
+# In integrate_model() Euler step:
+state['Ecum'] = max(0.0, state['Ecum'] + dt * outputs['dEcum_dt'])
+```
+
+This ensures:
+- Positive E: Normal emissions, Ecum increases
+- Negative E: Carbon removal, Ecum decreases
+- Floor at zero: Cannot remove more CO₂ than was ever emitted (Ecum ≥ 0)
+
+The clamp is applied during integration rather than modifying E itself, allowing the emissions rate to reflect the model's physical calculations while preventing unphysical cumulative emissions.
+
 ### Output Variables
 
 The results dictionary contains arrays for:
