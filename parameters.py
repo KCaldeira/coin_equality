@@ -259,10 +259,30 @@ class OptimizationParameters:
         Initial f values at each control time.
         Must have same length as control_times.
         Each value must satisfy 0 ≤ f ≤ 1.
+    ftol_rel : float, optional
+        Relative tolerance on objective function changes.
+        Stops when |Δf| < ftol_rel * |f|.
+        If None, uses NLopt default (0.0 = disabled).
+    ftol_abs : float, optional
+        Absolute tolerance on objective function changes.
+        Stops when |Δf| < ftol_abs.
+        If None, uses NLopt default (0.0 = disabled).
+    xtol_rel : float, optional
+        Relative tolerance on parameter changes.
+        Stops when |Δx| < xtol_rel * |x| for all parameters.
+        If None, uses NLopt default (0.0 = disabled).
+    xtol_abs : float, optional
+        Absolute tolerance on parameter changes.
+        Stops when |Δx| < xtol_abs for all parameters.
+        If None, uses NLopt default (0.0 = disabled).
     """
     max_evaluations: int
     control_times: list
     initial_guess: list
+    ftol_rel: float = None
+    ftol_abs: float = None
+    xtol_rel: float = None
+    xtol_abs: float = None
 
 
 @dataclass

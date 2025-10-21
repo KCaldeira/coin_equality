@@ -84,9 +84,18 @@
     "_description": "Parameters for optimization runs",
     "max_evaluations": 1000,
     "_max_evaluations": "Maximum number of objective function evaluations",
-    "control_times": [0,5,10,16,22,29,35,43,51,59,69,79,91,104,120,138,160,189,229,300], 
+    "control_times": [0,5,10,16,22,29,35,43,51,59,69,79,91,104,120,138,160,189,229,300],
     "_control_times": "Times (years) where control points are placed. Single point [0] for constant optimization, multiple points for time-varying. Currently spaced at 5% each for PRTP =1%.",
     "initial_guess": [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5],
-    "_initial_guess": "Initial f values at each control time. Must have same length as control_times. Each value in [0,1]"
+    "_initial_guess": "Initial f values at each control time. Must have same length as control_times. Each value in [0,1]",
+    "_stopping_criteria": "Optional NLopt stopping criteria (omit to use NLopt defaults). All default to 0.0 (disabled) if not specified.",
+    "ftol_rel": 1e-6,
+    "_ftol_rel": "Relative tolerance on objective function: stops when |Δf| < ftol_rel * |f|",
+    "ftol_abs": 1e-9,
+    "_ftol_abs": "Absolute tolerance on objective function: stops when |Δf| < ftol_abs",
+    "xtol_rel": 1e-6,
+    "_xtol_rel": "Relative tolerance on parameters: stops when |Δx| < xtol_rel * |x| for all parameters",
+    "xtol_abs": 1e-9,
+    "_xtol_abs": "Absolute tolerance on parameters: stops when |Δx| < xtol_abs for all parameters"
   }
 }

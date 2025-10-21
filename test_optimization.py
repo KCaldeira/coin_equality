@@ -1,11 +1,11 @@
 """
-Test script for single control point optimization.
+Test script for optimization with single or multiple control points.
 
 This script demonstrates the complete workflow:
 1. Load baseline configuration
-2. Perform sensitivity analysis to understand objective landscape
-3. Run single control point optimization
-4. Compare optimal vs. arbitrary constant allocations
+2. Perform sensitivity analysis (for single control point only)
+3. Run optimization (handles both single and multiple control points)
+4. Compare optimal vs. arbitrary constant allocations (for single control point)
 5. Generate visualization plots
 """
 
@@ -26,9 +26,14 @@ def print_header(text):
     print(f"{'=' * 80}\n")
 
 
-def print_optimization_results(opt_results):
+def print_optimization_results(opt_results, n_control_points):
     """Print formatted optimization results."""
-    print(f"Optimal f₀:             {opt_results['optimal_value']:.6f}")
+    if n_control_points == 1:
+        print(f"Optimal f₀:             {opt_results['optimal_values'][0]:.6f}")
+    else:
+        print(f"Optimal control values:")
+        for t, f_val in opt_results['control_points']:
+            print(f"  t={t:6.1f} yr: f={f_val:.6f}")
     print(f"Optimal objective:      {opt_results['optimal_objective']:.6e}")
     print(f"Function evaluations:   {opt_results['n_evaluations']}")
     print(f"Status:                 {opt_results['status']}")
@@ -64,34 +69,6 @@ def run_sensitivity_analysis(optimizer, n_points=21):
     return results
 
 
-def run_optimization(optimizer, initial_guess, max_evaluations):
-    """
-    Run single control point optimization.
-
-    Parameters
-    ----------
-    optimizer : UtilityOptimizer
-        Optimizer instance
-    initial_guess : float
-        Initial guess for optimization
-    max_evaluations : int
-        Maximum number of objective function evaluations
-
-    Returns
-    -------
-    dict
-        Optimization results
-    """
-    print_header("SINGLE CONTROL POINT OPTIMIZATION")
-    print(f"Initial guess: f₀ = {initial_guess}")
-    print(f"Max evaluations: {max_evaluations}")
-    print("Running BOBYQA optimization...\n")
-
-    opt_results = optimizer.optimize_single_control_point(initial_guess, max_evaluations)
-
-    print_optimization_results(opt_results)
-
-    return opt_results
 
 
 def compare_scenarios(config, f_values, labels):
@@ -174,7 +151,7 @@ def create_visualization_plots(sensitivity_results, opt_results, comparison_resu
 
         f_vals = sensitivity_results['f_values']
         obj_vals = sensitivity_results['objectives']
-        f_opt = opt_results['optimal_value']
+        f_opt = opt_results['optimal_values'][0]
         obj_opt = opt_results['optimal_objective']
 
         ax = axes[0, 0]
@@ -310,29 +287,50 @@ def main():
         print(f"    Control time: {control_times[0]}")
         print(f"    Initial guess: f = {initial_guess[0]}")
         sensitivity_results = run_sensitivity_analysis(optimizer, n_points=21)
-        opt_results = run_optimization(optimizer, initial_guess[0], max_evaluations)
     else:
         print(f"\n==> Running MULTI-POINT control optimization")
         print(f"    Number of control points: {len(control_times)}")
         print(f"    Control times: {control_times}")
         print(f"    Initial guess: {initial_guess}")
         sensitivity_results = None
-        opt_results = optimizer.optimize_multiple_control_points(control_times, initial_guess, max_evaluations)
 
-        if opt_results['status'] == 'degenerate':
-            print(f"\n*** DEGENERATE CASE DETECTED ***")
-            print(f"No income available for redistribution or abatement (deltaL = 0)")
-            print(f"Control values have no effect on outcome.")
-            print(f"Returning initial guess values.")
+    print_header("OPTIMIZATION")
+    print(f"Max evaluations: {max_evaluations}")
 
-        print(f"\nOptimal control values:")
-        for t, f_val in opt_results['control_points']:
-            print(f"  t={t:6.1f} yr: f={f_val:.6f}")
-        print(f"Optimal objective:      {opt_results['optimal_objective']:.6e}")
-        print(f"Function evaluations:   {opt_results['n_evaluations']}")
+    opt_params = config.optimization_params
+    if opt_params.ftol_rel is not None:
+        print(f"ftol_rel: {opt_params.ftol_rel}")
+    if opt_params.ftol_abs is not None:
+        print(f"ftol_abs: {opt_params.ftol_abs}")
+    if opt_params.xtol_rel is not None:
+        print(f"xtol_rel: {opt_params.xtol_rel}")
+    if opt_params.xtol_abs is not None:
+        print(f"xtol_abs: {opt_params.xtol_abs}")
+
+    print("Running BOBYQA optimization...\n")
+
+    opt_results = optimizer.optimize_control_points(
+        control_times,
+        initial_guess,
+        max_evaluations,
+        ftol_rel=opt_params.ftol_rel,
+        ftol_abs=opt_params.ftol_abs,
+        xtol_rel=opt_params.xtol_rel,
+        xtol_abs=opt_params.xtol_abs
+    )
+
+    if opt_results['status'] == 'degenerate':
+        print(f"\n*** DEGENERATE CASE DETECTED ***")
+        print(f"No income available for redistribution or abatement (deltaL = 0)")
+        print(f"Control values have no effect on outcome.")
+        print(f"Returning initial guess values.\n")
+    else:
+        print(f"Termination: {opt_results['termination_name']} (code {opt_results['termination_code']})\n")
+
+    print_optimization_results(opt_results, len(control_times))
 
     if len(control_times) == 1:
-        f_opt = opt_results['optimal_value']
+        f_opt = opt_results['optimal_values'][0]
         comparison_scenarios = {
             'Optimal': f_opt,
             'All redistribution (f=0)': 0.0,

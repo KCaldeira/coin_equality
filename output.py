@@ -175,15 +175,17 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
 
         writer.writerow(['Parameter', 'Value'])
 
-        if 'optimal_value' in opt_results:
-            writer.writerow(['Optimal f value', f"{opt_results['optimal_value']:.6f}"])
-        elif 'optimal_values' in opt_results:
-            for i, val in enumerate(opt_results['optimal_values']):
-                writer.writerow([f'Optimal f value at control point {i}', f"{val:.6f}"])
+        for i, val in enumerate(opt_results['optimal_values']):
+            writer.writerow([f'Optimal f value at control point {i}', f"{val:.6f}"])
 
         writer.writerow(['Optimal objective', f"{opt_results['optimal_objective']:.6e}"])
         writer.writerow(['Function evaluations', opt_results['n_evaluations']])
         writer.writerow(['Status', opt_results['status']])
+
+        if 'termination_name' in opt_results:
+            writer.writerow(['Termination reason', opt_results['termination_name']])
+        if 'termination_code' in opt_results and opt_results['termination_code'] is not None:
+            writer.writerow(['Termination code', opt_results['termination_code']])
 
         if opt_results['status'] == 'degenerate':
             writer.writerow([])

@@ -177,73 +177,6 @@ class UtilityOptimizer:
 
         return objective_value
 
-    def optimize_single_control_point(self, initial_guess, max_evaluations):
-        """
-        Optimize allocation with a single control point (constant trajectory).
-
-        Finds optimal constant f₀ ∈ [0, 1] that maximizes discounted utility.
-
-        Parameters
-        ----------
-        initial_guess : float
-            Initial guess for f₀
-        max_evaluations : int
-            Maximum number of objective function evaluations
-
-        Returns
-        -------
-        dict
-            Optimization results containing:
-            - 'optimal_value': optimal control value f₀
-            - 'optimal_objective': maximum utility achieved
-            - 'n_evaluations': number of objective evaluations used
-            - 'control_points': list containing [(0, f₀)]
-            - 'status': optimization status message
-        """
-        self.n_evaluations = 0
-        self.best_objective = -np.inf
-        self.best_control_values = None
-        self.degenerate_case = False
-        self.degenerate_reason = None
-
-        deltaL = self.base_config.scalar_params.deltaL
-        if abs(deltaL) < 1e-15:
-            self.degenerate_case = True
-            self.degenerate_reason = "deltaL = 0: No income available for redistribution or abatement. Control values have no effect on outcome."
-            control_times = [self.base_config.integration_params.t_start]
-            obj = self.calculate_objective([initial_guess], control_times)
-            return {
-                'optimal_value': float(initial_guess),
-                'optimal_objective': obj,
-                'n_evaluations': self.n_evaluations,
-                'control_points': [(control_times[0], initial_guess)],
-                'status': 'degenerate'
-            }
-
-        control_times = [self.base_config.integration_params.t_start]
-
-        def objective_wrapper(x, grad):
-            return self.calculate_objective(x, control_times)
-
-        opt = nlopt.opt(nlopt.LN_BOBYQA, 1)
-        opt.set_lower_bounds([0.0])
-        opt.set_upper_bounds([1.0])
-        opt.set_max_objective(objective_wrapper)
-        opt.set_maxeval(max_evaluations)
-        opt.set_xtol_rel(1e-6)
-
-        x0 = np.array([initial_guess])
-        optimal_x = opt.optimize(x0)
-        optimal_f = opt.last_optimum_value()
-
-        return {
-            'optimal_value': float(optimal_x[0]),
-            'optimal_objective': optimal_f,
-            'n_evaluations': self.n_evaluations,
-            'control_points': [(control_times[0], optimal_x[0])],
-            'status': 'success'
-        }
-
     def sensitivity_analysis(self, f_values):
         """
         Evaluate objective function at multiple fixed f values.
@@ -278,7 +211,8 @@ class UtilityOptimizer:
             'n_evaluations': self.n_evaluations
         }
 
-    def optimize_multiple_control_points(self, control_times, initial_guess, max_evaluations):
+    def optimize_control_points(self, control_times, initial_guess, max_evaluations,
+                                         ftol_rel=None, ftol_abs=None, xtol_rel=None, xtol_abs=None):
         """
         Optimize allocation with multiple control points (time-varying trajectory).
 
@@ -292,6 +226,14 @@ class UtilityOptimizer:
             Initial guess for control values at each control time
         max_evaluations : int
             Maximum number of objective function evaluations
+        ftol_rel : float, optional
+            Relative tolerance on objective function changes (None = use NLopt default)
+        ftol_abs : float, optional
+            Absolute tolerance on objective function changes (None = use NLopt default)
+        xtol_rel : float, optional
+            Relative tolerance on parameter changes (None = use NLopt default)
+        xtol_abs : float, optional
+            Absolute tolerance on parameter changes (None = use NLopt default)
 
         Returns
         -------
@@ -301,7 +243,9 @@ class UtilityOptimizer:
             - 'optimal_objective': maximum utility achieved
             - 'n_evaluations': number of objective evaluations used
             - 'control_points': list of (time, value) tuples
-            - 'status': optimization status message
+            - 'status': optimization status string
+            - 'termination_code': NLopt termination code
+            - 'termination_name': human-readable termination reason
         """
         self.n_evaluations = 0
         self.best_objective = -np.inf
@@ -322,7 +266,9 @@ class UtilityOptimizer:
                 'optimal_objective': obj,
                 'n_evaluations': self.n_evaluations,
                 'control_points': control_points,
-                'status': 'degenerate'
+                'status': 'degenerate',
+                'termination_code': None,
+                'termination_name': 'DEGENERATE_CASE'
             }
 
         n_points = len(control_times)
@@ -336,11 +282,35 @@ class UtilityOptimizer:
         opt.set_upper_bounds(np.ones(n_points))
         opt.set_max_objective(objective_wrapper)
         opt.set_maxeval(max_evaluations)
-        opt.set_xtol_rel(1e-6)
+
+        if ftol_rel is not None:
+            opt.set_ftol_rel(ftol_rel)
+        if ftol_abs is not None:
+            opt.set_ftol_abs(ftol_abs)
+        if xtol_rel is not None:
+            opt.set_xtol_rel(xtol_rel)
+        if xtol_abs is not None:
+            opt.set_xtol_abs(xtol_abs)
 
         x0 = np.array(initial_guess)
         optimal_x = opt.optimize(x0)
         optimal_f = opt.last_optimum_value()
+        termination_code = opt.last_optimize_result()
+
+        termination_names = {
+            1: 'SUCCESS',
+            2: 'STOPVAL_REACHED',
+            3: 'FTOL_REACHED',
+            4: 'XTOL_REACHED',
+            5: 'MAXEVAL_REACHED',
+            6: 'MAXTIME_REACHED',
+            -1: 'FAILURE',
+            -2: 'INVALID_ARGS',
+            -3: 'OUT_OF_MEMORY',
+            -4: 'ROUNDOFF_LIMITED',
+            -5: 'FORCED_STOP'
+        }
+        termination_name = termination_names.get(termination_code, f'UNKNOWN_{termination_code}')
 
         control_points = list(zip(control_times, optimal_x))
 
@@ -349,5 +319,7 @@ class UtilityOptimizer:
             'optimal_objective': optimal_f,
             'n_evaluations': self.n_evaluations,
             'control_points': control_points,
-            'status': 'success'
+            'status': 'success',
+            'termination_code': termination_code,
+            'termination_name': termination_name
         }
