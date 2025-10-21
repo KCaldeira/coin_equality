@@ -640,63 +640,7 @@ print(f"Results saved to: {output_paths['output_dir']}")
 
 See the **Testing the Forward Model** section above for detailed instructions on using `test_integration.py`.
 
-## Next Steps
-
-### 1. ✅ Single Control Point Optimization (COMPLETED)
-
-**Status:** Implemented and tested successfully.
-
-**Implementation summary:**
-
-The optimization framework uses a **control point parameterization** approach that maximizes discounted aggregate utility:
-
-```
-max ∫₀^T e^(-ρt) · U(t) · L(t) dt,  subject to 0 ≤ f ≤ 1
-```
-
-**Key components:**
-
-1. **`optimization.py`** - Core optimization module
-   - `evaluate_control_function()` - Pchip interpolation with constant extrapolation
-   - `UtilityOptimizer` class with `optimize_single_control_point()` and `optimize_multiple_control_points()`
-   - Uses NLopt BOBYQA algorithm (derivative-free, bound-constrained)
-   - Objective: maximize discounted utility integral using trapezoidal rule
-
-2. **`test_optimization.py`** - Complete optimization workflow
-   - Sensitivity analysis across f ∈ [0, 1]
-   - Single control point optimization
-   - Scenario comparison (optimal vs. fixed allocations)
-   - Saves results to timestamped directory with:
-     - `results.csv` - forward model time series
-     - `plots.pdf` - comprehensive visualization "book"
-     - `optimization_summary.csv` - optimization statistics
-
-3. **Configuration in JSON** - `optimization_parameters` section
-   ```json
-   "optimization_parameters": {
-     "max_evaluations": 1000
-   }
-   ```
-   - Initial guess taken from `control_function.value`
-   - All parameters required (fail-fast philosophy)
-
-**Baseline results:**
-- Optimal constant allocation: f₀ = 0.621 (62% to abatement, 38% to redistribution)
-- Converges in 15 function evaluations
-- Objective: -7.043×10⁹ (discounted aggregate utility)
-
-**Control point framework:**
-- Uses Pchip interpolation (C¹ continuity, shape-preserving, monotonic)
-- Constant extrapolation beyond last control point
-- Single control point → constant trajectory
-- Multiple control points → time-varying trajectory
-- Framework ready for Step 2 multi-point optimization
-
-### 2. Multi-Point Time-Dependent Optimization
-
-Extend the single control point optimization to find optimal time-varying trajectories `f(t)` by using multiple control points.
-
-**Configuration structure:**
+## Optimization Configuration
 
 The JSON configuration supports both single and multi-point optimization through the `optimization_parameters` section:
 
@@ -721,66 +665,100 @@ The JSON configuration supports both single and multi-point optimization through
   - Single-point: ~1000 typically sufficient
   - Multi-point: scale with problem size (e.g., 10000 for 5 points)
 
+## Next Steps
+
+### 0. Code Cleanup and Configuration Enhancement
+
+**Task 0a: Remove deprecated single control point optimization**
+- Delete `optimize_single_control_point()` method from `optimization.py`
+- This functionality is now fully subsumed by `optimize_multiple_control_points()` with a single control point
+- Clean up any references in documentation or comments
+
+**Task 0b: Add NLopt stopping criteria to configuration**
+- Add parameters to `optimization_parameters` section in JSON to control optimization convergence:
+  ```json
+  "optimization_parameters": {
+    "max_evaluations": 10000,
+    "control_times": [0, 25, 50, 75, 100],
+    "initial_guess": [0.5, 0.5, 0.5, 0.5, 0.5],
+    "ftol_rel": 1e-6,
+    "ftol_abs": 1e-9,
+    "xtol_rel": 1e-6,
+    "xtol_abs": 1e-9
+  }
+  ```
+- Map these parameters to NLopt stopping criteria:
+  - `ftol_rel` → `opt.set_ftol_rel()` - relative change in objective function
+  - `ftol_abs` → `opt.set_ftol_abs()` - absolute change in objective function
+  - `xtol_rel` → `opt.set_xtol_rel()` - relative change in optimization variables
+  - `xtol_abs` → `opt.set_xtol_abs()` - absolute change in optimization variables
+- Update `UtilityOptimizer` class to use these configuration parameters
+- Document the stopping criteria in configuration file comments
+
+### 1. Add Gini Index as Third State Variable
+
+**Motivation:** Currently the Gini index is computed algebraically from the allocation fraction `f(t)` at each time step. Making it a state variable with its own differential equation enables modeling of persistence and dynamic effects in inequality.
+
 **Implementation approach:**
+- Add `G` to state variables alongside `K` and `Ecum`
+- Define tendency `dG/dt` based on redistribution policy and decay dynamics
+- Update `calculate_tendencies()` in `economic_model.py`
+- Modify initial conditions to include `G(0) = Gini_initial`
+- Update integration loop in `integrate_model()` to evolve all three state variables
 
-Since the control point framework is already implemented in Step 1, this step focuses on **optimization strategy and convergence**.
+**Design considerations:**
+- How does `dG/dt` depend on allocation fraction `f(t)`?
+- Should there be a "natural" Gini that the system returns to without intervention?
+- What is the timescale for Gini changes relative to capital accumulation?
 
-**Objective:**
-```
-max ∫₀^T e^(-ρt) · U(t) · L(t) dt
-```
+### 2. Income-Dependent Climate Response Function
 
-where `f(t)` is defined by N control points: `[(t₀, f₀), (t₁, f₁), ..., (t_{N-1}, f_{N-1})]`
+**Motivation:** Climate impacts may depend not only on temperature but also on societal capacity to adapt, which correlates with income levels.
 
 **Implementation approach:**
+- Modify climate damage function (Eq. 1.2) to include income dependence:
+  ```
+  Ω(t) = k_damage_coeff · ΔT(t)^k_damage_exp · h(y(t))
+  ```
+  where `h(y)` is a function capturing income-dependent vulnerability
+- Possible forms for `h(y)`:
+  - Power law: `h(y) = (y/y_ref)^(-β)` (higher income → lower damage)
+  - Asymptotic: `h(y) = 1 / (1 + (y/y_adapt)^γ)` (diminishing protection at high income)
+- Add new parameters to `scalar_parameters` in JSON configuration
+- Update tendency calculations to account for feedback between income and damage
 
-Use the existing control point evaluation framework from Step 1 with multiple control points:
+**Design considerations:**
+- Should adaptation capacity depend on mean income `y` or income distribution (Gini)?
+- What is the empirical basis for the functional form and parameter values?
+- How does this affect optimal allocation between redistribution and abatement?
 
-1. **Multi-variable optimization setup:**
-   - Select control point times (e.g., evenly spaced or strategically placed)
-   - Optimize N control point values: `[f₀, f₁, ..., f_{N-1}]`
-   - Each fᵢ bounded: `0 ≤ fᵢ ≤ 1`
-   - Use existing `evaluate_control_function()` - no new code needed
+### 3. Persistence of Income Redistribution Effects
 
-2. **NLopt optimization strategy:**
-   ```python
-   def optimize_multiple_control_points(self, control_times):
-       n_points = len(control_times)
-       opt = nlopt.opt(nlopt.LN_BOBYQA, n_points)  # Start with BOBYQA
-       opt.set_lower_bounds([0] * n_points)
-       opt.set_upper_bounds([1] * n_points)
-       opt.set_min_objective(self._objective_function)  # Same objective as Step 1
-       opt.set_maxeval(10000)
-       return opt.optimize(initial_guess)
-   ```
+**Motivation:** Redistribution policies may have lasting effects that persist beyond immediate transfers, such as through human capital investment, institutional changes, or behavioral shifts.
 
-3. **Refinement considerations (focus of this step):**
-   - **Number of control points**: Start with 2-3, gradually increase
-   - **Control point placement**: Uniform vs. adaptive spacing
-   - **Initial guess strategies**: Constant, linear ramp, or Step 1 optimal
-   - **Convergence criteria**: Balance accuracy vs. computational cost
-   - **Algorithm comparison**: BOBYQA vs. AUGLAG+BOBYQA for global search
-   - **Multi-modal objective**: Test different initial guesses to find global optimum
+**Implementation approach:**
+- If Gini is a state variable (Step 1), model persistence through the `dG/dt` dynamics:
+  ```
+  dG/dt = -(G_target(f) - G) / τ_decay
+  ```
+  where:
+  - `G_target(f)` is the equilibrium Gini given current allocation policy
+  - `τ_decay` is the decay/adjustment timescale parameter
+  - Positive `τ_decay` → slower adjustment → more persistence
+- Alternative: introduce a separate "policy memory" state variable that influences current redistribution effectiveness
+- Add `tau_decay` parameter to `scalar_parameters` in JSON configuration
 
-4. **Alternative optimization algorithms to explore:**
-   - `nlopt.LN_BOBYQA` - Local derivative-free (baseline)
-   - `nlopt.AUGLAG` + local optimizer - Augmented Lagrangian for constraints
-   - `scipy.optimize.differential_evolution` - Global optimization
-   - `scipy.optimize.dual_annealing` - Simulated annealing
+**Design considerations:**
+- What is the appropriate timescale for persistence (years to decades)?
+- Should decay be symmetric (same rate for increasing/decreasing inequality)?
+- How does persistence interact with optimal dynamic allocation strategies?
+- Does persistence create hysteresis in the system?
 
-**Key research questions (no coding required):**
-- How many control points provide sufficient resolution?
-- Is the objective function unimodal or multi-modal?
-- What initial guesses lead to global vs. local optima?
-- Does optimal trajectory have recognizable structure (e.g., monotonic, switching)?
-- Computational cost vs. accuracy tradeoff
-
-**Expected deliverables:**
-- Optimal time-dependent trajectories for baseline scenario with varying N
-- Convergence studies showing objective value vs. number of control points
-- Comparison of optimization algorithms and initial guess strategies
-- Analysis of trajectory structure and economic interpretation
-- Computational performance metrics (evaluations required, wall-clock time)
+**Cross-cutting research questions:**
+- How do these three extensions interact with each other?
+- Do they change the qualitative nature of optimal allocation trajectories?
+- What new trade-offs emerge (e.g., short-term redistribution vs. long-term adaptation)?
+- How sensitive are results to the new parameters introduced?
 
 ## Project Structure
 
