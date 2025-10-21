@@ -1,0 +1,101 @@
+{
+  "run_name": "baseline2",
+  "description": "Baseline scenario with stopping criteria made 2-orders of magnitude tighterm starting from zeros",
+
+  "scalar_parameters": {
+    "alpha": 0.3,
+    "_alpha": "Capital share of income",
+    "delta": 0.10,
+    "_delta": "Capital depreciation rate (10% per year)",
+    "s": 0.3,
+    "_s": "Savings rate (30% of net production)",
+    "k_damage_coeff": 0.02,
+    "_k_damage_coeff": "Climate damage coefficient: Fracttion of output times delta-T**k_demage_exp",
+    "k_damage_exp": 2.0,
+    "_k_damage_exp": "Climate damage exponent (2 means quadratic)",
+    "k_climate": 0.5e-12,
+    "_k_climate": "Temperature sensitivity to cumulative  (K/tCO2) 0.5e-12 ~ 1.8 K per 1000 GtC [noe we are in CO2 units]",
+    "eta": 1.5,
+    "_eta": "Coefficient of relative risk aversion",
+    "rho": 0.01,
+    "_rho": "Pure rate of time preference (1 % per year)",
+    "Gini_initial": 0.67,
+    "_Gini_initial": "Initial Gini index (moderate inequality)",
+    "deltaL": 0.02,
+    "_deltaL": "Fraction of income available for redistribution (5%)",
+    "theta2": 2.0,
+    "_theta2": "Abatement cost exponent (quadratic)"
+  },
+
+  "time_functions": {
+    "_description": "Time-dependent exogenous functions",
+    "A": {
+      "_description": "Total factor productivity (TFP)",
+      "type": "exponential_growth",
+      "initial_value": 454.174,
+      "growth_rate": 0.01,
+      "_growth_rate": "TFP consistent with steady state at s = 0.3, alpha = 0.3, delta = 0.1 and L = 10e9; 1% annual TFP growth"
+    },
+    "L": {
+      "_description": "Population",
+      "type": "exponential_growth",
+      "initial_value": 10e9,
+      "growth_rate": 0.01,
+      "_growth_rate": "1% annual population growth"
+    },
+    "sigma": {
+      "_description": "Carbon intensity of GDP",
+      "type": "exponential_growth",
+      "initial_value": 0.0005,
+      "growth_rate": -0.02,
+      "_growth_rate": "Declining at 2% per year (decarbonization)"
+    },
+    "theta1": {
+      "_description": "Abatement cost per ton of CO2 for the last ton abated ($/tCO2)",
+      "type": "exponential_growth",
+      "initial_value": 1000,
+      "growth_rate": -0.02,
+      "_growth_rate": "Assume 5% of global GDP to abate all emissions. Declining at 1% per year (technological progress)"
+    }
+  },
+
+  "integration_parameters": {
+    "_description": "Time integration settings",
+    "t_start": 0.0,
+    "t_end": 300,
+    "_t_end": "Integrate for 300 years",
+    "dt": 0.2149328383873 ,
+    "_dt": "1-year time step (Euler method)",
+    "rtol": 1e-6,
+    "atol": 1e-9,
+    "_tolerances": "Reserved for future adaptive solvers",
+    "plot_short_horizon": 100.0,
+    "_plot_short_horizon": "Time horizon (years) for short-term detailed plots. Creates second PDF book with results from t_start to this time."
+  },
+
+  "control_function": {
+    "_description": "Allocation policy between abatement and redistribution (also used as initial guess for optimization)",
+    "type": "constant",
+    "value": 0.5,
+    "_value": "50% to abatement, 50% to redistribution; this value is used as initial guess for single-point optimization"
+  },
+
+  "optimization_parameters": {
+    "_description": "Parameters for optimization runs",
+    "max_evaluations": 1000,
+    "_max_evaluations": "Maximum number of objective function evaluations",
+    "control_times": [0,5,10,16,22,29,35,43,51,59,69,79,91,104,120,138,160,189,229,300],
+    "_control_times": "Times (years) where control points are placed. Single point [0] for constant optimization, multiple points for time-varying. Currently spaced at 5% each for PRTP =1%.",
+    "initial_guess": [0.214 ,0.149,0.493 ,0.328 ,0.283 ,0.838 ,0.383 ,0.838 ,0.387 ,0.873 ,0.73 ,0.3 ,0.2 ,0.1 ,0.5 ,0.9 ,0.3 ,0.3 ,0.8 ,0.4 ],
+    "_initial_guess": "Initial f values at each control time. Must have same length as control_times. Each value in [0,1]",
+    "_stopping_criteria": "Optional NLopt stopping criteria (omit to use NLopt defaults). All default to 0.0 (disabled) if not specified.",
+    "ftol_rel": 1e-8,
+    "_ftol_rel": "Relative tolerance on objective function: stops when |Δf| < ftol_rel * |f|",
+    "ftol_abs": 1e-11,
+    "_ftol_abs": "Absolute tolerance on objective function: stops when |Δf| < ftol_abs",
+    "xtol_rel": 1e-8,
+    "_xtol_rel": "Relative tolerance on parameters: stops when |Δx| < xtol_rel * |x| for all parameters",
+    "xtol_abs": 1e-11,
+    "_xtol_abs": "Absolute tolerance on parameters: stops when |Δx| < xtol_abs for all parameters"
+  }
+}

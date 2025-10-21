@@ -87,8 +87,18 @@ def calculate_tendencies(state, params):
     Gini_initial = params['Gini_initial']
     f = params['f']
 
+    # strange things can happen during the optimization phase
+    # thus the preloading of results and checking for bad values
+    Y_gross = 0.0
+    Epot = 0.0
+    mu = 0.0
+    Lambda = 0.0
+    neg_bignum = -1e30
+    U = neg_bignum
+
     # Eq 1.1: Gross production (Cobb-Douglas)
-    Y_gross = A * (K ** alpha) * (L ** (1 - alpha))
+    if K>0:
+        Y_gross = A * (K ** alpha) * (L ** (1 - alpha))
 
     # Eq 2.2: Temperature change from cumulative emissions
     delta_T = k_climate * Ecum
@@ -112,10 +122,12 @@ def calculate_tendencies(state, params):
     abatecost = f * delta_c * L
 
     # Eq 1.6: Abatement fraction
-    mu = (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2)
+    if Epot > 0:
+        mu = (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2)
 
     # Eq 1.7: Abatement cost fraction
-    Lambda = abatecost / Y_damaged
+    if Y_damaged > 0:
+        Lambda = abatecost / Y_damaged
 
     # Eq 1.8: Net production after abatement costs
     Y_net = (1 - Lambda) * Y_damaged
@@ -127,14 +139,15 @@ def calculate_tendencies(state, params):
     G_eff, _ = G2_effective_pareto(f, delta_L, Gini_initial)
 
     # Eq 3.5: Mean utility
-    if np.abs(eta - 1.0) < 1e-10:
-        U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
-    else:
-        term1 = (y_eff ** (1 - eta)) / (1 - eta)
-        numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
-        denominator = 1 + G_eff * (2 * eta - 1)
-        term2 = (numerator / denominator) ** (1 / (1 - eta))
-        U = term1 * term2
+    if y_eff >= 0 and 0 <= G_eff <= 1.0:
+        if np.abs(eta - 1.0) < 1e-10:
+            U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
+        else:
+            term1 = (y_eff ** (1 - eta)) / (1 - eta)
+            numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
+            denominator = 1 + G_eff * (2 * eta - 1)
+            term2 = (numerator / denominator) ** (1 / (1 - eta))
+            U = term1 * term2
 
     # Eq 2.3: Actual emissions (after abatement)
     E = sigma * (1 - mu) * Y_gross
