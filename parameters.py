@@ -187,6 +187,9 @@ class ScalarParameters:
         Climate damage coefficient (°C^-k_damage_exp)
     k_damage_exp : float
         Climate damage exponent
+    k_damage_halfsat : float
+        Income half-saturation for climate damage ($)
+        (income level at which damage is 50% of maximum; lower = more regressive)
     k_climate : float
         Temperature sensitivity to cumulative emissions (°C tCO2^-1)
     eta : float
@@ -209,6 +212,7 @@ class ScalarParameters:
     s: float
     k_damage_coeff: float
     k_damage_exp: float
+    k_damage_halfsat: float
     k_climate: float
     eta: float
     rho: float
@@ -370,6 +374,7 @@ def evaluate_params_at_time(t, config):
         's': sp.s,
         'k_damage_coeff': sp.k_damage_coeff,
         'k_damage_exp': sp.k_damage_exp,
+        'k_damage_halfsat': sp.k_damage_halfsat,
         'k_climate': sp.k_climate,
         'eta': sp.eta,
         'rho': sp.rho,

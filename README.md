@@ -773,9 +773,8 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, params):
         Must include:
         - 'k_damage_coeff': base damage coefficient
         - 'k_damage_exp': temperature exponent
-        - 'damage_income_exp': exponent for income dependence (β)
-          (β > 0 means lower income → higher damage)
-        - 'y_ref': reference income for normalization
+        - 'k_damage_halfsat': income half-saturation ($)
+          (income level where damage is 50% of maximum)
 
     Returns
     -------
@@ -788,20 +787,24 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, params):
     -----
     Uses Pareto distribution from income_distribution module to:
     1. Map ranks F to incomes y(F, Gini_current)
-    2. Apply damage function ω(F, ΔT) = k_damage_coeff · ΔT^k_exp · (y_ref/y(F))^β
-    3. Integrate to get Ω
+    2. Apply damage function ω(y, ΔT) = ω_max · k_halfsat / (k_halfsat + y)
+    3. Integrate to get Ω (income-weighted average damage)
     4. Compute Gini of damaged income distribution to get G_climate
     """
 ```
 
-**Suggested functional form:**
+**Functional form (half-saturation model):**
 ```
-ω(F, ΔT) = k_damage_coeff · ΔT^k_damage_exp · (y_ref / y(F, G))^β
+ω_max(ΔT) = k_damage_coeff · ΔT^k_damage_exp
+ω(y, ΔT) = ω_max · (1 - y / (k_damage_halfsat + y))
+         = ω_max · k_damage_halfsat / (k_damage_halfsat + y)
 ```
 where:
-- `β > 0`: income-dependence exponent (β=0 recovers uniform damage)
-- `y_ref`: reference income for normalization
-- Higher income → lower damage fraction
+- `k_damage_halfsat`: income level at which damage is 50% of maximum ($)
+- At y = 0 (poorest): ω = ω_max (maximum damage)
+- At y = k_damage_halfsat: ω = ω_max/2 (half maximum)
+- As y → ∞: ω → 0 (damage approaches zero)
+- k_damage_halfsat → ∞ recovers uniform damage
 
 **Integration into economic_model.py:**
 - Replace line computing `Omega` (currently Eq. 1.2) with call to new function
@@ -812,15 +815,17 @@ where:
   ```
 
 **New parameters to add to configuration:**
-- `damage_income_exp` (β): exponent for income dependence (default 0 for backward compatibility)
-- `y_ref`: reference income for damage normalization
+- `k_damage_halfsat`: income half-saturation for climate damage ($)
+  - Default: 10000 (damage is half-max at $10k income)
+  - Set very high (e.g., 1e12) for approximately uniform damage
+  - Lower values → more regressive damage (poor suffer more)
 
 **Design considerations:**
-- Should use numerical integration (e.g., `scipy.integrate.quad`) or discretized approximation?
-- For Pareto distribution, may have analytical solutions for certain β values
-- Need to ensure Gini calculation from damaged distribution is numerically stable
-- Climate damage should affect Gini *before* redistribution policy is applied
+- Uses discretized approximation (1000 bins) for computational efficiency
+- Numerically stable across wide range of k_damage_halfsat values
+- Climate damage affects Gini *before* redistribution policy is applied
 - Creates feedback: redistribution → lower Gini → lower climate damage → higher output
+- Half-saturation model is intuitive: parameter directly specifies income level of 50% damage
 
 ### 3. Persistence of Income Redistribution Effects
 

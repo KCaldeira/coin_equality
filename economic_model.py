@@ -8,6 +8,7 @@ and emissions abatement costs.
 import numpy as np
 from income_distribution import calculate_Gini_effective_redistribute_abate
 from parameters import evaluate_params_at_time
+from climate_damage_distribution import calculate_climate_damage_and_gini_effect
 
 
 def calculate_tendencies(state, params):
@@ -28,6 +29,7 @@ def calculate_tendencies(state, params):
         - 's': Savings rate
         - 'k_damage_coeff': Climate damage coefficient (°C^-k_damage_exp)
         - 'k_damage_exp': Climate damage exponent
+        - 'k_damage_halfsat': Income half-saturation for climate damage ($)
         - 'k_climate': Temperature sensitivity (°C tCO2^-1)
         - 'eta': Coefficient of relative risk aversion
         - 'A': Total factor productivity (current)
@@ -54,20 +56,22 @@ def calculate_tendencies(state, params):
     Calculation order follows equations 1.1-1.10, 2.1-2.2, 3.5, 4.3-4.4:
     1. Y_gross from K, L, A, α (Eq 1.1)
     2. ΔT from Ecum, k_climate (Eq 2.2)
-    3. Ω from ΔT, k_damage_coeff, k_damage_exp (Eq 1.2)
-    4. Y_damaged from Y_gross, Ω (Eq 1.3)
-    5. y from Y_damaged, L, s (Eq 1.4)
-    6. Δc from y, ΔL (Eq 4.3)
-    7. E_pot from σ, Y_gross (Eq 2.1)
-    8. abatecost from f, Δc, L (Eq 1.5)
-    9. μ from abatecost, θ₁, θ₂, E_pot (Eq 1.6)
-    10. Λ from abatecost, Y_damaged (Eq 1.7)
-    11. Y_net from Y_damaged, Λ (Eq 1.8)
-    12. y_eff from y, abatecost, L (Eq 1.9)
-    13. G_eff from f, ΔL, Gini_initial (Eq 4.4)
-    14. U from y_eff, G_eff, η (Eq 3.5)
-    15. E from σ, μ, Y_gross (Eq 2.3)
-    16. dK/dt from s, Y_net, δ, K (Eq 1.10)
+    3. y_gross from Y_gross, L (mean per-capita gross income)
+    4. Ω, G_climate from ΔT, Gini, y_gross, damage params (income-dependent damage)
+    5. Y_damaged from Y_gross, Ω (Eq 1.3)
+    6. y from Y_damaged, L, s (Eq 1.4)
+    7. Δc from y, ΔL (Eq 4.3)
+    8. E_pot from σ, Y_gross (Eq 2.1)
+    9. abatecost from f, Δc, L (Eq 1.5)
+    10. μ from abatecost, θ₁, θ₂, E_pot (Eq 1.6)
+    11. Λ from abatecost, Y_damaged (Eq 1.7)
+    12. Y_net from Y_damaged, Λ (Eq 1.8)
+    13. y_eff from y, abatecost, L (Eq 1.9)
+    14. G_eff from f, ΔL, G_climate (Eq 4.4, applied to climate-damaged distribution)
+    15. U from y_eff, G_eff, η (Eq 3.5)
+    16. E from σ, μ, Y_gross (Eq 2.3)
+    17. dK/dt from s, Y_net, δ, K (Eq 1.10)
+    18. dGini/dt, Gini_step from Gini dynamics
     """
     # Extract state variables
     K = state['K']
@@ -78,8 +82,6 @@ def calculate_tendencies(state, params):
     alpha = params['alpha']
     delta = params['delta']
     s = params['s']
-    k_damage_coeff = params['k_damage_coeff']
-    k_damage_exp = params['k_damage_exp']
     k_climate = params['k_climate']
     eta = params['eta']
     A = params['A']
@@ -104,13 +106,22 @@ def calculate_tendencies(state, params):
     # Eq 2.2: Temperature change from cumulative emissions
     delta_T = k_climate * Ecum
 
-    # Eq 1.2: Climate damage fraction
-    Omega = k_damage_coeff * (delta_T ** k_damage_exp)
+    # Mean per-capita gross income (before climate damage)
+    if L > 0:
+        y_gross = Y_gross / L
+    else:
+        y_gross = 0.0
+
+    # Income-dependent climate damage
+    # Returns both aggregate damage fraction and post-damage Gini
+    Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
+        delta_T, Gini, y_gross, params
+    )
 
     # Eq 1.3: Production after climate damage
     Y_damaged = (1 - Omega) * Y_gross
 
-    # Eq 1.4: Mean per-capita income
+    # Eq 1.4: Mean per-capita income (after climate damage, before abatement)
     y = (1 - s) * Y_damaged / L
 
     # Eq 4.3: Per-capita amount redistributed
@@ -141,8 +152,8 @@ def calculate_tendencies(state, params):
     y_eff = y - abatecost / L
 
     # Eq 4.4: Effective Gini index
-    # start from current Gini, not initial Gini
-    G_eff, _ = calculate_Gini_effective_redistribute_abate(f, delta_L, Gini)
+    # Redistribution operates on the climate-damaged distribution
+    G_eff, _ = calculate_Gini_effective_redistribute_abate(f, delta_L, Gini_climate)
 
     # Eq 3.5: Mean utility
     if y_eff >= 0 and 0 <= G_eff <= 1.0:
@@ -176,6 +187,7 @@ def calculate_tendencies(state, params):
         'Y_gross': Y_gross,
         'delta_T': delta_T,
         'Omega': Omega,
+        'Gini_climate': Gini_climate,
         'Y_damaged': Y_damaged,
         'Y_net': Y_net,
         'y': y,
@@ -208,7 +220,7 @@ def integrate_model(config):
         - 'Ecum': array of cumulative emissions values
         - 'Gini': array of Gini index values
         - 'A', 'L', 'sigma', 'theta1', 'f': time-dependent inputs
-        - All derived variables: Y_gross, delta_T, Omega, Y_damaged, Y_net,
+        - All derived variables: Y_gross, delta_T, Omega, Gini_climate, Y_damaged, Y_net,
           y, delta_c, mu, Lambda, abatecost, y_eff, G_eff, U, E
         - 'dK_dt', 'dEcum_dt', 'dGini_dt', 'Gini_step_change': tendencies
 
@@ -260,6 +272,7 @@ def integrate_model(config):
         'Y_gross': np.zeros(n_steps),
         'delta_T': np.zeros(n_steps),
         'Omega': np.zeros(n_steps),
+        'Gini_climate': np.zeros(n_steps),
         'Y_damaged': np.zeros(n_steps),
         'Y_net': np.zeros(n_steps),
         'y': np.zeros(n_steps),
@@ -301,6 +314,7 @@ def integrate_model(config):
         results['Y_gross'][i] = outputs['Y_gross']
         results['delta_T'][i] = outputs['delta_T']
         results['Omega'][i] = outputs['Omega']
+        results['Gini_climate'][i] = outputs['Gini_climate']
         results['Y_damaged'][i] = outputs['Y_damaged']
         results['Y_net'][i] = outputs['Y_net']
         results['y'][i] = outputs['y']

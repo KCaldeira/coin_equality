@@ -13,6 +13,8 @@
     "_k_damage_coeff": "Climate damage coefficient: Fracttion of output times delta-T**k_demage_exp",
     "k_damage_exp": 2.0,
     "_k_damage_exp": "Climate damage exponent (2 means quadratic)",
+    "k_damage_halfsat": 10000.0,
+    "_k_damage_halfsat": "Income level ($) at which climate damage is half of maximum (lower = more regressive damage). Set very high (e.g., 1e12) for uniform damage",
     "k_climate": 0.5e-12,
     "_k_climate": "Temperature sensitivity to cumulative  (K/tCO2) 0.5e-12 ~ 1.8 K per 1000 GtC [noe we are in CO2 units]",
     "eta": 1.5,
