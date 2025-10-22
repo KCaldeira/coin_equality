@@ -57,7 +57,7 @@ def G2_from_deltaL(deltaL, Gini_initial):
 
 # --- the two-step “Pareto-preserving” effective Gini ---
 
-def G2_effective_pareto(f, deltaL, Gini_initial):
+def calculate_Gini_effective_redistribute_abate(f, deltaL, Gini_initial):
     """
     Step 1: find G2 (full redistribution) from ΔL and Gini_initial.
     Step 2: keep the same crossing F*, compute ΔL_eff for partial allocation,

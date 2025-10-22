@@ -195,6 +195,10 @@ class ScalarParameters:
         Pure rate of time preference (yr^-1)
     Gini_initial : float
         Initial Gini index (0 < Gini_initial < 1)
+    Gini_fract : float
+        Fraction of effective Gini change as instantaneous step (0 <= Gini_fract <= 1)
+    Gini_restore : float
+        Rate at which Gini restores to initial value (yr^-1, 0=no restoration)
     deltaL : float
         Fraction of income available for redistribution
     theta2 : float
@@ -209,6 +213,8 @@ class ScalarParameters:
     eta: float
     rho: float
     Gini_initial: float
+    Gini_fract: float
+    Gini_restore: float
     deltaL: float
     theta2: float
 
@@ -351,7 +357,7 @@ def evaluate_params_at_time(t, config):
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
         'alpha', 'delta', 's', 'k_damage_coeff', 'k_damage_exp', 'k_climate',
-        'eta', 'rho', 'G1', 'deltaL', 'theta2',
+        'eta', 'rho', 'Gini_initial', 'Gini_fract', 'Gini_restore', 'delta_L', 'theta2',
         'A', 'L', 'sigma', 'theta1', 'f'
     """
     sp = config.scalar_params
@@ -368,6 +374,8 @@ def evaluate_params_at_time(t, config):
         'eta': sp.eta,
         'rho': sp.rho,
         'Gini_initial': sp.Gini_initial,
+        'Gini_fract': sp.Gini_fract,
+        'Gini_restore': sp.Gini_restore,
         'delta_L': sp.deltaL,
         'theta2': sp.theta2,
 

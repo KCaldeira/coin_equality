@@ -204,7 +204,7 @@ where `y` is mean per-capita income.
 
 **Eq. (4.4) - Effective Gini Index:**
 
-When fraction `f` of redistributable resources goes to abatement instead of redistribution, the effective Gini index is calculated using a two-step Pareto-preserving approach (see `income_distribution.G2_effective_pareto`).
+When fraction `f` of redistributable resources goes to abatement instead of redistribution, the effective Gini index is calculated using a two-step Pareto-preserving approach (see `income_distribution.calculate_Gini_effective_redistribute_abate`).
 
 For reference, the formula is:
 ```
@@ -249,6 +249,8 @@ Utility and inequality parameters:
 | `η` | Coefficient of relative risk aversion (CRRA) | - | `eta` |
 | `ρ` | Pure rate of time preference | yr⁻¹ | `rho` |
 | `G₁` | Initial Gini index (0 = perfect equality, 1 = max inequality) | - | `Gini_initial` |
+| `Gini_fract` | Fraction of effective Gini change as instantaneous step (0 = no step, 1 = full step) | - | `Gini_fract` |
+| `Gini_restore` | Rate at which Gini restores to initial value (0 = no restoration) | yr⁻¹ | `Gini_restore` |
 | `ΔL` | Fraction of income available for redistribution | - | `deltaL` |
 
 Abatement cost parameters:
@@ -337,7 +339,7 @@ The `income_distribution.py` module provides the core mathematical functions for
 
 ### Effective Gini Calculation
 
-- **`G2_effective_pareto(f, deltaL, Gini_initial)`** - **Main function** that calculates the effective Gini index when fraction `f` of redistributable resources is allocated to emissions abatement instead of redistribution.
+- **`calculate_Gini_effective_redistribute_abate(f, deltaL, Gini_initial)`** - **Main function** that calculates the effective Gini index when fraction `f` of redistributable resources is allocated to emissions abatement instead of redistribution.
 
   **Algorithm:**
   1. Solves for full-redistribution target `G2` from `ΔL` and `Gini_initial`
@@ -355,7 +357,7 @@ The `income_distribution.py` module provides the core mathematical functions for
 ### Usage Example
 
 ```python
-from income_distribution import G2_effective_pareto
+from income_distribution import calculate_Gini_effective_redistribute_abate
 
 # Initial Gini index
 Gini_initial = 0.4
@@ -367,7 +369,7 @@ deltaL = 0.05
 f = 0.5  # 50% to abatement, 50% to redistribution
 
 # Calculate effective Gini index
-G_eff, remainder = G2_effective_pareto(f, deltaL, Gini_initial)
+G_eff, remainder = calculate_Gini_effective_redistribute_abate(f, deltaL, Gini_initial)
 
 print(f"Effective Gini: {G_eff:.4f}")
 ```
@@ -581,13 +583,13 @@ The clamp is applied during integration rather than modifying E itself, allowing
 
 The results dictionary contains arrays for:
 - **Time**: `t`
-- **State variables**: `K`, `Ecum`
+- **State variables**: `K`, `Ecum`, `Gini`
 - **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`
 - **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_eff`
 - **Climate variables**: `delta_T`, `Omega`, `E`
 - **Abatement variables**: `mu`, `Lambda`, `abatecost`, `delta_c`
 - **Inequality/utility**: `G_eff`, `U`
-- **Tendencies**: `dK_dt`, `dEcum_dt`
+- **Tendencies**: `dK_dt`, `dEcum_dt`, `dGini_dt`, `Gini_step_change`
 
 All arrays have the same length corresponding to time points from `t_start` to `t_end` in steps of `dt`.
 
@@ -695,42 +697,130 @@ The JSON configuration supports both single and multi-point optimization through
 - Update `UtilityOptimizer` class to use these configuration parameters
 - Document the stopping criteria in configuration file comments
 
-### 1. Add Gini Index as Third State Variable
+### 1. Gini Index as State Variable (IMPLEMENTED)
 
-**Motivation:** Currently the Gini index is computed algebraically from the allocation fraction `f(t)` at each time step. Making it a state variable with its own differential equation enables modeling of persistence and dynamic effects in inequality.
+**Status:** ✓ Implemented
+
+The Gini index is now a state variable `G(t)` that evolves according to:
+
+**Gini dynamics:**
+```
+dG/dt = -Gini_restore · (G - Gini_initial)
+G_step = Gini_fract · (G_eff - G)
+```
+
+where:
+- `G_eff` is the effective Gini computed from current policy `f(t)` using `calculate_Gini_effective_redistribute_abate()`
+- `dG/dt` represents continuous restoration toward `Gini_initial` at rate `Gini_restore` (yr⁻¹)
+- `G_step` is the instantaneous step change applied each timestep
+- `Gini_fract` controls what fraction of the policy-implied change occurs as a step (0 = gradual only, 1 = full step)
+
+**Integration:**
+```python
+G(t+dt) = G(t) + dt · dG/dt + G_step
+```
+
+This formulation allows modeling:
+- **Full immediate response** (`Gini_fract=1`, `Gini_restore=0`): Gini jumps immediately to `G_eff`
+- **Gradual restoration** (`Gini_fract=0`, `Gini_restore>0`): Gini smoothly returns to `Gini_initial`
+- **Mixed dynamics** (both parameters nonzero): Combination of policy-driven steps and natural restoration
+
+### 2. Income-Rank-Dependent Climate Damage Distribution
+
+**Motivation:** Climate damage disproportionately affects lower-income populations who have less capacity to adapt. This creates a distributional dimension to climate impacts that affects both aggregate damage and inequality.
+
+**Conceptual framework:**
+
+The current model treats climate damage uniformly: `Ω` represents the fraction of gross output lost, applied equally across all income levels. In reality, damage is income-dependent, with lower-income individuals experiencing greater fractional losses.
+
+**Three-step calculation:**
+
+1. **Damage by income rank:** Define `ω(F, ΔT)` as the fraction of income lost for an individual at population rank `F` (where `F ∈ [0,1]`, with `F=0` being lowest income), given temperature change `ΔT`. This function should satisfy:
+   - `ω(F, ΔT)` is decreasing in `F` (higher income → lower damage fraction)
+   - `ω(F, 0) = 0` (no damage at baseline temperature)
+   - `ω(F, ΔT)` increases with `ΔT`
+
+2. **Aggregate damage fraction:** Integrate across the income distribution to compute the economy-wide damage fraction:
+   ```
+   Ω(ΔT, G) = ∫₀¹ ω(F, ΔT) · y(F, G) dF / ȳ
+   ```
+   where:
+   - `y(F, G)` is the income at rank `F` for a Pareto distribution with Gini `G`
+   - `ȳ` is mean income
+   - The integral is weighted by income to get the fraction of total GDP lost
+
+3. **Gini impact of climate damage:** Calculate the new effective Gini after income-dependent damage:
+   ```
+   G_climate = Gini_from_distribution({(1 - ω(F, ΔT)) · y(F, G) for F ∈ [0,1]})
+   ```
+   This captures how climate damage alters inequality (typically increasing it, since low-income suffer proportionally more).
 
 **Implementation approach:**
-- Add `G` to state variables alongside `K` and `Ecum`
-- Define tendency `dG/dt` based on redistribution policy and decay dynamics
-- Update `calculate_tendencies()` in `economic_model.py`
-- Modify initial conditions to include `G(0) = Gini_initial`
-- Update integration loop in `integrate_model()` to evolve all three state variables
+
+Create a new module `climate_damage_distribution.py` with:
+```python
+def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, params):
+    """
+    Calculate income-dependent climate damage and its effect on inequality.
+
+    Parameters
+    ----------
+    delta_T : float
+        Temperature change above baseline (°C)
+    Gini_current : float
+        Current Gini index before climate damage
+    params : dict
+        Must include:
+        - 'k_damage_coeff': base damage coefficient
+        - 'k_damage_exp': temperature exponent
+        - 'damage_income_exp': exponent for income dependence (β)
+          (β > 0 means lower income → higher damage)
+        - 'y_ref': reference income for normalization
+
+    Returns
+    -------
+    Omega : float
+        Aggregate damage fraction (replaces current Eq. 1.2)
+    G_climate : float
+        Gini index after climate damage applied
+
+    Notes
+    -----
+    Uses Pareto distribution from income_distribution module to:
+    1. Map ranks F to incomes y(F, Gini_current)
+    2. Apply damage function ω(F, ΔT) = k_damage_coeff · ΔT^k_exp · (y_ref/y(F))^β
+    3. Integrate to get Ω
+    4. Compute Gini of damaged income distribution to get G_climate
+    """
+```
+
+**Suggested functional form:**
+```
+ω(F, ΔT) = k_damage_coeff · ΔT^k_damage_exp · (y_ref / y(F, G))^β
+```
+where:
+- `β > 0`: income-dependence exponent (β=0 recovers uniform damage)
+- `y_ref`: reference income for normalization
+- Higher income → lower damage fraction
+
+**Integration into economic_model.py:**
+- Replace line computing `Omega` (currently Eq. 1.2) with call to new function
+- Update `Gini` state variable to include climate damage effect:
+  ```python
+  Omega, G_climate = calculate_climate_damage_and_gini_effect(delta_T, Gini, params)
+  # Use G_climate when computing redistribution effects
+  ```
+
+**New parameters to add to configuration:**
+- `damage_income_exp` (β): exponent for income dependence (default 0 for backward compatibility)
+- `y_ref`: reference income for damage normalization
 
 **Design considerations:**
-- How does `dG/dt` depend on allocation fraction `f(t)`?
-- Should there be a "natural" Gini that the system returns to without intervention?
-- What is the timescale for Gini changes relative to capital accumulation?
-
-### 2. Income-Dependent Climate Response Function
-
-**Motivation:** Climate impacts may depend not only on temperature but also on societal capacity to adapt, which correlates with income levels.
-
-**Implementation approach:**
-- Modify climate damage function (Eq. 1.2) to include income dependence:
-  ```
-  Ω(t) = k_damage_coeff · ΔT(t)^k_damage_exp · h(y(t))
-  ```
-  where `h(y)` is a function capturing income-dependent vulnerability
-- Possible forms for `h(y)`:
-  - Power law: `h(y) = (y/y_ref)^(-β)` (higher income → lower damage)
-  - Asymptotic: `h(y) = 1 / (1 + (y/y_adapt)^γ)` (diminishing protection at high income)
-- Add new parameters to `scalar_parameters` in JSON configuration
-- Update tendency calculations to account for feedback between income and damage
-
-**Design considerations:**
-- Should adaptation capacity depend on mean income `y` or income distribution (Gini)?
-- What is the empirical basis for the functional form and parameter values?
-- How does this affect optimal allocation between redistribution and abatement?
+- Should use numerical integration (e.g., `scipy.integrate.quad`) or discretized approximation?
+- For Pareto distribution, may have analytical solutions for certain β values
+- Need to ensure Gini calculation from damaged distribution is numerically stable
+- Climate damage should affect Gini *before* redistribution policy is applied
+- Creates feedback: redistribution → lower Gini → lower climate damage → higher output
 
 ### 3. Persistence of Income Redistribution Effects
 

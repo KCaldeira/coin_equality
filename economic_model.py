@@ -6,7 +6,7 @@ and emissions abatement costs.
 """
 
 import numpy as np
-from income_distribution import G2_effective_pareto
+from income_distribution import calculate_Gini_effective_redistribute_abate
 from parameters import evaluate_params_at_time
 
 
@@ -20,6 +20,7 @@ def calculate_tendencies(state, params):
         State variables:
         - 'K': Capital stock ($)
         - 'Ecum': Cumulative CO2 emissions (tCO2)
+        - 'Gini': Current Gini index
     params : dict
         Model parameters (all must be provided):
         - 'alpha': Output elasticity of capital
@@ -35,6 +36,8 @@ def calculate_tendencies(state, params):
         - 'theta1': Abatement cost coefficient (current, $ tCO2^-1)
         - 'theta2': Abatement cost exponent
         - 'Gini_initial': Initial Gini index
+        - 'Gini_fract': Fraction of Gini change as instantaneous step
+        - 'Gini_restore': Rate of restoration to Gini_initial (yr^-1)
         - 'delta_L': Fraction of income to redistribute
         - 'f': Fraction allocated to abatement vs redistribution
 
@@ -42,7 +45,7 @@ def calculate_tendencies(state, params):
     -------
     dict
         Dictionary containing:
-        - Tendencies: 'dK_dt', 'dEcum_dt'
+        - Tendencies: 'dK_dt', 'dEcum_dt', 'dGini_dt', 'Gini_step_change'
         - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y, delta_c,
           mu, Lambda, abatecost, y_eff, G_eff, U, E
 
@@ -69,6 +72,7 @@ def calculate_tendencies(state, params):
     # Extract state variables
     K = state['K']
     Ecum = state['Ecum']
+    Gini = state['Gini']
 
     # Extract parameters
     alpha = params['alpha']
@@ -85,20 +89,17 @@ def calculate_tendencies(state, params):
     theta2 = params['theta2']
     delta_L = params['delta_L']
     Gini_initial = params['Gini_initial']
+    Gini_fract = params['Gini_fract']
+    Gini_restore = params['Gini_restore']
     f = params['f']
 
-    # strange things can happen during the optimization phase
-    # thus the preloading of results and checking for bad values
-    Y_gross = 0.0
-    Epot = 0.0
-    mu = 0.0
-    Lambda = 0.0
-    neg_bignum = -1e30
-    U = neg_bignum
+    # strange things can happen during the optimization phase, thus the if-then checks below
 
     # Eq 1.1: Gross production (Cobb-Douglas)
     if K>0:
         Y_gross = A * (K ** alpha) * (L ** (1 - alpha))
+    else:
+        Y_gross = 0.0
 
     # Eq 2.2: Temperature change from cumulative emissions
     delta_T = k_climate * Ecum
@@ -124,10 +125,14 @@ def calculate_tendencies(state, params):
     # Eq 1.6: Abatement fraction
     if Epot > 0:
         mu = (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2)
+    else:
+        mu = 0.0
 
     # Eq 1.7: Abatement cost fraction
     if Y_damaged > 0:
         Lambda = abatecost / Y_damaged
+    else:
+        Lambda = 0.0
 
     # Eq 1.8: Net production after abatement costs
     Y_net = (1 - Lambda) * Y_damaged
@@ -136,7 +141,8 @@ def calculate_tendencies(state, params):
     y_eff = y - abatecost / L
 
     # Eq 4.4: Effective Gini index
-    G_eff, _ = G2_effective_pareto(f, delta_L, Gini_initial)
+    # start from current Gini, not initial Gini
+    G_eff, _ = calculate_Gini_effective_redistribute_abate(f, delta_L, Gini)
 
     # Eq 3.5: Mean utility
     if y_eff >= 0 and 0 <= G_eff <= 1.0:
@@ -148,6 +154,9 @@ def calculate_tendencies(state, params):
             denominator = 1 + G_eff * (2 * eta - 1)
             term2 = (numerator / denominator) ** (1 / (1 - eta))
             U = term1 * term2
+    else:
+        neg_bignum = -1e30
+        U = neg_bignum
 
     # Eq 2.3: Actual emissions (after abatement)
     E = sigma * (1 - mu) * Y_gross
@@ -155,9 +164,15 @@ def calculate_tendencies(state, params):
     # Eq 1.10: Capital tendency
     dK_dt = s * Y_net - delta * K
 
+    # Gini dynamics
+    dGini_dt = -Gini_restore * (Gini - Gini_initial)
+    Gini_step_change = Gini_fract * (G_eff - Gini)
+
     return {
         'dK_dt': dK_dt,
         'dEcum_dt': E,
+        'dGini_dt': dGini_dt,
+        'Gini_step_change': Gini_step_change,
         'Y_gross': Y_gross,
         'delta_T': delta_T,
         'Omega': Omega,
@@ -191,10 +206,11 @@ def integrate_model(config):
         - 't': array of time points
         - 'K': array of capital stock values
         - 'Ecum': array of cumulative emissions values
+        - 'Gini': array of Gini index values
         - 'A', 'L', 'sigma', 'theta1', 'f': time-dependent inputs
         - All derived variables: Y_gross, delta_T, Omega, Y_damaged, Y_net,
           y, delta_c, mu, Lambda, abatecost, y_eff, G_eff, U, E
-        - 'dK_dt', 'dEcum_dt': tendencies
+        - 'dK_dt', 'dEcum_dt', 'dGini_dt', 'Gini_step_change': tendencies
 
     Notes
     -----
@@ -204,6 +220,7 @@ def integrate_model(config):
     Initial conditions are computed automatically:
     - Ecum(0) = 0 (no cumulative emissions)
     - K(0) = (s·A(0)/δ)^(1/(1-α))·L(0) (steady-state capital)
+    - Gini(0) = Gini_initial (initial Gini index from configuration)
     """
     # Extract integration parameters
     t_start = config.integration_params.t_start
@@ -225,7 +242,8 @@ def integrate_model(config):
 
     state = {
         'K': K0,
-        'Ecum': 0.0
+        'Ecum': 0.0,
+        'Gini': config.scalar_params.Gini_initial
     }
 
     # Initialize storage for all variables
@@ -233,6 +251,7 @@ def integrate_model(config):
         't': t_array,
         'K': np.zeros(n_steps),
         'Ecum': np.zeros(n_steps),
+        'Gini': np.zeros(n_steps),
         'A': np.zeros(n_steps),
         'L': np.zeros(n_steps),
         'sigma': np.zeros(n_steps),
@@ -254,6 +273,8 @@ def integrate_model(config):
         'E': np.zeros(n_steps),
         'dK_dt': np.zeros(n_steps),
         'dEcum_dt': np.zeros(n_steps),
+        'dGini_dt': np.zeros(n_steps),
+        'Gini_step_change': np.zeros(n_steps),
     }
 
     # Time stepping loop
@@ -267,6 +288,7 @@ def integrate_model(config):
         # Store state variables
         results['K'][i] = state['K']
         results['Ecum'][i] = state['Ecum']
+        results['Gini'][i] = state['Gini']
 
         # Store time-dependent inputs
         results['A'][i] = params['A']
@@ -292,11 +314,15 @@ def integrate_model(config):
         results['E'][i] = outputs['E']
         results['dK_dt'][i] = outputs['dK_dt']
         results['dEcum_dt'][i] = outputs['dEcum_dt']
+        results['dGini_dt'][i] = outputs['dGini_dt']
+        results['Gini_step_change'][i] = outputs['Gini_step_change']
 
         # Euler step: update state for next iteration (skip on last step)
         if i < n_steps - 1:
             state['K'] = state['K'] + dt * outputs['dK_dt']
             # do not allow cumulative emissions to go negative, making it colder than the initial condition
             state['Ecum'] = max(0.0, state['Ecum'] + dt * outputs['dEcum_dt'])
+            # Gini update includes both continuous change and discontinuous step
+            state['Gini'] = state['Gini'] + dt * outputs['dGini_dt'] + outputs['Gini_step_change']
 
     return results
