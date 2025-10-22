@@ -409,6 +409,10 @@ def main():
         print(f"\nOptimal objective value: {opt_results['optimal_objective']:.6e}")
 
     print(f"\nAll results saved to: {output_paths['output_dir']}")
+
+    elapsed_time = time.time() - start_time
+    print(f"\nTotal runtime: {elapsed_time:.2f} seconds ({elapsed_time/60:.2f} minutes)")
+
     print_header("OPTIMIZATION TEST COMPLETE")
 
 
