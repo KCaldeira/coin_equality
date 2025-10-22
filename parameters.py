@@ -259,6 +259,15 @@ class OptimizationParameters:
         Initial f values at each control time.
         Must have same length as control_times.
         Each value must satisfy 0 ≤ f ≤ 1.
+    algorithm : str, optional
+        NLopt algorithm to use. If None, defaults to 'LN_BOBYQA'.
+        Options include:
+        - 'LN_BOBYQA': Local derivative-free (default, good for smooth problems)
+        - 'GN_ISRES': Global stochastic (good for multi-modal problems)
+        - 'GN_DIRECT_L': Global deterministic (good for Lipschitz-continuous)
+        - 'LN_COBYLA': Local derivative-free (handles nonlinear constraints)
+        - 'LN_NELDERMEAD': Local derivative-free (Nelder-Mead simplex)
+        See NLopt documentation for full list.
     ftol_rel : float, optional
         Relative tolerance on objective function changes.
         Stops when |Δf| < ftol_rel * |f|.
@@ -279,6 +288,7 @@ class OptimizationParameters:
     max_evaluations: int
     control_times: list
     initial_guess: list
+    algorithm: str = None
     ftol_rel: float = None
     ftol_abs: float = None
     xtol_rel: float = None

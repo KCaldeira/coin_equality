@@ -10,6 +10,7 @@ This script demonstrates the complete workflow:
 """
 
 import sys
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -259,6 +260,8 @@ def create_visualization_plots(sensitivity_results, opt_results, comparison_resu
 
 def main():
     """Main execution function."""
+    start_time = time.time()
+
     if len(sys.argv) < 2:
         print("Usage: python test_optimization.py <config_file>")
         print("\nExample:")
@@ -298,6 +301,9 @@ def main():
     print(f"Max evaluations: {max_evaluations}")
 
     opt_params = config.optimization_params
+    algorithm = opt_params.algorithm if opt_params.algorithm is not None else 'LN_BOBYQA'
+    print(f"Algorithm: {algorithm}")
+
     if opt_params.ftol_rel is not None:
         print(f"ftol_rel: {opt_params.ftol_rel}")
     if opt_params.ftol_abs is not None:
@@ -307,12 +313,13 @@ def main():
     if opt_params.xtol_abs is not None:
         print(f"xtol_abs: {opt_params.xtol_abs}")
 
-    print("Running BOBYQA optimization...\n")
+    print(f"\nRunning {algorithm} optimization...\n")
 
     opt_results = optimizer.optimize_control_points(
         control_times,
         initial_guess,
         max_evaluations,
+        algorithm=opt_params.algorithm,
         ftol_rel=opt_params.ftol_rel,
         ftol_abs=opt_params.ftol_abs,
         xtol_rel=opt_params.xtol_rel,

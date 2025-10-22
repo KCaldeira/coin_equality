@@ -182,6 +182,8 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
         writer.writerow(['Function evaluations', opt_results['n_evaluations']])
         writer.writerow(['Status', opt_results['status']])
 
+        if 'algorithm' in opt_results:
+            writer.writerow(['Algorithm', opt_results['algorithm']])
         if 'termination_name' in opt_results:
             writer.writerow(['Termination reason', opt_results['termination_name']])
         if 'termination_code' in opt_results and opt_results['termination_code'] is not None:

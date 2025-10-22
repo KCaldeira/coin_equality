@@ -212,7 +212,7 @@ class UtilityOptimizer:
         }
 
     def optimize_control_points(self, control_times, initial_guess, max_evaluations,
-                                         ftol_rel=None, ftol_abs=None, xtol_rel=None, xtol_abs=None):
+                                         algorithm=None, ftol_rel=None, ftol_abs=None, xtol_rel=None, xtol_abs=None):
         """
         Optimize allocation with multiple control points (time-varying trajectory).
 
@@ -226,6 +226,9 @@ class UtilityOptimizer:
             Initial guess for control values at each control time
         max_evaluations : int
             Maximum number of objective function evaluations
+        algorithm : str, optional
+            NLopt algorithm name (e.g., 'LN_BOBYQA', 'GN_ISRES').
+            If None, defaults to 'LN_BOBYQA'.
         ftol_rel : float, optional
             Relative tolerance on objective function changes (None = use NLopt default)
         ftol_abs : float, optional
@@ -246,12 +249,16 @@ class UtilityOptimizer:
             - 'status': optimization status string
             - 'termination_code': NLopt termination code
             - 'termination_name': human-readable termination reason
+            - 'algorithm': algorithm name used
         """
         self.n_evaluations = 0
         self.best_objective = -np.inf
         self.best_control_values = None
         self.degenerate_case = False
         self.degenerate_reason = None
+
+        if algorithm is None:
+            algorithm = 'LN_BOBYQA'
 
         deltaL = self.base_config.scalar_params.deltaL
         if abs(deltaL) < 1e-15:
@@ -268,7 +275,8 @@ class UtilityOptimizer:
                 'control_points': control_points,
                 'status': 'degenerate',
                 'termination_code': None,
-                'termination_name': 'DEGENERATE_CASE'
+                'termination_name': 'DEGENERATE_CASE',
+                'algorithm': algorithm
             }
 
         n_points = len(control_times)
@@ -277,7 +285,8 @@ class UtilityOptimizer:
         def objective_wrapper(x, grad):
             return self.calculate_objective(x, control_times)
 
-        opt = nlopt.opt(nlopt.LN_BOBYQA, n_points)
+        nlopt_algorithm = getattr(nlopt, algorithm)
+        opt = nlopt.opt(nlopt_algorithm, n_points)
         opt.set_lower_bounds(np.zeros(n_points))
         opt.set_upper_bounds(np.ones(n_points))
         opt.set_max_objective(objective_wrapper)
@@ -321,5 +330,6 @@ class UtilityOptimizer:
             'control_points': control_points,
             'status': 'success',
             'termination_code': termination_code,
-            'termination_name': termination_name
+            'termination_name': termination_name,
+            'algorithm': algorithm
         }
