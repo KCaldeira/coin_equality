@@ -671,225 +671,42 @@ The JSON configuration supports both single and multi-point optimization through
 
 ## Next Steps
 
-### 0. Code Cleanup and Configuration Enhancement
+The following tasks are prioritized to prepare the model for production use and publication:
 
-**Task 0a: Remove deprecated single control point optimization**
-- Delete `optimize_single_control_point()` method from `optimization.py`
-- This functionality is now fully subsumed by `optimize_multiple_control_points()` with a single control point
-- Clean up any references in documentation or comments
+### 1. Update Methods Section of Paper
 
-**Task 0b: Add NLopt stopping criteria to configuration**
-- Add parameters to `optimization_parameters` section in JSON to control optimization convergence:
-  ```json
-  "optimization_parameters": {
-    "max_evaluations": 10000,
-    "control_times": [0, 25, 50, 75, 100],
-    "initial_guess": [0.5, 0.5, 0.5, 0.5, 0.5],
-    "ftol_rel": 1e-6,
-    "ftol_abs": 1e-9,
-    "xtol_rel": 1e-6,
-    "xtol_abs": 1e-9
-  }
-  ```
-- Map these parameters to NLopt stopping criteria:
-  - `ftol_rel` → `opt.set_ftol_rel()` - relative change in objective function
-  - `ftol_abs` → `opt.set_ftol_abs()` - absolute change in objective function
-  - `xtol_rel` → `opt.set_xtol_rel()` - relative change in optimization variables
-  - `xtol_abs` → `opt.set_xtol_abs()` - absolute change in optimization variables
-- Update `UtilityOptimizer` class to use these configuration parameters
-- Document the stopping criteria in configuration file comments
+Revise and update the Methods section of the paper to ensure it accurately reflects the current implementation as documented in this README and the model code. The paper should provide a clear, consistent description of all model equations, parameter definitions, and computational approaches used in the codebase.
 
-### 1. Gini Index as State Variable (IMPLEMENTED)
+### 2. Comprehensive Code Validation
 
-**Status:** ✓ Implemented
+Perform a detailed verification of model calculations by manually tracing through one complete time step of the integration:
+- Use the output `results.csv` file to verify intermediate calculations
+- Check that all equations are implemented correctly and consistently with documentation
+- Validate state variable updates, tendency calculations, and functional relationships
+- Ensure numerical values propagate correctly through the calculation order
+- Document any discrepancies or unexpected behaviors
 
-The Gini index is now a state variable `G(t)` that evolves according to:
+This step-by-step verification will provide confidence in the correctness of the implementation.
 
-**Gini dynamics:**
-```
-dG/dt = -Gini_restore · (G - Gini_initial)
-G_step = Gini_fract · (G_eff - G)
-```
+### 3. Investigate and Improve Optimization Methods
 
-where:
-- `G_eff` is the effective Gini computed from current policy `f(t)` using `calculate_Gini_effective_redistribute_abate()`
-- `dG/dt` represents continuous restoration toward `Gini_initial` at rate `Gini_restore` (yr⁻¹)
-- `G_step` is the instantaneous step change applied each timestep
-- `Gini_fract` controls what fraction of the policy-implied change occurs as a step (0 = gradual only, 1 = full step)
+Address current issues with the optimization routine where the model allocates resources to emissions abatement even when that produces no benefit to utility. In cases where abatement provides no utility gains, those resources should be directed toward reducing the Gini index to increase aggregate utility.
 
-**Integration:**
-```python
-G(t+dt) = G(t) + dt · dG/dt + G_step
-```
+Specific investigations:
+- Diagnose why the optimizer is selecting suboptimal allocation strategies
+- Examine objective function gradients and sensitivity to control variables
+- Consider alternative optimization algorithms or improved starting conditions
+- Verify that the objective function correctly captures the trade-offs between abatement and redistribution
+- Test optimizer performance across different parameter regimes
 
-This formulation allows modeling:
-- **Full immediate response** (`Gini_fract=1`, `Gini_restore=0`): Gini jumps immediately to `G_eff`
-- **Gradual restoration** (`Gini_fract=0`, `Gini_restore>0`): Gini smoothly returns to `Gini_initial`
-- **Mixed dynamics** (both parameters nonzero): Combination of policy-driven steps and natural restoration
+### 4. Production Code Readiness
 
-### 2. Income-Rank-Dependent Climate Damage Distribution (IMPLEMENTED)
-
-**Status:** ✓ Implemented with analytical solution
-
-**Motivation:** Climate damage disproportionately affects lower-income populations who have less capacity to adapt. This creates a distributional dimension to climate impacts that affects both aggregate damage and inequality.
-
-**Conceptual framework:**
-
-The current model treats climate damage uniformly: `Ω` represents the fraction of gross output lost, applied equally across all income levels. In reality, damage is income-dependent, with lower-income individuals experiencing greater fractional losses.
-
-**Three-step calculation:**
-
-1. **Damage by income rank:** Define `ω(F, ΔT)` as the fraction of income lost for an individual at population rank `F` (where `F ∈ [0,1]`, with `F=0` being lowest income), given temperature change `ΔT`. This function should satisfy:
-   - `ω(F, ΔT)` is decreasing in `F` (higher income → lower damage fraction)
-   - `ω(F, 0) = 0` (no damage at baseline temperature)
-   - `ω(F, ΔT)` increases with `ΔT`
-
-2. **Aggregate damage fraction:** Integrate across the income distribution to compute the economy-wide damage fraction:
-   ```
-   Ω(ΔT, G) = ∫₀¹ ω(F, ΔT) · y(F, G) dF / ȳ
-   ```
-   where:
-   - `y(F, G)` is the income at rank `F` for a Pareto distribution with Gini `G`
-   - `ȳ` is mean income
-   - The integral is weighted by income to get the fraction of total GDP lost
-
-3. **Gini impact of climate damage:** Calculate the new effective Gini after income-dependent damage:
-   ```
-   G_climate = Gini_from_distribution({(1 - ω(F, ΔT)) · y(F, G) for F ∈ [0,1]})
-   ```
-   This captures how climate damage alters inequality (typically increasing it, since low-income suffer proportionally more).
-
-**Implementation approach:**
-
-Create a new module `climate_damage_distribution.py` with:
-```python
-def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, params):
-    """
-    Calculate income-dependent climate damage and its effect on inequality.
-
-    Parameters
-    ----------
-    delta_T : float
-        Temperature change above baseline (°C)
-    Gini_current : float
-        Current Gini index before climate damage
-    params : dict
-        Must include:
-        - 'k_damage_coeff': base damage coefficient
-        - 'k_damage_exp': temperature exponent
-        - 'k_damage_halfsat': income half-saturation ($)
-          (income level where damage is 50% of maximum)
-
-    Returns
-    -------
-    Omega : float
-        Aggregate damage fraction (replaces current Eq. 1.2)
-    G_climate : float
-        Gini index after climate damage applied
-
-    Notes
-    -----
-    Uses Pareto distribution from income_distribution module to:
-    1. Map ranks F to incomes y(F, Gini_current)
-    2. Apply damage function ω(y, ΔT) = ω_max · k_halfsat / (k_halfsat + y)
-    3. Integrate to get Ω (income-weighted average damage)
-    4. Compute Gini of damaged income distribution to get G_climate
-    """
-```
-
-**Functional form (half-saturation model):**
-```
-ω_max(ΔT) = k_damage_coeff · ΔT^k_damage_exp
-ω(y, ΔT) = ω_max · (1 - y / (k_damage_halfsat + y))
-         = ω_max · k_damage_halfsat / (k_damage_halfsat + y)
-```
-where:
-- `k_damage_halfsat`: income level at which damage is 50% of maximum ($)
-- At y = 0 (poorest): ω = ω_max (maximum damage)
-- At y = k_damage_halfsat: ω = ω_max/2 (half maximum)
-- As y → ∞: ω → 0 (damage approaches zero)
-- k_damage_halfsat → ∞ recovers uniform damage
-
-**Integration into economic_model.py:**
-- Replace line computing `Omega` (currently Eq. 1.2) with call to new function
-- Update `Gini` state variable to include climate damage effect:
-  ```python
-  Omega, G_climate = calculate_climate_damage_and_gini_effect(delta_T, Gini, params)
-  # Use G_climate when computing redistribution effects
-  ```
-
-**New parameters to add to configuration:**
-- `k_damage_halfsat`: income half-saturation for climate damage ($)
-  - Default: 10000 (damage is half-max at $10k income)
-  - Set very high (e.g., 1e12) for approximately uniform damage
-  - Lower values → more regressive damage (poor suffer more)
-
-**Implementation (Analytical Solution):**
-
-The module uses **closed-form analytical solutions** rather than numerical integration:
-
-**Aggregate Damage:**
-```
-β = k_halfsat · (a-1) / (ȳ · a)
-Ω = ω_max · ₂F₁(1, a, a+1, -β)
-```
-where:
-- `a` is the Pareto parameter: `a = (1 + 1/G)/ 2`
-- `₂F₁` is the Gauss hypergeometric function
-- `β` is a dimensionless parameter controlling damage regressivity
-
-**Post-Damage Gini:**
-```
-S₀ = (a-1)/(2a-1)                        [Lorenz curve integral]
-D  = ω · ₂F₁(1, a-1, a, -β)             [Aggregate damage]
-Sᵈ = ω · S₀ · ₂F₁(1, 2a-1, 2a, -β)      [Damaged Lorenz integral]
-G_new = 1 - 2·(S₀ - Sᵈ)/(1 - D)          [Post-damage Gini]
-```
-
-**Advantages of Analytical Approach:**
-1. **Exact**: No discretization error (within machine precision)
-2. **Fast**: Single hypergeometric evaluation vs. thousands of integration points
-3. **Stable**: Well-defined mathematical properties across all parameter ranges
-4. **Elegant**: Closed-form expressions reveal mathematical structure
-
-**Mathematical Insight:**
-- The hypergeometric function ₂F₁ naturally arises from integrating the half-saturation damage function over the Pareto distribution
-- When β → 0 (uniform damage): ₂F₁(1,a,a+1,0) = 1, recovering Ω = ω_max
-- When β > 0: The hypergeometric function captures how damage concentrates on lower incomes
-
-**Design considerations:**
-- Climate damage affects Gini *before* redistribution policy is applied
-- Creates feedback: redistribution → lower Gini → lower climate damage → higher output
-- Half-saturation model is intuitive: parameter directly specifies income level of 50% damage
-- Analytical solution derived with assistance from ChatGPT (2025)
-
-### 3. Persistence of Income Redistribution Effects
-
-**Motivation:** Redistribution policies may have lasting effects that persist beyond immediate transfers, such as through human capital investment, institutional changes, or behavioral shifts.
-
-**Implementation approach:**
-- If Gini is a state variable (Step 1), model persistence through the `dG/dt` dynamics:
-  ```
-  dG/dt = -(G_target(f) - G) / τ_decay
-  ```
-  where:
-  - `G_target(f)` is the equilibrium Gini given current allocation policy
-  - `τ_decay` is the decay/adjustment timescale parameter
-  - Positive `τ_decay` → slower adjustment → more persistence
-- Alternative: introduce a separate "policy memory" state variable that influences current redistribution effectiveness
-- Add `tau_decay` parameter to `scalar_parameters` in JSON configuration
-
-**Design considerations:**
-- What is the appropriate timescale for persistence (years to decades)?
-- Should decay be symmetric (same rate for increasing/decreasing inequality)?
-- How does persistence interact with optimal dynamic allocation strategies?
-- Does persistence create hysteresis in the system?
-
-**Cross-cutting research questions:**
-- How do these three extensions interact with each other?
-- Do they change the qualitative nature of optimal allocation trajectories?
-- What new trade-offs emerge (e.g., short-term redistribution vs. long-term adaptation)?
-- How sensitive are results to the new parameters introduced?
+Combine the results of code validation (Step 2) and optimization improvements (Step 3) to establish confidence that the model is ready for production use. This includes:
+- Confirming all calculations are correct and well-tested
+- Ensuring optimization routines reliably find optimal solutions
+- Documenting any known limitations or edge cases
+- Creating comprehensive test cases that verify expected model behavior
+- Establishing this codebase as a reliable tool for research and analysis
 
 ## Project Structure
 
