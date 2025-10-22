@@ -402,25 +402,6 @@ Each JSON configuration file must contain:
    - `type`: "constant" or "piecewise_constant"
    - Type-specific parameters (e.g., `value` for constant)
 
-### Adding Comments with `_description` Fields
-
-Any JSON key starting with `_` (underscore) is treated as a comment/description and ignored during loading. This allows you to document parameters directly in the configuration file:
-
-```json
-"scalar_parameters": {
-  "_description": "Time-invariant model parameters",
-  "alpha": 0.3,
-  "_alpha": "Capital share of income",
-  "delta": 0.10,
-  "_delta": "Capital depreciation rate (10% per year)"
-}
-```
-
-You can add descriptions at any level:
-- **Section level**: `"_description"` to describe a whole section
-- **Parameter level**: `"_parameter_name"` to describe individual parameters
-- **Nested levels**: Works in nested dictionaries like time functions
-
 See `config_baseline.json` for extensive examples of documentation.
 
 ### Initial Conditions
@@ -518,14 +499,6 @@ The PDF contains four organized sections:
 2. **Dollar Variables** - Economic flows and stocks
 3. **Physical Variables** - Climate and emissions data
 4. **Specified Functions** - Exogenous model inputs
-
-#### Troubleshooting
-
-**Common issues:**
-- **Missing config file**: Ensure the JSON file exists and path is correct
-- **JSON syntax errors**: Validate JSON syntax in configuration file
-- **Missing dependencies**: Run `pip install -r requirements.txt`
-- **Permission errors**: Ensure write access to `./data/output/` directory
 
 #### Testing Different Scenarios
 
