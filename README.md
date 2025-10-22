@@ -612,12 +612,14 @@ This creates a directory: `./data/output/{run_name}_YYYYMMDD-HHMMSS/`
 
 **CSV File (`results.csv`):**
 - Each column is a model variable
+- Time column ('t') is always the first column, followed by other variables in alphabetical order
 - Each row is a time point
 - First row contains variable names (header)
 - Can be loaded into Excel, Python (pandas), R, etc.
 
 **PDF File (`plots.pdf`):**
 - Multi-page PDF with organized time series plots
+- Each page header displays the run name for easy identification
 - Variables grouped by type (dimensionless ratios, dollar variables, etc.)
 - Individual plots for single variables, combined plots for related variables with legends
 - Automatically uses scientific notation for large/small values

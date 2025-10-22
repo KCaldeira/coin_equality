@@ -128,7 +128,7 @@ def compare_scenarios(config, f_values, labels):
     return comparison_results
 
 
-def create_visualization_plots(sensitivity_results, opt_results, comparison_results, output_pdf):
+def create_visualization_plots(sensitivity_results, opt_results, comparison_results, run_name, output_pdf):
     """
     Create visualization plots and save to PDF.
 
@@ -140,6 +140,8 @@ def create_visualization_plots(sensitivity_results, opt_results, comparison_resu
         Results from optimization
     comparison_results : dict
         Results from scenario comparison
+    run_name : str
+        Name of the model run to display in header
     output_pdf : str
         Path to output PDF file
     """
@@ -148,7 +150,7 @@ def create_visualization_plots(sensitivity_results, opt_results, comparison_resu
 
     with PdfPages(output_pdf) as pdf:
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        fig.suptitle('Single Control Point Optimization Results', fontsize=14, fontweight='bold')
+        fig.suptitle(f'{run_name} - Single Control Point Optimization Results', fontsize=14, fontweight='bold')
 
         f_vals = sensitivity_results['f_values']
         obj_vals = sensitivity_results['objectives']
@@ -203,7 +205,7 @@ def create_visualization_plots(sensitivity_results, opt_results, comparison_resu
         plt.close()
 
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        fig.suptitle('Economic and Emissions Comparison', fontsize=14, fontweight='bold')
+        fig.suptitle(f'{run_name} - Economic and Emissions Comparison', fontsize=14, fontweight='bold')
 
         ax = axes[0, 0]
         for (label, data), color in zip(comparison_results.items(), colors):
@@ -387,7 +389,7 @@ def main():
     if comparison_results:
         print("\nCreating comparison visualization plots...")
         output_pdf = f'optimization_comparison_{config.run_name}.pdf'
-        create_visualization_plots(sensitivity_results, opt_results, comparison_results, output_pdf)
+        create_visualization_plots(sensitivity_results, opt_results, comparison_results, config.run_name, output_pdf)
         print(f"  Comparison PDF:   {output_pdf}")
 
     print_header("SUMMARY")

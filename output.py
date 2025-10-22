@@ -236,8 +236,9 @@ def write_results_csv(results, output_dir, filename='results.csv'):
     """
     csv_path = os.path.join(output_dir, filename)
 
-    # Get variable names (keys) in consistent order
-    var_names = sorted(results.keys())
+    # Get variable names with 't' first, then rest sorted
+    other_vars = sorted([k for k in results.keys() if k != 't'])
+    var_names = ['t'] + other_vars
 
     # Open CSV file and write
     with open(csv_path, 'w', newline='') as csvfile:
@@ -257,7 +258,7 @@ def write_results_csv(results, output_dir, filename='results.csv'):
     return csv_path
 
 
-def plot_results_pdf(results, output_dir, filename='plots.pdf'):
+def plot_results_pdf(results, output_dir, run_name, filename='plots.pdf'):
     """
     Create PDF with time series plots of all variables, organized by topic with combined charts.
 
@@ -267,6 +268,8 @@ def plot_results_pdf(results, output_dir, filename='plots.pdf'):
         Results dictionary from integrate_model()
     output_dir : str
         Directory to write PDF file
+    run_name : str
+        Name of the model run to display in header
     filename : str
         Name of PDF file
 
@@ -318,16 +321,16 @@ def plot_results_pdf(results, output_dir, filename='plots.pdf'):
                 charts_per_page = 6
                 for page_start in range(0, n_charts, charts_per_page):
                     page_charts = available_charts[page_start:page_start + charts_per_page]
-                    _create_plot_page_new(t, results, page_charts, group_name, pdf, page_start//charts_per_page + 1)
+                    _create_plot_page_new(t, results, page_charts, group_name, run_name, pdf, page_start//charts_per_page + 1)
                 continue
 
             # Create single page for this group
-            _create_plot_page_new(t, results, available_charts, group_name, pdf, layout=(rows, cols), figsize=figsize)
+            _create_plot_page_new(t, results, available_charts, group_name, run_name, pdf, layout=(rows, cols), figsize=figsize)
 
     return pdf_path
 
 
-def _create_plot_page_new(t, results, chart_specs, group_name, pdf, page_num=None, layout=None, figsize=None):
+def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, page_num=None, layout=None, figsize=None):
     """
     Create a single page of plots for a variable group with support for combined charts.
 
@@ -341,6 +344,8 @@ def _create_plot_page_new(t, results, chart_specs, group_name, pdf, page_num=Non
         List of chart specifications (single or combined)
     group_name : str
         Name of the variable group
+    run_name : str
+        Name of the model run to display in header
     pdf : PdfPages
         PDF object to add page to
     page_num : int, optional
@@ -361,8 +366,8 @@ def _create_plot_page_new(t, results, chart_specs, group_name, pdf, page_num=Non
     # Create figure
     fig, axes = plt.subplots(rows, cols, figsize=figsize)
 
-    # Create title
-    title = f'COIN_equality Model Results - {group_name.title()} Variables'
+    # Create title with run_name
+    title = f'{run_name} - COIN_equality Model Results - {group_name.title()} Variables'
     if page_num is not None:
         title += f' (Page {page_num})'
     fig.suptitle(title, fontsize=16, fontweight='bold', y=0.95)
@@ -504,13 +509,13 @@ def save_results(results, run_name, plot_short_horizon=None):
         results_short = {key: val[mask] if isinstance(val, np.ndarray) else val
                         for key, val in results.items()}
 
-        pdf_file_full = plot_results_pdf(results, output_dir, filename='plots_full.pdf')
-        pdf_file_short = plot_results_pdf(results_short, output_dir, filename='plots_short.pdf')
+        pdf_file_full = plot_results_pdf(results, output_dir, run_name, filename='plots_full.pdf')
+        pdf_file_short = plot_results_pdf(results_short, output_dir, run_name, filename='plots_short.pdf')
 
         output_dict['pdf_file'] = pdf_file_full
         output_dict['pdf_file_short'] = pdf_file_short
     else:
-        pdf_file = plot_results_pdf(results, output_dir, filename='plots.pdf')
+        pdf_file = plot_results_pdf(results, output_dir, run_name, filename='plots.pdf')
         output_dict['pdf_file'] = pdf_file
 
     return output_dict
