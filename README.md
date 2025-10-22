@@ -725,7 +725,9 @@ This formulation allows modeling:
 - **Gradual restoration** (`Gini_fract=0`, `Gini_restore>0`): Gini smoothly returns to `Gini_initial`
 - **Mixed dynamics** (both parameters nonzero): Combination of policy-driven steps and natural restoration
 
-### 2. Income-Rank-Dependent Climate Damage Distribution
+### 2. Income-Rank-Dependent Climate Damage Distribution (IMPLEMENTED)
+
+**Status:** ✓ Implemented with analytical solution
 
 **Motivation:** Climate damage disproportionately affects lower-income populations who have less capacity to adapt. This creates a distributional dimension to climate impacts that affects both aggregate damage and inequality.
 
@@ -820,12 +822,44 @@ where:
   - Set very high (e.g., 1e12) for approximately uniform damage
   - Lower values → more regressive damage (poor suffer more)
 
+**Implementation (Analytical Solution):**
+
+The module uses **closed-form analytical solutions** rather than numerical integration:
+
+**Aggregate Damage:**
+```
+β = k_halfsat · (a-1) / (ȳ · a)
+Ω = ω_max · ₂F₁(1, a, a+1, -β)
+```
+where:
+- `a` is the Pareto parameter: `a = (1 + 1/G)/ 2`
+- `₂F₁` is the Gauss hypergeometric function
+- `β` is a dimensionless parameter controlling damage regressivity
+
+**Post-Damage Gini:**
+```
+S₀ = (a-1)/(2a-1)                        [Lorenz curve integral]
+D  = ω · ₂F₁(1, a-1, a, -β)             [Aggregate damage]
+Sᵈ = ω · S₀ · ₂F₁(1, 2a-1, 2a, -β)      [Damaged Lorenz integral]
+G_new = 1 - 2·(S₀ - Sᵈ)/(1 - D)          [Post-damage Gini]
+```
+
+**Advantages of Analytical Approach:**
+1. **Exact**: No discretization error (within machine precision)
+2. **Fast**: Single hypergeometric evaluation vs. thousands of integration points
+3. **Stable**: Well-defined mathematical properties across all parameter ranges
+4. **Elegant**: Closed-form expressions reveal mathematical structure
+
+**Mathematical Insight:**
+- The hypergeometric function ₂F₁ naturally arises from integrating the half-saturation damage function over the Pareto distribution
+- When β → 0 (uniform damage): ₂F₁(1,a,a+1,0) = 1, recovering Ω = ω_max
+- When β > 0: The hypergeometric function captures how damage concentrates on lower incomes
+
 **Design considerations:**
-- Uses discretized approximation (1000 bins) for computational efficiency
-- Numerically stable across wide range of k_damage_halfsat values
 - Climate damage affects Gini *before* redistribution policy is applied
 - Creates feedback: redistribution → lower Gini → lower climate damage → higher output
 - Half-saturation model is intuitive: parameter directly specifies income level of 50% damage
+- Analytical solution derived with assistance from ChatGPT (2025)
 
 ### 3. Persistence of Income Redistribution Effects
 
