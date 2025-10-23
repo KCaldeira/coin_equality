@@ -257,18 +257,28 @@ class OptimizationParameters:
     """
     Parameters controlling optimization.
 
+    Supports two modes:
+    1. Direct multi-point optimization (control_times is list, initial_guess is list)
+    2. Iterative refinement optimization (control_times is int, initial_guess is float)
+
     Attributes
     ----------
     max_evaluations : int
-        Maximum number of objective function evaluations
-    control_times : list of float
-        Times (years) where control points are placed.
-        For single-point: [0]
-        For multi-point: e.g., [0, 25, 50, 75, 100]
-    initial_guess : list of float
-        Initial f values at each control time.
-        Must have same length as control_times.
-        Each value must satisfy 0 ≤ f ≤ 1.
+        Maximum number of objective function evaluations (per iteration for iterative mode)
+    control_times : list of float OR int
+        Direct mode (list): Times (years) where control points are placed.
+            For single-point: [0]
+            For multi-point: e.g., [0, 25, 50, 75, 100]
+        Iterative refinement mode (int): Number of refinement iterations.
+            Iteration 1: 2 control points (t_start, t_end)
+            Iteration 2: 3 control points
+            Iteration k: 2^k + 1 control points
+    initial_guess : list of float OR float
+        Direct mode (list): Initial f values at each control time.
+            Must have same length as control_times.
+            Each value must satisfy 0 ≤ f ≤ 1.
+        Iterative refinement mode (float): Single initial f value for first iteration.
+            Must satisfy 0 ≤ f ≤ 1.
     algorithm : str, optional
         NLopt algorithm to use. If None, defaults to 'LN_BOBYQA'.
         Options include:
@@ -296,13 +306,37 @@ class OptimizationParameters:
         If None, uses NLopt default (0.0 = disabled).
     """
     max_evaluations: int
-    control_times: list
-    initial_guess: list
+    control_times: object  # list or int
+    initial_guess: object  # list or float
     algorithm: str = None
     ftol_rel: float = None
     ftol_abs: float = None
     xtol_rel: float = None
     xtol_abs: float = None
+
+    def is_iterative_refinement(self):
+        """
+        Check if this configuration uses iterative refinement mode.
+
+        Returns
+        -------
+        bool
+            True if iterative refinement mode (control_times is int),
+            False if direct mode (control_times is list)
+        """
+        return isinstance(self.control_times, int)
+
+    def is_direct_mode(self):
+        """
+        Check if this configuration uses direct multi-point mode.
+
+        Returns
+        -------
+        bool
+            True if direct mode (control_times is list),
+            False if iterative refinement mode (control_times is int)
+        """
+        return isinstance(self.control_times, (list, np.ndarray))
 
 
 @dataclass

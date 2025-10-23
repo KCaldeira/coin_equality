@@ -164,6 +164,7 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
     - Objective function value
     - Number of function evaluations
     - Convergence status
+    - Iteration-by-iteration results (for iterative refinement mode)
     - Sensitivity analysis statistics (if provided)
     """
     csv_path = os.path.join(output_dir, filename)
@@ -178,12 +179,14 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
         for i, val in enumerate(opt_results['optimal_values']):
             writer.writerow([f'Optimal f value at control point {i}', f"{val:.6f}"])
 
-        writer.writerow(['Optimal objective', f"{opt_results['optimal_objective']:.6e}"])
+        writer.writerow(['Optimal objective', f"{opt_results['optimal_objective']:.12e}"])
         writer.writerow(['Function evaluations', opt_results['n_evaluations']])
         writer.writerow(['Status', opt_results['status']])
 
         if 'algorithm' in opt_results:
             writer.writerow(['Algorithm', opt_results['algorithm']])
+        if 'n_iterations' in opt_results:
+            writer.writerow(['Number of iterations', opt_results['n_iterations']])
         if 'termination_name' in opt_results:
             writer.writerow(['Termination reason', opt_results['termination_name']])
         if 'termination_code' in opt_results and opt_results['termination_code'] is not None:
@@ -196,15 +199,63 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
             writer.writerow(['Note', 'Control values have no effect on outcome. Returning initial guess.'])
         writer.writerow([])
 
-        writer.writerow(['Control Points'])
+        writer.writerow(['Final Control Points'])
         writer.writerow(['Time', 'f Value'])
         for time, value in opt_results['control_points']:
             writer.writerow([f"{time:.2f}", f"{value:.6f}"])
 
+        if 'iteration_history' in opt_results:
+            writer.writerow([])
+            writer.writerow(['Iterative Refinement - Iteration History'])
+            writer.writerow(['Iteration', 'Control_Points', 'Objective', 'Evaluations', 'Status'])
+            for iter_result in opt_results['iteration_history']:
+                writer.writerow([
+                    iter_result['iteration'],
+                    iter_result['n_control_points'],
+                    f"{iter_result['optimal_objective']:.12e}",
+                    iter_result['n_evaluations'],
+                    iter_result['termination_name']
+                ])
+
+            writer.writerow([])
+            writer.writerow(['Iterative Refinement - Control Values by Iteration'])
+
+            max_points = max(iter_result['n_control_points'] for iter_result in opt_results['iteration_history'])
+            header = ['Iteration', 'Control_Points'] + [f'f_{i}' for i in range(max_points)]
+            writer.writerow(header)
+
+            for iter_result in opt_results['iteration_history']:
+                row = [
+                    iter_result['iteration'],
+                    iter_result['n_control_points']
+                ]
+                for val in iter_result['optimal_values']:
+                    row.append(f"{val:.6f}")
+                for _ in range(max_points - len(iter_result['optimal_values'])):
+                    row.append('')
+                writer.writerow(row)
+
+            writer.writerow([])
+            writer.writerow(['Iterative Refinement - Control Times by Iteration'])
+            header = ['Iteration', 'Control_Points'] + [f't_{i}' for i in range(max_points)]
+            writer.writerow(header)
+
+            for i, iter_result in enumerate(opt_results['iteration_history']):
+                control_times = opt_results['iteration_control_grids'][i]
+                row = [
+                    iter_result['iteration'],
+                    iter_result['n_control_points']
+                ]
+                for time in control_times:
+                    row.append(f"{time:.2f}")
+                for _ in range(max_points - len(control_times)):
+                    row.append('')
+                writer.writerow(row)
+
         if sensitivity_results:
             writer.writerow([])
             writer.writerow(['Sensitivity Analysis'])
-            writer.writerow(['f Value', 'Objective'])
+            writer.writerow(['f_Value', 'Objective'])
             for f_val, obj in zip(sensitivity_results['f_values'], sensitivity_results['objectives']):
                 writer.writerow([f"{f_val:.6f}", f"{obj:.6e}"])
 

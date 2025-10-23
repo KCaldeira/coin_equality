@@ -10,6 +10,84 @@ import nlopt
 from scipy.interpolate import PchipInterpolator
 from economic_model import integrate_model
 from parameters import ModelConfiguration
+from constants import EPSILON
+
+
+def create_midpoint_grid(control_times):
+    """
+    Create a new control grid by inserting midpoints between each adjacent pair.
+
+    Parameters
+    ----------
+    control_times : array_like
+        Current control times (must be sorted)
+
+    Returns
+    -------
+    ndarray
+        New control times with midpoints inserted.
+        Length = 2 * len(control_times) - 1
+
+    Examples
+    --------
+    >>> create_midpoint_grid([0, 100])
+    array([0, 50, 100])
+    >>> create_midpoint_grid([0, 50, 100])
+    array([0, 25, 50, 75, 100])
+    """
+    control_times = np.asarray(control_times)
+    n = len(control_times)
+    new_times = np.zeros(2 * n - 1)
+    new_times[0::2] = control_times
+    new_times[1::2] = (control_times[:-1] + control_times[1:]) / 2
+    return new_times
+
+
+def interpolate_to_new_grid(old_times, old_values, new_times):
+    """
+    Interpolate control values to a new grid using PCHIP interpolation.
+
+    Uses Piecewise Cubic Hermite Interpolating Polynomial for shape-preserving
+    interpolation with continuous first derivatives. Clamps results to [0, 1]
+    to ensure valid control values.
+
+    Parameters
+    ----------
+    old_times : array_like
+        Times at which old values are defined
+    old_values : array_like
+        Control values at old_times
+    new_times : array_like
+        Times at which to evaluate interpolated values
+
+    Returns
+    -------
+    ndarray
+        Interpolated values at new_times, clamped to [0, 1]
+
+    Notes
+    -----
+    For new_times that match old_times, returns the exact old_values.
+    For new_times beyond the range of old_times, uses constant extrapolation.
+    Results are clamped to [0, 1] to ensure valid control function values.
+    """
+    old_times = np.asarray(old_times)
+    old_values = np.asarray(old_values)
+    new_times = np.asarray(new_times)
+
+    if len(old_times) == 1:
+        return np.full_like(new_times, old_values[0], dtype=float)
+
+    interpolator = PchipInterpolator(old_times, old_values, extrapolate=False)
+    new_values = np.where(
+        new_times <= old_times[-1],
+        interpolator(new_times),
+        old_values[-1]
+    )
+
+    new_values = np.clip(new_values, 0.0, 1.0)
+
+    return new_values
 
 
 def evaluate_control_function(control_points, t):
@@ -32,7 +110,7 @@ def evaluate_control_function(control_points, t):
     Returns
     -------
     float or ndarray
-        Control function value(s) at time(s) t
+        Control function value(s) at time(s) t, clamped to [0, 1]
 
     Notes
     -----
@@ -40,7 +118,7 @@ def evaluate_control_function(control_points, t):
     - C¹ continuity (continuous first derivatives)
     - Shape-preserving and monotonicity-preserving
     - No overshoot beyond the range of control point values
-    - Ensures f(t) ∈ [0,1] when all control points satisfy 0 ≤ fᵢ ≤ 1
+    - Results are clamped to [0,1] to handle numerical precision issues
 
     Special cases:
     - Single control point [(t₀, f₀)]: returns f₀ for all t (constant)
@@ -72,6 +150,8 @@ def evaluate_control_function(control_points, t):
             interpolator(t_array),
             values[-1]
         )
+
+    result = np.clip(result, 0.0, 1.0)
 
     return result if np.ndim(t) > 0 else float(result[0])
 
@@ -142,9 +222,11 @@ class UtilityOptimizer:
         Notes
         -----
         Uses trapezoidal integration for the discounted utility integral.
+        Control values are clamped to [0, 1] to handle numerical precision issues.
         """
         self.n_evaluations += 1
 
+        control_values = np.clip(control_values, 0.0, 1.0)
         control_points = list(zip(control_times, control_values))
         control_function = create_control_function_from_points(control_points)
 
@@ -261,7 +343,7 @@ class UtilityOptimizer:
             algorithm = 'LN_BOBYQA'
 
         deltaL = self.base_config.scalar_params.deltaL
-        if abs(deltaL) < 1e-15:
+        if abs(deltaL) < EPSILON:
             self.degenerate_case = True
             self.degenerate_reason = "deltaL = 0: No income available for redistribution or abatement. Control values have no effect on outcome."
             control_times_array = np.array(control_times)
@@ -332,4 +414,123 @@ class UtilityOptimizer:
             'termination_code': termination_code,
             'termination_name': termination_name,
             'algorithm': algorithm
+        }
+
+    def optimize_with_iterative_refinement(self, n_iterations, initial_guess_scalar,
+                                          max_evaluations, algorithm=None,
+                                          ftol_rel=None, ftol_abs=None,
+                                          xtol_rel=None, xtol_abs=None):
+        """
+        Optimize using iterative refinement with progressively finer control grids.
+
+        Performs a sequence of optimizations with increasing numbers of control points.
+        Each iteration uses PCHIP interpolation of the previous solution to initialize
+        the optimization, providing better convergence than cold-starting with many
+        control points.
+
+        Parameters
+        ----------
+        n_iterations : int
+            Number of refinement iterations to perform.
+            Iteration k produces 2^k + 1 control points.
+        initial_guess_scalar : float
+            Initial f value for all control points in first iteration.
+            Must satisfy 0 ≤ f ≤ 1.
+        max_evaluations : int
+            Maximum objective function evaluations per iteration
+        algorithm : str, optional
+            NLopt algorithm name. If None, defaults to 'LN_BOBYQA'.
+        ftol_rel : float, optional
+            Relative tolerance on objective function changes
+        ftol_abs : float, optional
+            Absolute tolerance on objective function changes
+        xtol_rel : float, optional
+            Relative tolerance on parameter changes
+        xtol_abs : float, optional
+            Absolute tolerance on parameter changes
+
+        Returns
+        -------
+        dict
+            Optimization results containing:
+            - 'optimal_values': optimal control values from final iteration
+            - 'optimal_objective': maximum utility achieved
+            - 'n_evaluations': total evaluations across all iterations
+            - 'control_points': list of (time, value) tuples from final iteration
+            - 'status': optimization status string
+            - 'algorithm': algorithm name used
+            - 'n_iterations': number of iterations performed
+            - 'iteration_history': list of results from each iteration
+            - 'iteration_control_grids': control times used at each iteration
+
+        Notes
+        -----
+        Iteration schedule:
+        - Iteration 1: 2 control points at [t_start, t_end]
+        - Iteration 2: 3 control points (adds midpoint)
+        - Iteration k: 2^k + 1 control points (subdivides each interval)
+
+        Initial guess strategy:
+        - First iteration: uses initial_guess_scalar for all points
+        - Subsequent iterations: uses previous optimal values at existing points,
+          PCHIP interpolation for new midpoints
+        """
+        t_start = self.base_config.integration_params.t_start
+        t_end = self.base_config.integration_params.t_end
+
+        iteration_history = []
+        iteration_control_grids = []
+        total_evaluations = 0
+
+        control_times = np.array([t_start, t_end])
+        initial_guess = np.array([initial_guess_scalar, initial_guess_scalar])
+
+        for iteration in range(1, n_iterations + 1):
+            iteration_control_grids.append(control_times.copy())
+
+            print(f"\n{'=' * 80}")
+            print(f"  ITERATION {iteration}/{n_iterations}")
+            print(f"  Control points: {len(control_times)} at times {control_times}")
+            print(f"  Initial guess: {initial_guess}")
+            print(f"{'=' * 80}\n")
+
+            opt_result = self.optimize_control_points(
+                control_times,
+                initial_guess,
+                max_evaluations,
+                algorithm=algorithm,
+                ftol_rel=ftol_rel,
+                ftol_abs=ftol_abs,
+                xtol_rel=xtol_rel,
+                xtol_abs=xtol_abs
+            )
+
+            opt_result['iteration'] = iteration
+            opt_result['n_control_points'] = len(control_times)
+            iteration_history.append(opt_result)
+            total_evaluations += opt_result['n_evaluations']
+
+            print(f"\nIteration {iteration} complete:")
+            print(f"  Objective: {opt_result['optimal_objective']:.6e}")
+            print(f"  Evaluations: {opt_result['n_evaluations']}")
+            print(f"  Status: {opt_result['termination_name']}")
+
+            if iteration < n_iterations:
+                old_times = control_times
+                old_values = opt_result['optimal_values']
+                control_times = create_midpoint_grid(control_times)
+                initial_guess = interpolate_to_new_grid(old_times, old_values, control_times)
+
+        final_result = iteration_history[-1]
+
+        return {
+            'optimal_values': final_result['optimal_values'],
+            'optimal_objective': final_result['optimal_objective'],
+            'n_evaluations': total_evaluations,
+            'control_points': final_result['control_points'],
+            'status': 'success',
+            'algorithm': algorithm if algorithm is not None else 'LN_BOBYQA',
+            'n_iterations': n_iterations,
+            'iteration_history': iteration_history,
+            'iteration_control_grids': iteration_control_grids
         }

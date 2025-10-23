@@ -1,5 +1,6 @@
 import math
 from scipy.optimize import root_scalar
+from constants import EPSILON
 
 # --- basic maps ---
 
@@ -22,7 +23,7 @@ def crossing_rank_from_G(Gini_initial, G2):
 def _phi(r):  # helper for bracketing cap; φ(r) = (r-1) r^{1/(r-1)-1}
     if r <= 0:
         return float("-inf")
-    if abs(r - 1.0) < 1e-16:
+    if abs(r - 1.0) < EPSILON:
         return 0.0
     sgn = 1.0 if r > 1.0 else -1.0
     log_abs = math.log(abs(r - 1.0)) + (1.0/(r - 1.0) - 1.0) * math.log(r)
@@ -36,22 +37,22 @@ def G2_from_deltaL(deltaL, Gini_initial):
     if not (0 < Gini_initial < 1):
         raise ValueError("Gini_initial must be in (0,1).")
 
-    if abs(deltaL) < 1e-15:
+    if abs(deltaL) < EPSILON:
         return Gini_initial, 0.0
 
     A1 = (1.0 - Gini_initial) / (1.0 + Gini_initial)
     r_max = 1.0 / A1  # corresponds to G2 -> 0
     deltaL_max = _phi(r_max)
-    if deltaL >= deltaL_max - 1e-15:
+    if deltaL >= deltaL_max - EPSILON:
         return 0.0, float(deltaL - deltaL_max)  # cap & remainder
     # bracket r
-    bracket = (1.0 + 1e-12, r_max) if deltaL > 0 else (1e-12, 1.0 - 1e-12)
+    bracket = (1.0 + EPSILON, r_max) if deltaL > 0 else (EPSILON, 1.0 - EPSILON)
     sol = root_scalar(lambda r: _phi(r) - deltaL, bracket=bracket, method="brentq")
     if not sol.converged:
         raise RuntimeError("root_scalar failed for r.")
     r = sol.root
     A2 = r * A1
-    A2 = min(max(A2, 1e-15), 1.0)
+    A2 = min(max(A2, EPSILON), 1.0)
     G2 = (1.0 - A2) / (1.0 + A2)
     return float(G2), 0.0
 

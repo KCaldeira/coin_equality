@@ -696,7 +696,11 @@ See the **Testing the Forward Model** section above for detailed instructions on
 
 ## Optimization Configuration
 
-The JSON configuration supports both single and multi-point optimization through the `optimization_parameters` section:
+The JSON configuration supports both direct multi-point optimization and iterative refinement optimization through the `optimization_parameters` section.
+
+### Direct Multi-Point Optimization
+
+Specify control times and initial guesses explicitly:
 
 ```json
 "optimization_parameters": {
@@ -715,9 +719,64 @@ The JSON configuration supports both single and multi-point optimization through
   - Must have same length as `control_times`
   - Each value must satisfy 0 ≤ f ≤ 1
   - For single-point: `[0.5]` (or read from `control_function.value`)
-- `max_evaluations`: Maximum objective function evaluations
+- `max_evaluations`: Maximum objective function evaluations per optimization
   - Single-point: ~1000 typically sufficient
   - Multi-point: scale with problem size (e.g., 10000 for 5 points)
+
+### Iterative Refinement Optimization
+
+Specify the number of refinement iterations to progressively add control points:
+
+```json
+"optimization_parameters": {
+  "max_evaluations": 5000,
+  "control_times": 4,
+  "initial_guess": 0.5
+}
+```
+
+**Configuration rules for iterative refinement:**
+- `control_times`: Scalar integer specifying number of refinement iterations
+  - Must be ≥ 1
+  - Iteration 1: 2 control points (at `t_start` and `t_end`)
+  - Iteration 2: 3 control points (adds midpoint)
+  - Iteration 3: 5 control points (subdivides each interval)
+  - Iteration k: 2^k + 1 control points
+- `initial_guess`: Scalar value for initial f at all control points in first iteration
+  - Must satisfy 0 ≤ f ≤ 1
+- `max_evaluations`: Maximum objective function evaluations per iteration
+
+**Iterative refinement algorithm:**
+
+The optimizer performs a sequence of optimizations with progressively finer control point grids. Each iteration uses the solution from the previous iteration to initialize the new optimization via PCHIP (Piecewise Cubic Hermite Interpolating Polynomial) interpolation.
+
+**Iteration 1:**
+- Control times: `[t_start, t_end]`
+- Initial guess: `[initial_guess, initial_guess]`
+- Optimize with 2 control points
+
+**Iteration 2:**
+- Control times: `[t_start, (t_start + t_end)/2, t_end]`
+- Initial guess: `[f₁(t_start), PCHIP((t_start + t_end)/2), f₁(t_end)]`
+  - where `f₁(t)` is the optimal solution from iteration 1
+  - PCHIP interpolation uses iteration 1 results at existing control points
+
+**Iteration 3:**
+- Control times: Insert midpoint between each adjacent pair from iteration 2
+  - Result: 5 control points
+- Initial guess: Values from iteration 2 at existing points, PCHIP interpolation at new points
+
+**Iteration k (k ≥ 2):**
+- Control times: Insert midpoint between each adjacent pair from iteration k-1
+  - Result: 2^k + 1 control points
+- Initial guess: Values from iteration k-1 at existing points, PCHIP interpolation at new points
+
+**Advantages of iterative refinement:**
+- Better convergence by starting with coarse, well-initialized solutions
+- Progressively captures finer temporal structure in optimal policy
+- Each iteration "warm starts" from previous solution
+- Avoids poor local minima that can occur with many control points from cold start
+- PCHIP interpolation preserves monotonicity and shape characteristics of previous solution
 
 ## Next Steps
 

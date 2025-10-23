@@ -9,6 +9,7 @@ import numpy as np
 from income_distribution import calculate_Gini_effective_redistribute_abate
 from parameters import evaluate_params_at_time
 from climate_damage_distribution import calculate_climate_damage_and_gini_effect
+from constants import EPSILON, NEG_BIGNUM
 
 
 def calculate_tendencies(state, params):
@@ -117,6 +118,8 @@ def calculate_tendencies(state, params):
     Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
         delta_T, Gini, y_gross, params
     )
+    # Clamp Gini_climate to valid bounds before using in subsequent calculations
+    Gini_climate = np.clip(Gini_climate, EPSILON, 1.0 - EPSILON)
 
     # Eq 1.3: Production after climate damage
     Y_damaged = (1 - Omega) * Y_gross
@@ -157,7 +160,7 @@ def calculate_tendencies(state, params):
 
     # Eq 3.5: Mean utility
     if y_eff >= 0 and 0 <= G_eff <= 1.0:
-        if np.abs(eta - 1.0) < 1e-10:
+        if np.abs(eta - 1.0) < EPSILON:
             U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
         else:
             term1 = (y_eff ** (1 - eta)) / (1 - eta)
@@ -166,8 +169,7 @@ def calculate_tendencies(state, params):
             term2 = (numerator / denominator) ** (1 / (1 - eta))
             U = term1 * term2
     else:
-        neg_bignum = -1e30
-        U = neg_bignum
+        U = NEG_BIGNUM
 
     # Eq 2.3: Actual emissions (after abatement)
     E = sigma * (1 - mu) * Y_gross
@@ -337,6 +339,11 @@ def integrate_model(config):
             # do not allow cumulative emissions to go negative, making it colder than the initial condition
             state['Ecum'] = max(0.0, state['Ecum'] + dt * outputs['dEcum_dt'])
             # Gini update includes both continuous change and discontinuous step
-            state['Gini'] = state['Gini'] + dt * outputs['dGini_dt'] + outputs['Gini_step_change']
+            # Clamp Gini to stay within valid bounds (0, 1) exclusive
+            state['Gini'] = np.clip(
+                state['Gini'] + dt * outputs['dGini_dt'] + outputs['Gini_step_change'],
+                EPSILON,
+                1.0 - EPSILON
+            )
 
     return results

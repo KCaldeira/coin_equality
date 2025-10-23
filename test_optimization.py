@@ -273,36 +273,52 @@ def main():
     config_path = sys.argv[1]
 
     config = load_configuration(config_path)
-    control_times = config.optimization_params.control_times
-    n_control_points = len(control_times)
+    opt_params = config.optimization_params
 
-    print_header(f"OPTIMIZATION TEST ({n_control_points} CONTROL POINTS)")
-    print(f"Configuration file: {config_path}")
-    print(f"Run name: {config.run_name}")
-    print(f"Time span: {config.integration_params.t_start} to {config.integration_params.t_end} years")
-    print(f"Time step: {config.integration_params.dt} years")
+    is_iterative = opt_params.is_iterative_refinement()
+
+    if is_iterative:
+        n_iterations = opt_params.control_times
+        print_header(f"ITERATIVE REFINEMENT OPTIMIZATION ({n_iterations} ITERATIONS)")
+        print(f"Configuration file: {config_path}")
+        print(f"Run name: {config.run_name}")
+        print(f"Time span: {config.integration_params.t_start} to {config.integration_params.t_end} years")
+        print(f"Time step: {config.integration_params.dt} years")
+        print(f"\nIterative refinement mode:")
+        print(f"  Number of iterations: {n_iterations}")
+        print(f"  Final control points: {2**n_iterations + 1}")
+        print(f"  Initial guess: f = {opt_params.initial_guess}")
+    else:
+        control_times = opt_params.control_times
+        n_control_points = len(control_times)
+        print_header(f"DIRECT OPTIMIZATION ({n_control_points} CONTROL POINTS)")
+        print(f"Configuration file: {config_path}")
+        print(f"Run name: {config.run_name}")
+        print(f"Time span: {config.integration_params.t_start} to {config.integration_params.t_end} years")
+        print(f"Time step: {config.integration_params.dt} years")
 
     optimizer = UtilityOptimizer(config)
 
-    initial_guess = config.optimization_params.initial_guess
-    max_evaluations = config.optimization_params.max_evaluations
+    initial_guess = opt_params.initial_guess
+    max_evaluations = opt_params.max_evaluations
 
-    if len(control_times) == 1:
+    if is_iterative:
+        sensitivity_results = None
+    elif len(opt_params.control_times) == 1:
         print(f"\n==> Running SINGLE control point optimization")
-        print(f"    Control time: {control_times[0]}")
+        print(f"    Control time: {opt_params.control_times[0]}")
         print(f"    Initial guess: f = {initial_guess[0]}")
         sensitivity_results = run_sensitivity_analysis(optimizer, n_points=21)
     else:
         print(f"\n==> Running MULTI-POINT control optimization")
-        print(f"    Number of control points: {len(control_times)}")
-        print(f"    Control times: {control_times}")
+        print(f"    Number of control points: {len(opt_params.control_times)}")
+        print(f"    Control times: {opt_params.control_times}")
         print(f"    Initial guess: {initial_guess}")
         sensitivity_results = None
 
     print_header("OPTIMIZATION")
-    print(f"Max evaluations: {max_evaluations}")
+    print(f"Max evaluations: {max_evaluations}{' per iteration' if is_iterative else ''}")
 
-    opt_params = config.optimization_params
     algorithm = opt_params.algorithm if opt_params.algorithm is not None else 'LN_BOBYQA'
     print(f"Algorithm: {algorithm}")
 
@@ -317,28 +333,42 @@ def main():
 
     print(f"\nRunning {algorithm} optimization...\n")
 
-    opt_results = optimizer.optimize_control_points(
-        control_times,
-        initial_guess,
-        max_evaluations,
-        algorithm=opt_params.algorithm,
-        ftol_rel=opt_params.ftol_rel,
-        ftol_abs=opt_params.ftol_abs,
-        xtol_rel=opt_params.xtol_rel,
-        xtol_abs=opt_params.xtol_abs
-    )
+    if is_iterative:
+        opt_results = optimizer.optimize_with_iterative_refinement(
+            n_iterations=opt_params.control_times,
+            initial_guess_scalar=opt_params.initial_guess,
+            max_evaluations=max_evaluations,
+            algorithm=opt_params.algorithm,
+            ftol_rel=opt_params.ftol_rel,
+            ftol_abs=opt_params.ftol_abs,
+            xtol_rel=opt_params.xtol_rel,
+            xtol_abs=opt_params.xtol_abs
+        )
+        n_final_control_points = len(opt_results['control_points'])
+    else:
+        opt_results = optimizer.optimize_control_points(
+            opt_params.control_times,
+            initial_guess,
+            max_evaluations,
+            algorithm=opt_params.algorithm,
+            ftol_rel=opt_params.ftol_rel,
+            ftol_abs=opt_params.ftol_abs,
+            xtol_rel=opt_params.xtol_rel,
+            xtol_abs=opt_params.xtol_abs
+        )
+        n_final_control_points = len(opt_params.control_times)
 
-    if opt_results['status'] == 'degenerate':
+    if opt_results.get('status') == 'degenerate':
         print(f"\n*** DEGENERATE CASE DETECTED ***")
         print(f"No income available for redistribution or abatement (deltaL = 0)")
         print(f"Control values have no effect on outcome.")
         print(f"Returning initial guess values.\n")
-    else:
+    elif not is_iterative and 'termination_name' in opt_results:
         print(f"Termination: {opt_results['termination_name']} (code {opt_results['termination_code']})\n")
 
-    print_optimization_results(opt_results, len(control_times))
+    print_optimization_results(opt_results, n_final_control_points)
 
-    if len(control_times) == 1:
+    if not is_iterative and len(opt_params.control_times) == 1:
         f_opt = opt_results['optimal_values'][0]
         comparison_scenarios = {
             'Optimal': f_opt,
@@ -393,8 +423,22 @@ def main():
         print(f"  Comparison PDF:   {output_pdf}")
 
     print_header("SUMMARY")
-    if len(control_times) == 1:
-        print(f"Optimal constant allocation: f₀ = {f_opt:.6f}")
+    if is_iterative:
+        print(f"Iterative refinement optimization complete:")
+        print(f"  Iterations performed: {opt_results['n_iterations']}")
+        print(f"  Total evaluations: {opt_results['n_evaluations']}")
+        print(f"  Final control points: {n_final_control_points}")
+        print(f"\nOptimal objective value: {opt_results['optimal_objective']:.6e}")
+        print(f"\nIteration history:")
+        for iter_result in opt_results['iteration_history']:
+            print(f"  Iteration {iter_result['iteration']:2d}: {iter_result['n_control_points']:3d} points, "
+                  f"objective = {iter_result['optimal_objective']:.6e}, "
+                  f"evals = {iter_result['n_evaluations']}")
+        print(f"\nFinal control trajectory:")
+        for t, f_val in opt_results['control_points']:
+            print(f"  t={t:6.1f} yr: f={f_val:.6f}")
+    elif not is_iterative and len(opt_params.control_times) == 1:
+        print(f"Optimal constant allocation: f₀ = {opt_results['optimal_values'][0]:.6f}")
         print(f"Optimal objective value: {opt_results['optimal_objective']:.6e}")
         print(f"\nComparison with other strategies:")
         for label, data in comparison_results.items():
