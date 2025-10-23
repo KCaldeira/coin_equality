@@ -164,7 +164,7 @@ def calculate_tendencies(state, params):
     G_eff, _ = calculate_Gini_effective_redistribute_abate(f, delta_L, Gini_climate)
 
     # Eq 3.5: Mean utility
-    if y_eff >= 0 and 0 <= G_eff <= 1.0:
+    if y_eff > 0 and 0 <= G_eff <= 1.0:
         if np.abs(eta - 1.0) < EPSILON:
             U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
         else:
