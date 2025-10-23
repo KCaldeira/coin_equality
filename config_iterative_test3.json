@@ -1,5 +1,5 @@
 {
-  "run_name": "iterative_refinement_test_GN_ISRES_u",
+  "run_name": "iterative_refinement_test_null_u",
   "description": "Test of iterative refinement optimization with 4 iterations",
 
   "scalar_parameters": {
@@ -89,12 +89,12 @@
     "_description": "ITERATIVE REFINEMENT MODE: control_times is integer (number of iterations), initial_guess is scalar",
     "max_evaluations": 1000,
     "_max_evaluations": "Maximum number of objective function evaluations PER ITERATION",
-    "control_times": 5,
+    "control_times": 7,
     "_control_times": "INTEGER: Number of refinement iterations (iteration k produces 2^k + 1 control points). Final iteration will have 2^3 + 1 = 9 control points",
     "initial_guess": 0.5,
     "_initial_guess": "SCALAR: Initial f value for both t_start and t_end in first iteration. Subsequent iterations use PCHIP interpolation from previous solution",
     "_algorithm_note": "Optional: specify NLopt algorithm. Omit to use default (LN_BOBYQA). Local algorithms recommended for iterative refinement.",
-    "algorithm": "GN_ISRES",
+    "algorithm": null,
     "_algorithm": "GN_ISRES (global stochastic optimizer, explores parameter space more broadly)",
     "_stopping_criteria": "NLopt stopping criteria. For f ∈ [0,1], absolute tolerance makes more sense than relative.",
     "xtol_abs": 1e-10,

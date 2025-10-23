@@ -89,7 +89,7 @@
     "_description": "ITERATIVE REFINEMENT MODE: control_times is integer (number of iterations), initial_guess is scalar",
     "max_evaluations": 1000,
     "_max_evaluations": "Maximum number of objective function evaluations PER ITERATION",
-    "control_times": 3,
+    "control_times": 7,
     "_control_times": "INTEGER: Number of refinement iterations (iteration k produces 2^k + 1 control points). Final iteration will have 2^3 + 1 = 9 control points",
     "initial_guess": 0.5,
     "_initial_guess": "SCALAR: Initial f value for both t_start and t_end in first iteration. Subsequent iterations use PCHIP interpolation from previous solution",

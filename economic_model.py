@@ -137,13 +137,13 @@ def calculate_tendencies(state, params):
     abatecost = f * delta_c * L
 
     # Eq 1.6: Abatement fraction
-    if Epot > 0:
+    if Epot > 0 and abatecost > 0:
         mu = (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2)
     else:
         mu = 0.0
 
     # Eq 1.7: Abatement cost fraction
-    if Y_damaged > 0:
+    if Y_damaged > 0 && abatecost > 0:
         Lambda = abatecost / Y_damaged
     else:
         Lambda = 0.0
