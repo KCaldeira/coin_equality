@@ -33,21 +33,22 @@ For the differential equation solver, variables are calculated in this order:
 
 1. **Y_gross** from K, L, A, α (Eq 1.1: Cobb-Douglas production)
 2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions)
-3. **Ω** from ΔT, k_damage_coeff, k_damage_exp (Eq 1.2: climate damage fraction)
-4. **Y_damaged** from Y_gross, Ω (Eq 1.3: production after climate damage)
-5. **y** from Y_damaged, L, s (Eq 1.4: mean per-capita income)
-6. **Δc** from y, ΔL (Eq 4.3: per-capita amount redistributable)
-7. **E_pot** from σ, Y_gross (Eq 2.1: potential emissions)
-8. **abatecost** from f, Δc, L (Eq 1.5: abatement expenditure)
-9. **μ** from abatecost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated)
-10. **Λ** from abatecost, Y_damaged (Eq 1.7: abatement cost fraction)
-11. **Y_net** from Y_damaged, Λ (Eq 1.8: production after abatement costs)
-12. **y_eff** from y, abatecost, L (Eq 1.9: effective per-capita income)
-13. **G_eff** from f, ΔL, G₁ (Eq 4.4: effective Gini index)
-14. **U** from y_eff, G_eff, η (Eq 3.5: mean utility)
-15. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
-16. **dK/dt** from s, Y_net, δ, K (Eq 1.10: capital tendency)
-17. **dEcum/dt = E** (cumulative emissions tendency)
+3. **y_gross** from Y_gross, L (mean per-capita gross income before climate damage)
+4. **Ω, G_climate** from ΔT, Gini, y_gross, damage params (Eq 1.2: income-dependent climate damage and distributional effect)
+5. **Y_damaged** from Y_gross, Ω (Eq 1.3: production after climate damage)
+6. **y** from Y_damaged, L, s (Eq 1.4: mean per-capita income after climate damage)
+7. **Δc** from y, ΔL (Eq 4.3: per-capita amount redistributable)
+8. **E_pot** from σ, Y_gross (Eq 2.1: potential emissions)
+9. **abatecost** from f, Δc, L (Eq 1.5: abatement expenditure)
+10. **μ** from abatecost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated)
+11. **Λ** from abatecost, Y_damaged (Eq 1.7: abatement cost fraction)
+12. **Y_net** from Y_damaged, Λ (Eq 1.8: production after abatement costs)
+13. **y_eff** from y, abatecost, L (Eq 1.9: effective per-capita income)
+14. **G_eff** from f, ΔL, G_climate (Eq 4.4: effective Gini after redistribution/abatement, applied to climate-damaged distribution)
+15. **U** from y_eff, G_eff, η (Eq 3.5: mean utility)
+16. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
+17. **dK/dt** from s, Y_net, δ, K (Eq 1.10: capital tendency)
+18. **dGini/dt, Gini_step** from Gini dynamics (Gini tendency and step change)
 
 ### Core Components
 
@@ -58,11 +59,24 @@ For the differential equation solver, variables are calculated in this order:
 Y_gross(t) = A(t) · K(t)^α · L(t)^(1-α)
 ```
 
-**Eq. (1.2) - Climate Damage:**
+**Eq. (1.2) - Income-Dependent Climate Damage:**
 ```
-Ω(t) = k_damage_coeff · ΔT(t)^k_damage_exp
+ω_max(ΔT) = k_damage_coeff · ΔT(t)^k_damage_exp
+ω(y, ΔT) = ω_max · k_damage_halfsat / (k_damage_halfsat + y)
+Ω(t) = ∫₀¹ ω(y(F)) · y(F) · dF / ∫₀¹ y(F) · dF
 ```
-where `Ω(t)` is the fraction of gross production lost to climate damage.
+where:
+- `ω_max(ΔT)` is the maximum damage fraction (for zero income)
+- `ω(y, ΔT)` is the damage fraction at income level `y` (half-saturation model)
+- `k_damage_halfsat` is the income level at which damage is 50% of maximum
+- `Ω(t)` is the aggregate fraction of gross production lost to climate damage
+
+**Income-dependent damage characteristics:**
+- At income `y = 0`: damage = `ω_max` (maximum for poorest)
+- At income `y = k_damage_halfsat`: damage = `ω_max/2` (half of maximum)
+- As income `y → ∞`: damage → 0 (approaches zero for wealthy)
+
+Climate damage increases inequality: lower-income populations experience proportionally greater losses, resulting in a post-damage Gini coefficient `G_climate > G_current`. The aggregate damage `Ω` and the distributional effect on Gini are computed analytically using closed-form solutions based on hypergeometric functions (see `climate_damage_distribution.py`).
 
 **Eq. (1.3) - Damaged Production:**
 ```
@@ -220,6 +234,67 @@ where:
 
 See Eq. (1.6) above. The abatement fraction is determined by the amount society allocates to abatement relative to potential emissions and the marginal abatement cost.
 
+#### 5. Gini Index Dynamics and Persistence
+
+The Gini index is now a **state variable** that evolves over time, allowing for persistence of redistribution effects and gradual restoration to baseline inequality.
+
+**State Variable:**
+```
+Gini(t) - Current Gini index of the income distribution
+```
+
+**Gini Evolution:**
+
+The Gini index evolves through two mechanisms:
+
+1. **Instantaneous Step Change** (fraction of policy effect applied immediately):
+```
+Gini_step = Gini_fract · (G_eff - Gini)
+```
+where:
+- `G_eff` is the effective Gini from current policy (redistribution/abatement allocation)
+- `Gini_fract` is the fraction of the change applied as an immediate step (0 ≤ Gini_fract ≤ 1)
+- `Gini_fract = 0`: no immediate effect (fully persistent system)
+- `Gini_fract = 1`: full immediate effect (no persistence)
+- `Gini_fract = 0.1`: 10% of policy effect occurs immediately
+
+2. **Continuous Restoration** (gradual return to baseline):
+```
+dGini/dt = -Gini_restore · (Gini - Gini_initial)
+```
+where:
+- `Gini_restore` is the restoration rate (yr⁻¹)
+- `Gini_restore = 0`: no restoration (persistent policy effects)
+- `Gini_restore > 0`: gradual restoration toward initial inequality
+- `Gini_restore = 0.1`: 10% per year restoration rate (timescale ~10 years)
+
+**Combined Update Rule:**
+```
+Gini(t+dt) = Gini(t) + dt · dGini/dt + Gini_step
+```
+
+**Physical Interpretation:**
+
+This formulation captures two competing effects:
+- **Policy pressure** (via `Gini_step`): Redistribution policies push toward lower inequality (G_eff < Gini_initial)
+- **Structural restoration** (via `dGini/dt`): Absent continued intervention, inequality tends to return to baseline levels
+
+The `Gini_fract` parameter controls the **speed of policy effect**:
+- Small `Gini_fract`: Policy effects build up gradually (high persistence/inertia)
+- Large `Gini_fract`: Policy effects manifest quickly (low persistence/inertia)
+
+The `Gini_restore` parameter controls the **persistence of achieved changes**:
+- Small `Gini_restore`: Changes are long-lasting
+- Large `Gini_restore`: Changes decay quickly without continued policy pressure
+
+**Climate Damage Interaction:**
+
+Climate damage affects inequality through the intermediate variable `G_climate`:
+```
+Current Gini → (climate damage) → G_climate → (redistribution/abatement) → G_eff
+```
+where `G_climate > Gini` due to regressive climate damage impacts (lower incomes suffer proportionally more).
+
 ## Key Parameters
 
 Parameters are organized into groups as specified in the JSON configuration file.
@@ -238,8 +313,9 @@ Climate parameters:
 
 | Parameter | Description | Units | JSON Key |
 |-----------|-------------|-------|----------|
-| `k_damage_coeff` | Climate damage coefficient | °C⁻ᵏ_ᵈᵃᵐᵃᵍᵉ_ᵉˣᵖ | `k_damage_coeff` |
+| `k_damage_coeff` | Climate damage coefficient (maximum damage for zero income) | °C⁻ᵏ_ᵈᵃᵐᵃᵍᵉ_ᵉˣᵖ | `k_damage_coeff` |
 | `k_damage_exp` | Climate damage exponent | - | `k_damage_exp` |
+| `k_damage_halfsat` | Income half-saturation for climate damage (lower = more regressive) | $ | `k_damage_halfsat` |
 | `k_climate` | Temperature sensitivity to cumulative emissions | °C tCO₂⁻¹ | `k_climate` |
 
 Utility and inequality parameters:
@@ -386,9 +462,9 @@ Each JSON configuration file must contain:
 2. **`description`** - Optional description of the scenario
 3. **`scalar_parameters`** - Time-invariant model constants:
    - Economic: `alpha`, `delta`, `s`
-   - Climate: `k_damage_coeff`, `k_damage_exp`, `k_climate`
+   - Climate: `k_damage_coeff`, `k_damage_exp`, `k_damage_halfsat`, `k_climate`
    - Utility: `eta`, `rho`
-   - Distribution: `Gini_initial`, `deltaL`
+   - Distribution: `Gini_initial`, `Gini_fract`, `Gini_restore`, `deltaL`
    - Abatement: `theta2`
 
 4. **`time_functions`** - Time-dependent functions (A, L, sigma, theta1), each specified with:
@@ -413,8 +489,9 @@ Initial conditions are **computed automatically** (not specified in JSON):
   ```
   K₀ = (s · A(0) / δ)^(1/(1-α)) · L(0)
   ```
+- **`Gini(0) = Gini_initial`**: Initial Gini index from configuration
 
-This ensures the model starts from a consistent economic equilibrium.
+This ensures the model starts from a consistent economic equilibrium with specified initial inequality.
 
 ### Example Configuration
 
