@@ -97,14 +97,8 @@
     "_algorithm_note": "Optional: specify NLopt algorithm. Omit to use default (LN_BOBYQA). Note: NLopt algorithms are single-threaded.",
     "algorithm": "GN_ISRES",
     "_algorithm": "Options: LN_BOBYQA (local, smooth), GN_ISRES (global, stochastic, good for multi-modal), GN_DIRECT_L (global, deterministic), LN_COBYLA (local), LN_NELDERMEAD (local simplex)",
-    "_stopping_criteria": "Optional NLopt stopping criteria (omit to use NLopt defaults). All default to 0.0 (disabled) if not specified.",
-    "ftol_rel": 1e-6,
-    "_ftol_rel": "Relative tolerance on objective function: stops when |Δf| < ftol_rel * |f|",
-    "ftol_abs": 1e-9,
-    "_ftol_abs": "Absolute tolerance on objective function: stops when |Δf| < ftol_abs",
-    "xtol_rel": 1e-6,
-    "_xtol_rel": "Relative tolerance on parameters: stops when |Δx| < xtol_rel * |x| for all parameters",
-    "xtol_abs": 1e-9,
-    "_xtol_abs": "Absolute tolerance on parameters: stops when |Δx| < xtol_abs for all parameters"
+    "_stopping_criteria": "NLopt stopping criteria. For f ∈ [0,1], absolute tolerance makes more sense than relative.",
+    "xtol_abs": 1e-10,
+    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |Δf| < 1e-10. Appropriate since f ∈ [0,1]."
   }
 }

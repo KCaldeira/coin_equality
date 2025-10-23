@@ -13,34 +13,69 @@ from parameters import ModelConfiguration
 from constants import EPSILON
 
 
-def create_midpoint_grid(control_times):
+def calculate_utility_weighted_times(n_points, config):
     """
-    Create a new control grid by inserting midpoints between each adjacent pair.
+    Calculate control point times weighted by contribution to discounted utility.
+
+    Distributes control points to provide approximately equal contributions to
+    the time-discounted aggregate utility integral. Concentrates points in early
+    periods where discounting makes decisions more impactful.
 
     Parameters
     ----------
-    control_times : array_like
-        Current control times (must be sorted)
+    n_points : int
+        Number of control points to generate (must be >= 2)
+    config : ModelConfiguration
+        Model configuration containing time span, TFP function, and parameters
 
     Returns
     -------
     ndarray
-        New control times with midpoints inserted.
-        Length = 2 * len(control_times) - 1
+        Control times from t_start to t_end, weighted by utility contribution
 
-    Examples
-    --------
-    >>> create_midpoint_grid([0, 100])
-    array([0, 50, 100])
-    >>> create_midpoint_grid([0, 50, 100])
-    array([0, 25, 50, 75, 100])
+    Notes
+    -----
+    Algorithm:
+    1. Compute average TFP growth rate: k_A = ln(A(t_end)/A(t_start)) / (t_end - t_start)
+    2. Compute effective consumption discount rate: r_c = ρ + η·k_A·(1-α)
+    3. Generate times: t(k) = -(1/r_c)·ln(1 - (k/N)·(1 - exp(-r_c·t_end)))
+       for k = 0, 1, ..., N where N = n_points - 1
+
+    This ensures each interval contributes roughly equally to the discounted
+    objective function, with more resolution where it matters most.
     """
-    control_times = np.asarray(control_times)
-    n = len(control_times)
-    new_times = np.zeros(2 * n - 1)
-    new_times[0::2] = control_times
-    new_times[1::2] = (control_times[:-1] + control_times[1:]) / 2
-    return new_times
+    t_start = config.integration_params.t_start
+    t_end = config.integration_params.t_end
+
+    A_func = config.time_functions['A']
+    A_start = A_func(t_start)
+    A_end = A_func(t_end)
+
+    rho = config.scalar_params.rho
+    eta = config.scalar_params.eta
+    alpha = config.scalar_params.alpha
+
+    if t_end <= t_start:
+        raise ValueError(f"t_end ({t_end}) must be greater than t_start ({t_start})")
+
+    if A_end <= 0 or A_start <= 0:
+        raise ValueError(f"TFP must be positive: A(t_start)={A_start}, A(t_end)={A_end}")
+
+    k_A = np.log(A_end / A_start) / (t_end - t_start)
+    r_c = rho + eta * k_A * (1 - alpha)
+
+    N = n_points - 1
+    k_values = np.arange(n_points)
+
+    if abs(r_c) < EPSILON:
+        times = t_start + (k_values / N) * (t_end - t_start)
+    else:
+        times = -(1.0 / r_c) * np.log(1.0 - (k_values / N) * (1.0 - np.exp(-r_c * t_end)))
+
+    times[0] = t_start
+    times[-1] = t_end
+
+    return times
 
 
 def interpolate_to_new_grid(old_times, old_values, new_times):
@@ -475,17 +510,21 @@ class UtilityOptimizer:
         - Subsequent iterations: uses previous optimal values at existing points,
           PCHIP interpolation for new midpoints
         """
-        t_start = self.base_config.integration_params.t_start
-        t_end = self.base_config.integration_params.t_end
-
         iteration_history = []
         iteration_control_grids = []
         total_evaluations = 0
 
-        control_times = np.array([t_start, t_end])
-        initial_guess = np.array([initial_guess_scalar, initial_guess_scalar])
-
         for iteration in range(1, n_iterations + 1):
+            n_points = 1 + 2**(iteration - 1)
+            control_times = calculate_utility_weighted_times(n_points, self.base_config)
+
+            if iteration == 1:
+                initial_guess = np.full(n_points, initial_guess_scalar)
+            else:
+                old_times = iteration_control_grids[-1]
+                old_values = iteration_history[-1]['optimal_values']
+                initial_guess = interpolate_to_new_grid(old_times, old_values, control_times)
+
             iteration_control_grids.append(control_times.copy())
 
             print(f"\n{'=' * 80}")
@@ -514,12 +553,6 @@ class UtilityOptimizer:
             print(f"  Objective: {opt_result['optimal_objective']:.6e}")
             print(f"  Evaluations: {opt_result['n_evaluations']}")
             print(f"  Status: {opt_result['termination_name']}")
-
-            if iteration < n_iterations:
-                old_times = control_times
-                old_values = opt_result['optimal_values']
-                control_times = create_midpoint_grid(control_times)
-                initial_guess = interpolate_to_new_grid(old_times, old_values, control_times)
 
         final_result = iteration_history[-1]
 

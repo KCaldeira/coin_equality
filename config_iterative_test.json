@@ -96,10 +96,8 @@
     "_algorithm_note": "Optional: specify NLopt algorithm. Omit to use default (LN_BOBYQA). Local algorithms recommended for iterative refinement.",
     "algorithm": null,
     "_algorithm": "Using default LN_BOBYQA (local derivative-free, good for smooth problems)",
-    "_stopping_criteria": "Optional NLopt stopping criteria (omit to use NLopt defaults)",
-    "ftol_rel": 1e-6,
-    "_ftol_rel": "Relative tolerance on objective function",
-    "xtol_rel": 1e-6,
-    "_xtol_rel": "Relative tolerance on parameters"
+    "_stopping_criteria": "NLopt stopping criteria. For f ∈ [0,1], absolute tolerance makes more sense than relative.",
+    "xtol_abs": 1e-10,
+    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |Δf| < 1e-10. Appropriate since f ∈ [0,1]."
   }
 }

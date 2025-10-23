@@ -1,5 +1,5 @@
 {
-  "run_name": "iterative_refinement_test_GN_ISRES",
+  "run_name": "iterative_refinement_test_GN_ISRES_u",
   "description": "Test of iterative refinement optimization with 4 iterations",
 
   "scalar_parameters": {
@@ -95,11 +95,9 @@
     "_initial_guess": "SCALAR: Initial f value for both t_start and t_end in first iteration. Subsequent iterations use PCHIP interpolation from previous solution",
     "_algorithm_note": "Optional: specify NLopt algorithm. Omit to use default (LN_BOBYQA). Local algorithms recommended for iterative refinement.",
     "algorithm": "GN_ISRES",
-    "_algorithm": "Using default LN_BOBYQA (local derivative-free, good for smooth problems)",
-    "_stopping_criteria": "Optional NLopt stopping criteria (omit to use NLopt defaults)",
-    "ftol_rel": 1e-6,
-    "_ftol_rel": "Relative tolerance on objective function",
-    "xtol_rel": 1e-6,
-    "_xtol_rel": "Relative tolerance on parameters"
+    "_algorithm": "GN_ISRES (global stochastic optimizer, explores parameter space more broadly)",
+    "_stopping_criteria": "NLopt stopping criteria. For f ∈ [0,1], absolute tolerance makes more sense than relative.",
+    "xtol_abs": 1e-10,
+    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |Δf| < 1e-10. Appropriate since f ∈ [0,1]."
   }
 }

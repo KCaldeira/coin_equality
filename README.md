@@ -750,32 +750,45 @@ Specify the number of refinement iterations to progressively add control points:
 
 The optimizer performs a sequence of optimizations with progressively finer control point grids. Each iteration uses the solution from the previous iteration to initialize the new optimization via PCHIP (Piecewise Cubic Hermite Interpolating Polynomial) interpolation.
 
-**Iteration 1:**
-- Control times: `[t_start, t_end]`
-- Initial guess: `[initial_guess, initial_guess]`
-- Optimize with 2 control points
+**Control point spacing - Utility-weighted distribution:**
 
-**Iteration 2:**
-- Control times: `[t_start, (t_start + t_end)/2, t_end]`
-- Initial guess: `[f₁(t_start), PCHIP((t_start + t_end)/2), f₁(t_end)]`
-  - where `f₁(t)` is the optimal solution from iteration 1
-  - PCHIP interpolation uses iteration 1 results at existing control points
+Instead of spacing control points equally in time, points are distributed to provide approximately equal contributions to the time-discounted aggregate utility integral. This concentrates control points where they matter most for the objective function.
 
-**Iteration 3:**
-- Control times: Insert midpoint between each adjacent pair from iteration 2
-  - Result: 5 control points
-- Initial guess: Values from iteration 2 at existing points, PCHIP interpolation at new points
+The control point times are calculated based on:
+1. **Average TFP growth rate**: `k_A = ln(A(t_end)/A(t_start)) / (t_end - t_start)`
+2. **Effective consumption discount rate**: `r_c = ρ + η · k_A · (1 - α)`
+   - `ρ`: pure rate of time preference
+   - `η`: coefficient of relative risk aversion
+   - `α`: capital share of income
 
-**Iteration k (k ≥ 2):**
-- Control times: Insert midpoint between each adjacent pair from iteration k-1
-  - Result: 2^k + 1 control points
-- Initial guess: Values from iteration k-1 at existing points, PCHIP interpolation at new points
+For iteration with N+1 control points (k = 0, 1, ..., N):
+```
+t(k) = -(1/r_c) · ln(1 - (k/N) · (1 - exp(-r_c · t_end)))
+```
+
+This formula ensures that each interval between control points contributes approximately equally to the discounted objective, with more points concentrated in early periods where discounting matters most.
+
+**Iteration schedule:**
+
+- **Iteration 1**: 2 control points (k=0, 1) → `[t(0), t(1)]` = `[0, t_end]`
+- **Iteration 2**: 3 control points (k=0, 1, 2)
+- **Iteration 3**: 5 control points (k=0, 1, 2, 3, 4)
+- **Iteration 4**: 9 control points
+- **Iteration n**: 1 + 2^(n-1) control points
+
+**Initial guess strategy:**
+- **Iteration 1**: All points use `initial_guess` scalar value
+- **Iteration n (n ≥ 2)**:
+  - Existing points from iteration n-1 use their optimal values
+  - New points use PCHIP interpolation from iteration n-1 solution
+  - Interpolated values are clamped to [0, 1]
 
 **Advantages of iterative refinement:**
 - Better convergence by starting with coarse, well-initialized solutions
 - Progressively captures finer temporal structure in optimal policy
 - Each iteration "warm starts" from previous solution
 - Avoids poor local minima that can occur with many control points from cold start
+- Utility-weighted spacing focuses computational effort where it matters most
 - PCHIP interpolation preserves monotonicity and shape characteristics of previous solution
 
 ## Next Steps
