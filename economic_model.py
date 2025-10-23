@@ -114,10 +114,15 @@ def calculate_tendencies(state, params):
         y_gross = 0.0
 
     # Income-dependent climate damage
+    if y_gross > 0:
     # Returns both aggregate damage fraction and post-damage Gini
-    Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
-        delta_T, Gini, y_gross, params
-    )
+        Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
+          delta_T, Gini, y_gross, params
+      )
+    else:
+        Omega = 0.0
+        Gini_climate = Gini
+
     # Clamp Gini_climate to valid bounds before using in subsequent calculations
     Gini_climate = np.clip(Gini_climate, EPSILON, 1.0 - EPSILON)
 
