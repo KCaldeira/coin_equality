@@ -143,7 +143,7 @@ def calculate_tendencies(state, params):
         mu = 0.0
 
     # Eq 1.7: Abatement cost fraction
-    if Y_damaged > 0 && abatecost > 0:
+    if Y_damaged > 0 and abatecost > 0:
         Lambda = abatecost / Y_damaged
     else:
         Lambda = 0.0
