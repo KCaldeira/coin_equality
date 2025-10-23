@@ -791,6 +791,16 @@ This formula ensures that each interval between control points contributes appro
 - Utility-weighted spacing focuses computational effort where it matters most
 - PCHIP interpolation preserves monotonicity and shape characteristics of previous solution
 
+### Optimization Stopping Criteria
+
+The optimization accepts optional NLopt stopping criteria parameters:
+- `xtol_abs` - Absolute tolerance on control parameters (recommended)
+- `xtol_rel` - Relative tolerance on control parameters
+- `ftol_abs` - Absolute tolerance on objective function
+- `ftol_rel` - Relative tolerance on objective function
+
+**Recommended practice:** Use `xtol_abs = 1e-10` as the sole stopping criterion. Since the control variable f is bounded in [0,1], absolute tolerance is more meaningful than relative tolerance, and there's no reason to want different accuracy near 0 versus near 1. The objective function can have large absolute values, making `ftol_rel` trigger prematurely even when significant improvements remain possible.
+
 ## Next Steps
 
 The following tasks are prioritized to prepare the model for production use and publication:
