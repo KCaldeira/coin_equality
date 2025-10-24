@@ -805,11 +805,33 @@ The optimization accepts optional NLopt stopping criteria parameters:
 
 The following tasks are prioritized to prepare the model for production use and publication:
 
-### 1. Update Methods Section of Paper
+### 1. Align Model Components with DICE-2023 (Barrage & Nordhaus 2024)
+
+Update key model components to more closely follow the formulations in Barrage and Nordhaus (2024):
+
+**Climate damage function:**
+- Current: Simple power-law with income-dependent damage: `ω_max(ΔT) = k_damage_coeff · ΔT^k_damage_exp`
+- Target: DICE-2023 damage function formulation
+
+**Carbon intensity (σ):**
+- Current: Simple exponential decay
+- Target: DICE-2023 carbon intensity trajectory with technological progress
+
+**Backstop price (θ₁):**
+- Current: Simple exponential decline in marginal abatement cost
+- Target: DICE-2023 backstop price formulation with cost reductions
+
+**Total factor productivity (A):**
+- Current: Simple exponential growth
+- Target: DICE-2023 TFP trajectory with calibrated growth rates
+
+This alignment will ensure our extensions (income distribution, redistribution mechanisms) are built on a well-established baseline that matches current IAM best practices.
+
+### 2. Update Methods Section of Paper
 
 Revise and update the Methods section of the paper to ensure it accurately reflects the current implementation as documented in this README and the model code. The paper should provide a clear, consistent description of all model equations, parameter definitions, and computational approaches used in the codebase.
 
-### 2. Comprehensive Code Validation
+### 3. Comprehensive Code Validation
 
 Perform a detailed verification of model calculations by manually tracing through one complete time step of the integration:
 - Use the output `results.csv` file to verify intermediate calculations
@@ -820,20 +842,9 @@ Perform a detailed verification of model calculations by manually tracing throug
 
 This step-by-step verification will provide confidence in the correctness of the implementation.
 
-### 3. Investigate and Improve Optimization Methods
-
-Address current issues with the optimization routine where the model allocates resources to emissions abatement even when that produces no benefit to utility. In cases where abatement provides no utility gains, those resources should be directed toward reducing the Gini index to increase aggregate utility.
-
-Specific investigations:
-- Diagnose why the optimizer is selecting suboptimal allocation strategies
-- Examine objective function gradients and sensitivity to control variables
-- Consider alternative optimization algorithms or improved starting conditions
-- Verify that the objective function correctly captures the trade-offs between abatement and redistribution
-- Test optimizer performance across different parameter regimes
-
 ### 4. Production Code Readiness
 
-Combine the results of code validation (Step 2) and optimization improvements (Step 3) to establish confidence that the model is ready for production use. This includes:
+Establish confidence that the model is ready for production use:
 - Confirming all calculations are correct and well-tested
 - Ensuring optimization routines reliably find optimal solutions
 - Documenting any known limitations or edge cases
