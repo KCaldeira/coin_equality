@@ -344,8 +344,8 @@ class UtilityOptimizer:
         max_evaluations : int
             Maximum number of objective function evaluations
         algorithm : str, optional
-            NLopt algorithm name (e.g., 'LN_BOBYQA', 'GN_ISRES').
-            If None, defaults to 'LN_BOBYQA'.
+            NLopt algorithm name (e.g., 'LN_SBPLX', 'LN_BOBYQA', 'GN_ISRES').
+            If None, defaults to 'LN_SBPLX'.
         ftol_rel : float, optional
             Relative tolerance on objective function changes (None = use NLopt default)
         ftol_abs : float, optional
@@ -375,7 +375,7 @@ class UtilityOptimizer:
         self.degenerate_reason = None
 
         if algorithm is None:
-            algorithm = 'LN_BOBYQA'
+            algorithm = 'LN_SBPLX'
 
         deltaL = self.base_config.scalar_params.deltaL
         if abs(deltaL) < EPSILON:
@@ -474,7 +474,7 @@ class UtilityOptimizer:
         max_evaluations : int
             Maximum objective function evaluations per iteration
         algorithm : str, optional
-            NLopt algorithm name. If None, defaults to 'LN_BOBYQA'.
+            NLopt algorithm name. If None, defaults to 'LN_SBPLX'.
         ftol_rel : float, optional
             Relative tolerance on objective function changes
         ftol_abs : float, optional
@@ -562,7 +562,7 @@ class UtilityOptimizer:
             'n_evaluations': total_evaluations,
             'control_points': final_result['control_points'],
             'status': 'success',
-            'algorithm': algorithm if algorithm is not None else 'LN_BOBYQA',
+            'algorithm': algorithm if algorithm is not None else 'LN_SBPLX',
             'n_iterations': n_iterations,
             'iteration_history': iteration_history,
             'iteration_control_grids': iteration_control_grids

@@ -319,7 +319,7 @@ def main():
     print_header("OPTIMIZATION")
     print(f"Max evaluations: {max_evaluations}{' per iteration' if is_iterative else ''}")
 
-    algorithm = opt_params.algorithm if opt_params.algorithm is not None else 'LN_BOBYQA'
+    algorithm = opt_params.algorithm if opt_params.algorithm is not None else 'LN_SBPLX'
     print(f"Algorithm: {algorithm}")
 
     if opt_params.ftol_rel is not None:

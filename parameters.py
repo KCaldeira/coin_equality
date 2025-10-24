@@ -280,9 +280,10 @@ class OptimizationParameters:
         Iterative refinement mode (float): Single initial f value for first iteration.
             Must satisfy 0 ≤ f ≤ 1.
     algorithm : str, optional
-        NLopt algorithm to use. If None, defaults to 'LN_BOBYQA'.
+        NLopt algorithm to use. If None, defaults to 'LN_SBPLX'.
         Options include:
-        - 'LN_BOBYQA': Local derivative-free (default, good for smooth problems)
+        - 'LN_SBPLX': Local derivative-free Subplex (default, robust for noisy objectives)
+        - 'LN_BOBYQA': Local derivative-free (good for smooth problems)
         - 'GN_ISRES': Global stochastic (good for multi-modal problems)
         - 'GN_DIRECT_L': Global deterministic (good for Lipschitz-continuous)
         - 'LN_COBYLA': Local derivative-free (handles nonlinear constraints)
