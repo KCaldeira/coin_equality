@@ -127,11 +127,11 @@ def test_eq12_random_cases():
         omega_max = random.uniform(0.05, 0.3)  # Max damage: 5% to 30%
 
         # Set up parameters for the function
-        # (delta_T=1.0 and k_damage_exp=1.0 means omega_max = k_damage_coeff)
+        # (delta_T=1.0 and psi1=omega_max, psi2=0.0 means omega_max = psi1 * 1.0)
         params = dict(
             k_damage_halfsat=k,
-            k_damage_coeff=omega_max,
-            k_damage_exp=1.0
+            psi1=omega_max,
+            psi2=0.0
         )
 
         # Call analytical solution (function under test)

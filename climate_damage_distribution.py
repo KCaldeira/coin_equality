@@ -56,8 +56,8 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
         Mean per-capita income ($)
     params : dict
         Must include:
-        - 'k_damage_coeff': base damage coefficient (dimensionless)
-        - 'k_damage_exp': temperature exponent (dimensionless)
+        - 'psi1': linear damage coefficient (°C⁻¹)
+        - 'psi2': quadratic damage coefficient (°C⁻²)
         - 'k_damage_halfsat': income half-saturation constant ($)
           (income level at which damage is 50% of maximum)
     n_bins : int, optional
@@ -75,7 +75,7 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     Notes
     -----
     **Damage Function (Half-Saturation Model):**
-        ω_max(ΔT) = k_damage_coeff · ΔT^k_damage_exp
+        ω_max(ΔT) = psi1 · ΔT + psi2 · ΔT²  [Barrage & Nordhaus 2023]
         ω(y, ΔT) = ω_max · k_halfsat / (k_halfsat + y)
                  = ω_max · (1 - y / (k_halfsat + y))
 
@@ -133,17 +133,19 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     # Handle degenerate Gini cases
     if Gini_current <= 0 or Gini_current >= 1:
         # Fall back to uniform damage if Gini is at boundary
-        Omega_uniform = params['k_damage_coeff'] * (delta_T ** params['k_damage_exp'])
+        # Barrage & Nordhaus (2023) quadratic damage function
+        Omega_uniform = params['psi1'] * delta_T + params['psi2'] * (delta_T ** 2)
         return Omega_uniform, Gini_current
 
     # Extract parameters
-    k_coeff = params['k_damage_coeff']
-    k_exp = params['k_damage_exp']
+    psi1 = params['psi1']
+    psi2 = params['psi2']
     k_halfsat = params['k_damage_halfsat']
 
     # Maximum damage fraction (temperature-dependent component)
-    # ω_max = k_damage_coeff · ΔT^k_damage_exp
-    omega_max = k_coeff * (delta_T ** k_exp)
+    # Barrage & Nordhaus (2023) quadratic damage function:
+    # ω_max(ΔT) = psi1 · ΔT + psi2 · ΔT²
+    omega_max = psi1 * delta_T + psi2 * (delta_T ** 2)
 
     # Special case: very high halfsat means approximately uniform damage
     # When k_halfsat >> income, ω(y) ≈ ω_max for all y

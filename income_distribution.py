@@ -9,9 +9,18 @@ def a_from_G(G):  # Pareto index a from Gini
         raise ValueError("G must be in (0,1).")
     return (1.0 + 1.0/G) / 2.0
 
+def G_from_a(a):  # Gini from Pareto index a (inverse of a_from_G)
+    if a <= 1:
+        raise ValueError("a must be > 1 for finite Gini.")
+    return 1.0 / (2.0 * a - 1.0)
+
 def L_pareto(F, G):  # Lorenz curve at F for Pareto-Lorenz with G
     a = a_from_G(G)
     return 1.0 - (1.0 - F)**(1.0 - 1.0/a)
+
+def L_pareto_derivative(F, G):  # Derivative of Lorenz curve dL/dF at F for Pareto-Lorenz with G
+    a = a_from_G(G)
+    return (1.0 - 1.0/a) * (1.0 - F)**(-1.0/a)
 
 def crossing_rank_from_G(Gini_initial, G2):
     if Gini_initial == G2:
