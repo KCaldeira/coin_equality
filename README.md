@@ -71,6 +71,13 @@ where:
 - `k_damage_halfsat` is the income level at which damage is 50% of maximum
 - `Ω(t)` is the aggregate fraction of gross production lost to climate damage
 
+**Analytical Solution:**
+The integral for `Ω(t)` is solved analytically using a closed-form solution based on the Gauss hypergeometric function ₂F₁:
+```
+Ω = ω_max · ₂F₁(1, a, a+1, -β)
+```
+where `β = k_damage_halfsat · (a-1) / (ȳ · a)`, `a` is the Pareto parameter, and `ȳ` is mean income. This closed-form solution avoids numerical integration and is exact within numerical precision (see `climate_damage_distribution.py`).
+
 **Income-dependent damage characteristics:**
 - At income `y = 0`: damage = `ω_max` (maximum for poorest)
 - At income `y = k_damage_halfsat`: damage = `ω_max/2` (half of maximum)
