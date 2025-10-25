@@ -11,6 +11,8 @@ This script demonstrates the complete workflow:
 
 import sys
 import time
+import json
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -18,6 +20,126 @@ from parameters import load_configuration, ModelConfiguration
 from optimization import UtilityOptimizer, create_control_function_from_points
 from economic_model import integrate_model
 from output import save_results, write_optimization_summary, copy_config_file
+
+
+def apply_config_override(config_dict, key_path, value):
+    """
+    Apply a command line override to a nested configuration dictionary.
+
+    Parameters
+    ----------
+    config_dict : dict
+        The configuration dictionary to modify
+    key_path : str
+        Dot-separated path to the key (e.g., "scalar_parameters.alpha")
+    value : str
+        String value to set (will be converted to appropriate type)
+    """
+    keys = key_path.split('.')
+
+    # Navigate to the parent dict
+    current = config_dict
+    for key in keys[:-1]:
+        if key not in current:
+            raise KeyError(f"Key path '{key_path}' not found in config (failed at '{key}')")
+        current = current[key]
+
+    final_key = keys[-1]
+    if final_key not in current:
+        raise KeyError(f"Key path '{key_path}' not found in config (final key '{final_key}' not found)")
+
+    # Infer type from existing value
+    existing_value = current[final_key]
+
+    try:
+        if existing_value is None:
+            # If existing is None, try int -> float -> bool -> string
+            try:
+                converted_value = int(value)
+            except ValueError:
+                try:
+                    converted_value = float(value)
+                except ValueError:
+                    if value.lower() in ('true', 'false'):
+                        converted_value = value.lower() == 'true'
+                    else:
+                        converted_value = value
+        elif isinstance(existing_value, bool):
+            # Handle bools before int (since bool is subclass of int in Python)
+            converted_value = value.lower() in ('true', '1', 'yes')
+        elif isinstance(existing_value, int):
+            converted_value = int(value)
+        elif isinstance(existing_value, float):
+            converted_value = float(value)
+        elif isinstance(existing_value, str):
+            converted_value = value
+        elif isinstance(existing_value, (list, dict)):
+            # Try to parse as JSON for lists and dicts
+            converted_value = json.loads(value)
+        else:
+            # Fallback: keep as string
+            converted_value = value
+    except (ValueError, json.JSONDecodeError) as e:
+        raise ValueError(f"Cannot convert '{value}' to type {type(existing_value).__name__} for key '{key_path}': {e}")
+
+    current[final_key] = converted_value
+    print(f"Override: {key_path} = {converted_value} (was {existing_value})")
+
+
+def parse_arguments():
+    """
+    Parse command line arguments including config file and overrides.
+
+    Returns
+    -------
+    tuple
+        (config_path, overrides_dict) where overrides_dict maps key paths to values
+    """
+    parser = argparse.ArgumentParser(
+        description='Run optimization with optional parameter overrides',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python test_optimization.py config_baseline.json
+  python test_optimization.py config_baseline.json --scalar_parameters.alpha 0.35
+  python test_optimization.py config_baseline.json --optimization_parameters.initial_guess 0.3 --run_name "test_run"
+
+Override format:
+  --key.subkey.subsubkey value
+
+Common overrides:
+  --run_name <name>
+  --scalar_parameters.alpha <value>
+  --scalar_parameters.rho <value>
+  --optimization_parameters.initial_guess <value>
+  --optimization_parameters.max_evaluations <value>
+  --optimization_parameters.n_points_final <value>
+  --time_functions.A.growth_rate <value>
+        """
+    )
+
+    parser.add_argument('config_file', help='Path to JSON configuration file')
+
+    # Use parse_known_args to allow arbitrary --key value pairs
+    args, unknown = parser.parse_known_args()
+
+    # Parse overrides from unknown arguments
+    overrides = {}
+    i = 0
+    while i < len(unknown):
+        arg = unknown[i]
+        if arg.startswith('--'):
+            key = arg[2:]  # Remove '--' prefix
+            if i + 1 < len(unknown) and not unknown[i + 1].startswith('--'):
+                value = unknown[i + 1]
+                overrides[key] = value
+                i += 2
+            else:
+                raise ValueError(f"Override '{arg}' requires a value")
+        else:
+            raise ValueError(f"Unexpected argument '{arg}'. Overrides must start with '--'")
+
+    return args.config_file, overrides
 
 
 def print_header(text):
@@ -264,15 +386,31 @@ def main():
     """Main execution function."""
     start_time = time.time()
 
-    if len(sys.argv) < 2:
-        print("Usage: python test_optimization.py <config_file>")
-        print("\nExample:")
-        print("  python test_optimization.py config_baseline.json")
-        sys.exit(1)
+    # Parse command line arguments
+    config_path, overrides = parse_arguments()
 
-    config_path = sys.argv[1]
+    # Load base configuration from JSON file
+    with open(config_path, 'r') as f:
+        config_dict = json.load(f)
 
-    config = load_configuration(config_path)
+    # Apply command line overrides
+    if overrides:
+        print_header("APPLYING COMMAND LINE OVERRIDES")
+        for key_path, value in overrides.items():
+            apply_config_override(config_dict, key_path, value)
+
+    # Create configuration object from modified dict
+    # Save modified dict to temp file for load_configuration to process
+    import tempfile
+    import os
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+        json.dump(config_dict, tmp, indent=2)
+        tmp_path = tmp.name
+
+    try:
+        config = load_configuration(tmp_path)
+    finally:
+        os.unlink(tmp_path)
     opt_params = config.optimization_params
 
     is_iterative = opt_params.is_iterative_refinement()
@@ -342,7 +480,8 @@ def main():
             ftol_rel=opt_params.ftol_rel,
             ftol_abs=opt_params.ftol_abs,
             xtol_rel=opt_params.xtol_rel,
-            xtol_abs=opt_params.xtol_abs
+            xtol_abs=opt_params.xtol_abs,
+            n_points_final=opt_params.n_points_final
         )
         n_final_control_points = len(opt_results['control_points'])
     else:

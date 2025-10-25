@@ -305,6 +305,12 @@ class OptimizationParameters:
         Absolute tolerance on parameter changes.
         Stops when |Δx| < xtol_abs for all parameters.
         If None, uses NLopt default (0.0 = disabled).
+    n_points_final : int, optional
+        Target number of control points in final iteration (only used in iterative mode).
+        If specified, refinement_base is calculated as: (n_points_final - 1)^(1/(n_iterations - 1))
+        If None, uses refinement_base = 2.0 (default behavior: 2, 3, 5, 9, 17, ...)
+        Example: n_points_final=17 with 5 iterations gives base ≈ 2.0
+        Example: n_points_final=10 with 4 iterations gives base ≈ 2.08
     """
     max_evaluations: int
     control_times: object  # list or int
@@ -314,6 +320,7 @@ class OptimizationParameters:
     ftol_abs: float = None
     xtol_rel: float = None
     xtol_abs: float = None
+    n_points_final: int = None
 
     def is_iterative_refinement(self):
         """

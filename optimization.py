@@ -454,7 +454,8 @@ class UtilityOptimizer:
     def optimize_with_iterative_refinement(self, n_iterations, initial_guess_scalar,
                                           max_evaluations, algorithm=None,
                                           ftol_rel=None, ftol_abs=None,
-                                          xtol_rel=None, xtol_abs=None):
+                                          xtol_rel=None, xtol_abs=None,
+                                          n_points_final=None):
         """
         Optimize using iterative refinement with progressively finer control grids.
 
@@ -467,7 +468,7 @@ class UtilityOptimizer:
         ----------
         n_iterations : int
             Number of refinement iterations to perform.
-            Iteration k produces 2^k + 1 control points.
+            Iteration k produces round(1 + base^(k-1)) control points.
         initial_guess_scalar : float
             Initial f value for all control points in first iteration.
             Must satisfy 0 ≤ f ≤ 1.
@@ -483,6 +484,10 @@ class UtilityOptimizer:
             Relative tolerance on parameter changes
         xtol_abs : float, optional
             Absolute tolerance on parameter changes
+        n_points_final : int, optional
+            Target number of control points in final iteration.
+            If specified, base = (n_points_final - 1)^(1/(n_iterations - 1))
+            If None, uses base = 2.0 (default: 2, 3, 5, 9, 17, ...)
 
         Returns
         -------
@@ -497,25 +502,39 @@ class UtilityOptimizer:
             - 'n_iterations': number of iterations performed
             - 'iteration_history': list of results from each iteration
             - 'iteration_control_grids': control times used at each iteration
+            - 'refinement_base': base used for point growth
 
         Notes
         -----
-        Iteration schedule:
+        Iteration schedule (default base=2.0):
         - Iteration 1: 2 control points at [t_start, t_end]
-        - Iteration 2: 3 control points (adds midpoint)
-        - Iteration k: 2^k + 1 control points (subdivides each interval)
+        - Iteration 2: 3 control points
+        - Iteration k: round(1 + base^(k-1)) control points
 
         Initial guess strategy:
         - First iteration: uses initial_guess_scalar for all points
         - Subsequent iterations: uses previous optimal values at existing points,
           PCHIP interpolation for new midpoints
         """
+        # Calculate refinement base
+        if n_points_final is not None:
+            if n_iterations <= 1:
+                refinement_base = 2.0
+            else:
+                refinement_base = (n_points_final - 1) ** (1.0 / (n_iterations - 1))
+        else:
+            refinement_base = 2.0
+
+        print(f"\nIterative refinement: {n_iterations} iterations, base = {refinement_base:.4f}")
+        if n_points_final is not None:
+            print(f"Target final points: {n_points_final}")
+
         iteration_history = []
         iteration_control_grids = []
         total_evaluations = 0
 
         for iteration in range(1, n_iterations + 1):
-            n_points = 1 + 2**(iteration - 1)
+            n_points = round(1 + refinement_base**(iteration - 1))
             control_times = calculate_utility_weighted_times(n_points, self.base_config)
 
             if iteration == 1:
@@ -565,5 +584,6 @@ class UtilityOptimizer:
             'algorithm': algorithm if algorithm is not None else 'LN_SBPLX',
             'n_iterations': n_iterations,
             'iteration_history': iteration_history,
-            'iteration_control_grids': iteration_control_grids
+            'iteration_control_grids': iteration_control_grids,
+            'refinement_base': refinement_base
         }

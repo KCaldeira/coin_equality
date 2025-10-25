@@ -592,6 +592,80 @@ python test_integration.py config_my_test.json
 
 This testing framework validates the complete model pipeline and provides immediate visual feedback on model behavior through the generated charts.
 
+### Testing the Optimization with Parameter Overrides
+
+The optimization test script supports command line parameter overrides, enabling automated parameter sweeps without creating multiple configuration files.
+
+#### Command Line Override Syntax
+
+Override any configuration parameter using dot notation:
+
+```bash
+python test_optimization.py config.json --key.subkey.value new_value
+```
+
+**Examples:**
+
+```bash
+# Override single parameter
+python test_optimization.py config_baseline.json --scalar_parameters.alpha 0.35
+
+# Override multiple parameters
+python test_optimization.py config_baseline.json \
+  --run_name "sensitivity_test" \
+  --optimization_parameters.initial_guess 0.3 \
+  --scalar_parameters.rho 0.015
+
+# Override nested parameters
+python test_optimization.py config_baseline.json \
+  --time_functions.A.growth_rate 0.02 \
+  --optimization_parameters.n_points_final 100
+```
+
+**Common overrides:**
+- `--run_name <name>` - Set output directory name
+- `--scalar_parameters.alpha <value>` - Capital share
+- `--scalar_parameters.rho <value>` - Time preference rate
+- `--scalar_parameters.eta <value>` - Risk aversion coefficient
+- `--optimization_parameters.initial_guess <value>` - Starting point
+- `--optimization_parameters.max_evaluations <value>` - Iteration budget
+- `--optimization_parameters.n_points_final <value>` - Target control points
+- `--time_functions.A.growth_rate <value>` - TFP growth rate
+
+#### Automated Parameter Sweeps
+
+The `run_initial_guess_sweep.py` script demonstrates automated testing across multiple parameter values:
+
+```bash
+python run_initial_guess_sweep.py config_baseline.json
+```
+
+This runs optimization 11 times with `initial_guess` values from 0.0 to 1.0 (step 0.1), automatically creating separate output directories for each run.
+
+**Creating custom sweep scripts:**
+
+```python
+import subprocess
+
+config_file = "config_baseline.json"
+
+# Sweep over alpha values
+for alpha in [0.25, 0.30, 0.35, 0.40]:
+    cmd = [
+        "python", "test_optimization.py", config_file,
+        "--scalar_parameters.alpha", str(alpha),
+        "--run_name", f"alpha_{alpha:.2f}"
+    ]
+    subprocess.run(cmd, check=True)
+```
+
+**Benefits of command line overrides:**
+- No need to create dozens of nearly-identical JSON files
+- Easy to script parameter sweeps in bash or Python
+- Git-friendly: only baseline configs need version control
+- Clear provenance: command documents what changed from baseline
+- Composable: combine multiple overrides in one command
+
 ## Time Integration
 
 The model uses Euler's method with fixed time steps for transparent integration that ensures all functional relationships are satisfied exactly at output points.
@@ -738,13 +812,23 @@ Specify the number of refinement iterations to progressively add control points:
 **Configuration rules for iterative refinement:**
 - `control_times`: Scalar integer specifying number of refinement iterations
   - Must be ≥ 1
-  - Iteration 1: 2 control points (at `t_start` and `t_end`)
-  - Iteration 2: 3 control points (adds midpoint)
-  - Iteration 3: 5 control points (subdivides each interval)
-  - Iteration k: 2^k + 1 control points
 - `initial_guess`: Scalar value for initial f at all control points in first iteration
   - Must satisfy 0 ≤ f ≤ 1
 - `max_evaluations`: Maximum objective function evaluations per iteration
+- `n_points_final`: Target number of control points in final iteration (optional)
+  - If specified, the refinement base is calculated as: `base = (n_points_final - 1)^(1/(n_iterations - 1))`
+  - If omitted, uses default `base = 2.0`
+  - Non-integer bases prevent exact alignment with previous grids
+  - Example: `n_points_final = 10` with 4 iterations gives base ≈ 2.08 → 2, 3, 5, 10 points
+  - Example: default base = 2.0 with 5 iterations gives 2, 3, 5, 9, 17 points
+- `xtol_abs`: Absolute tolerance on control parameters (optional, default from NLopt)
+  - Recommended: `1e-10` (stops when all |Δf| < 1e-10)
+  - Since f ∈ [0,1], absolute tolerance is more meaningful than relative tolerance
+
+**Number of control points per iteration:**
+- Iteration k produces `round(1 + base^(k-1))` control points
+- Default base=2.0: Iteration 1: 2 points, Iteration 2: 3 points, Iteration 3: 5 points, etc.
+- Custom base from n_points_final ensures the final iteration has exactly the target number of points
 
 **Iterative refinement algorithm:**
 
@@ -842,7 +926,34 @@ Perform a detailed verification of model calculations by manually tracing throug
 
 This step-by-step verification will provide confidence in the correctness of the implementation.
 
-### 4. Production Code Readiness
+### 4. Mathematica Verification of Model Equations
+
+Use Wolfram Mathematica to independently re-derive and verify all model equations:
+
+**Analytical derivations to verify:**
+- Pareto-Lorenz income distribution and Gini coefficient relationships
+- Mean utility calculation with income distribution (Eq. 3.5)
+- Income redistribution mechanics and effective Gini formulation (Eq. 4.4)
+- Climate damage with income-dependent effects and distributional impacts
+- Abatement cost functions and emission relationships
+- All closed-form solutions and integrals
+
+**Numerical verification:**
+- Compare Mathematica symbolic solutions with Python numerical implementations
+- Verify hypergeometric function evaluations in climate damage calculations
+- Check integration of utility across income distribution
+- Validate PCHIP interpolation behavior at boundaries
+
+**Benefits:**
+- Independent verification ensures mathematical correctness
+- Symbolic computation catches algebraic errors that may not appear in numerical tests
+- Provides publication-ready analytical expressions
+- Validates assumptions in closed-form approximations
+- Ensures consistency between documentation and implementation
+
+This verification step provides confidence that the model mathematics is sound before using it for policy analysis.
+
+### 5. Production Code Readiness
 
 Establish confidence that the model is ready for production use:
 - Confirming all calculations are correct and well-tested
