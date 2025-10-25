@@ -85,11 +85,11 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     - As income y → ∞: ω → 0 (damage approaches zero for wealthy)
 
     **Analytical Solution for Aggregate Damage:**
-    For Pareto income distribution y(F) = ȳ · a/(a-1) · (1-F)^(-1/a), the
+    For Pareto income distribution y(F) = ȳ · (1 - 1/a) · (1-F)^(-1/a), the
     aggregate damage is computed analytically as:
 
-        β = k_halfsat · (a-1) / (ȳ · a)
-        Ω = ω_max · ₂F₁(1, a, a+1, -β)
+        β = k_halfsat · a / (ȳ · (a-1))
+        Ω = ω_max · (k_halfsat / ȳ) · ₂F₁(1, a, a+1, -β)
 
     where ₂F₁ is the Gauss hypergeometric function. This closed-form solution
     replaces numerical integration and is exact (within numerical precision).
@@ -165,13 +165,13 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     #
     #   Ω = ∫ ω(y(F)) · y(F) · dF / ∫ y(F) · dF
     #
-    # For Pareto distribution y(F) = ȳ·a/(a-1)·(1-F)^(-1/a) and
+    # For Pareto distribution y(F) = ȳ·(1-1/a)·(1-F)^(-1/a) and
     # damage function ω(y) = ω_max · k/(k+y), this integral has the
     # closed-form solution:
     #
-    #   Ω = ω_max · ₂F₁(1, a, a+1, -β)
+    #   Ω = ω_max · (k/ȳ) · ₂F₁(1, a, a+1, -β)
     #
-    # where β = k·(a-1)/(ȳ·a) is a dimensionless parameter and
+    # where β = k·a/(ȳ·(a-1)) is a dimensionless parameter and
     # ₂F₁ is the Gauss hypergeometric function.
     #
     # Derivation: The integral reduces to a beta function integral that
@@ -180,11 +180,11 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
 
     # Dimensionless parameter β controlling damage distribution
     # β large → damage concentrated on poor; β small → more uniform
-    beta = (k_halfsat * (a - 1.0)) / (y_mean * a)
+    beta = k_halfsat * a / (y_mean * (a - 1.0))
 
     # Aggregate damage via hypergeometric function
     # ₂F₁(1, a, a+1, -β) evaluated using mpmath for high precision
-    Omega = omega_max * float(hyp2f1(1, a, a + 1, -beta))
+    Omega = omega_max * (k_halfsat / y_mean) * float(hyp2f1(1, a, a + 1, -beta))
 
     # ═══════════════════════════════════════════════════════════════════
     # ANALYTICAL SOLUTION FOR POST-DAMAGE GINI
@@ -248,11 +248,11 @@ def calculate_climate_damage_gini_effect(a, k_halfsat, y_mean, omega_max):
     **Key Quantities:**
         S₀ = (a-1)/(2a-1)        - Integral of undamaged Lorenz curve
         G₀ = 1/(2a-1)            - Undamaged Gini coefficient
-        β  = k·(a-1)/(ȳ·a)       - Dimensionless damage parameter
+        β  = k·a/(ȳ·(a-1))       - Dimensionless damage parameter
 
     **Damage Integrals (via hypergeometric functions):**
-        D  = ω · ₂F₁(1, a-1, a, -β)          - Aggregate damage fraction
-        Sᵈ = ω · S₀ · ₂F₁(1, 2a-1, 2a, -β)  - Damage-weighted Lorenz integral
+        D  = ω · (k/ȳ) · ₂F₁(1, a, a+1, -β)                     - Aggregate damage fraction
+        Sᵈ = ω · (a·k/ȳ) · (1/(2a-1)) · ₂F₁(1, 2a-1, 2a, -β)   - Damage-weighted Lorenz integral
 
     **Post-Damage Gini:**
         G_new = 1 - 2·(S₀ - Sᵈ)/(1 - D)
@@ -296,10 +296,10 @@ def calculate_climate_damage_gini_effect(a, k_halfsat, y_mean, omega_max):
     # STEP 2: Compute dimensionless damage parameter β
     # ═══════════════════════════════════════════════════════════════════
 
-    # β = k·(a-1)/(ȳ·a) controls the regressivity of climate damage
+    # β = k·a/(ȳ·(a-1)) controls the regressivity of climate damage
     # - β → 0: damage becomes uniform (k_halfsat → ∞)
     # - β → ∞: damage highly concentrated on poor (k_halfsat → 0)
-    beta = (k_halfsat * (a - 1.0)) / (y_mean * a)
+    beta = k_halfsat * a / (y_mean * (a - 1.0))
 
     # ═══════════════════════════════════════════════════════════════════
     # STEP 3: Compute damage integrals using hypergeometric functions
@@ -307,13 +307,14 @@ def calculate_climate_damage_gini_effect(a, k_halfsat, y_mean, omega_max):
 
     # D = ∫₀¹ ω(y(F)) · y(F) dF / ∫₀¹ y(F) dF
     # This is the aggregate damage fraction (same as Omega from main function)
-    # Analytical form: D = ω · ₂F₁(1, a-1, a, -β)
-    D = omega_max * float(hyp2f1(1.0, a - 1.0, a, -beta))
+    # Analytical form: D = ω · (k/ȳ) · ₂F₁(1, a, a+1, -β)
+    D = omega_max * (k_halfsat / y_mean) * float(hyp2f1(1.0, a, a + 1.0, -beta))
 
     # Sᵈ = ∫₀¹ L_damaged(F) dF where L_damaged is the Lorenz curve of
     # the damaged income distribution
-    # Analytical form: Sᵈ = ω · S₀ · ₂F₁(1, 2a-1, 2a, -β)
-    Sd = omega_max * S0 * float(hyp2f1(1.0, 2.0 * a - 1.0, 2.0 * a, -beta))
+    # Analytical form: Sᵈ = ω · (a·k/ȳ) · (1/(2a-1)) · ₂F₁(1, 2a-1, 2a, -β)
+    Sd = omega_max * (a * k_halfsat / y_mean) * (1.0 / (2.0 * a - 1.0)) \
+         * float(hyp2f1(1.0, 2.0 * a - 1.0, 2.0 * a, -beta))
 
     # ═══════════════════════════════════════════════════════════════════
     # STEP 4: Compute post-damage Gini coefficient
