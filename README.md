@@ -83,11 +83,12 @@ where:
 **Analytical Solution for Aggregate Damage:**
 The aggregate damage (fraction of total production lost) is computed analytically:
 ```
+b = y_damage_halfsat · a / (ȳ · (a-1))
 Ω = (1/ȳ) · ∫₀¹ ω(y(F)) · y(F) · dF
-  = ω_max · (y_damage_halfsat/ȳ) · ₂F₁(1, a, a+1, -β)
+  = ω_max · (y_damage_halfsat/ȳ) · ₂F₁(1, a, a+1, -b)
 ```
 where:
-- `β = y_damage_halfsat · a / (ȳ · (a-1))` is a dimensionless damage concentration parameter
+- `b` is a dimensionless damage concentration parameter
 - `₂F₁` is the Gauss hypergeometric function
 
 **Post-Damage Inequality (Gini Effect):**
@@ -553,8 +554,9 @@ The file `unit_test_eq1.2.py` validates the analytical solution for aggregate cl
 
 The analytical solution uses hypergeometric functions to compute:
 ```
-Ω = ω_max · (y_damage_halfsat/ȳ) · ₂F₁(1, a, a+1, -β)
+Ω = ω_max · (y_damage_halfsat/ȳ) · ₂F₁(1, a, a+1, -b)
 ```
+where `b = y_damage_halfsat · a / (ȳ · (a-1))`
 
 This is compared against high-precision numerical integration of the original integral:
 ```
