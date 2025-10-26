@@ -114,7 +114,7 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     Examples
     --------
     Uniform damage (very high k_damage_halfsat):
-    >>> params = {'k_damage_coeff': 0.02, 'k_damage_exp': 2.0,
+    >>> params = {'psi1': 0.0, 'psi2': 0.02,
     ...           'k_damage_halfsat': 1e12}
     >>> Omega, G_climate = calculate_climate_damage_and_gini_effect(
     ...     delta_T=2.0, Gini_current=0.4, y_mean=50000, params=params)

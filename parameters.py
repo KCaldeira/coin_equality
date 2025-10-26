@@ -183,10 +183,10 @@ class ScalarParameters:
         Capital depreciation rate (yr^-1)
     s : float
         Savings rate (fraction of net production)
-    k_damage_coeff : float
-        Climate damage coefficient (°C^-k_damage_exp)
-    k_damage_exp : float
-        Climate damage exponent
+    psi1 : float
+        Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]
+    psi2 : float
+        Quadratic climate damage coefficient (°C⁻²) [Barrage & Nordhaus 2023]
     k_damage_halfsat : float
         Income half-saturation for climate damage ($)
         (income level at which damage is 50% of maximum; lower = more regressive)
@@ -210,8 +210,8 @@ class ScalarParameters:
     alpha: float
     delta: float
     s: float
-    k_damage_coeff: float
-    k_damage_exp: float
+    psi1: float
+    psi2: float
     k_damage_halfsat: float
     k_climate: float
     eta: float
@@ -402,7 +402,7 @@ def evaluate_params_at_time(t, config):
     dict
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
-        'alpha', 'delta', 's', 'k_damage_coeff', 'k_damage_exp', 'k_climate',
+        'alpha', 'delta', 's', 'psi1', 'psi2', 'k_climate',
         'eta', 'rho', 'Gini_initial', 'Gini_fract', 'Gini_restore', 'delta_L', 'theta2',
         'A', 'L', 'sigma', 'theta1', 'f'
     """
@@ -414,8 +414,8 @@ def evaluate_params_at_time(t, config):
         'alpha': sp.alpha,
         'delta': sp.delta,
         's': sp.s,
-        'k_damage_coeff': sp.k_damage_coeff,
-        'k_damage_exp': sp.k_damage_exp,
+        'psi1': sp.psi1,
+        'psi2': sp.psi2,
         'k_damage_halfsat': sp.k_damage_halfsat,
         'k_climate': sp.k_climate,
         'eta': sp.eta,

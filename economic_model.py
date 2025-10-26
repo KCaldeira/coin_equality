@@ -28,8 +28,8 @@ def calculate_tendencies(state, params):
         - 'alpha': Output elasticity of capital
         - 'delta': Capital depreciation rate (yr^-1)
         - 's': Savings rate
-        - 'k_damage_coeff': Climate damage coefficient (°C^-k_damage_exp)
-        - 'k_damage_exp': Climate damage exponent
+        - 'psi1': Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]
+        - 'psi2': Quadratic climate damage coefficient (°C⁻²) [Barrage & Nordhaus 2023]
         - 'k_damage_halfsat': Income half-saturation for climate damage ($)
         - 'k_climate': Temperature sensitivity (°C tCO2^-1)
         - 'eta': Coefficient of relative risk aversion
