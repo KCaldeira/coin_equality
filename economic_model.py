@@ -30,7 +30,7 @@ def calculate_tendencies(state, params):
         - 's': Savings rate
         - 'psi1': Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]
         - 'psi2': Quadratic climate damage coefficient (°C⁻²) [Barrage & Nordhaus 2023]
-        - 'k_damage_halfsat': Income half-saturation for climate damage ($)
+        - 'y_damage_halfsat': Income half-saturation for climate damage ($)
         - 'k_climate': Temperature sensitivity (°C tCO2^-1)
         - 'eta': Coefficient of relative risk aversion
         - 'A': Total factor productivity (current)

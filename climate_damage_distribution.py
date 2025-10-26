@@ -14,7 +14,7 @@ this module computes:
 2. Post-damage Gini G_climate: inequality after climate damage is applied
 
 The damage function uses a half-saturation (Michaelis-Menten) model:
-    ω(y) = ω_max · k_halfsat / (k_halfsat + y)
+    ω(y) = ω_max · y_damage_halfsat / (y_damage_halfsat + y)
 
 where lower-income individuals (smaller y) experience higher fractional losses.
 
@@ -58,7 +58,7 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
         Must include:
         - 'psi1': linear damage coefficient (°C⁻¹)
         - 'psi2': quadratic damage coefficient (°C⁻²)
-        - 'k_damage_halfsat': income half-saturation constant ($)
+        - 'y_damage_halfsat': income half-saturation constant ($)
           (income level at which damage is 50% of maximum)
     n_bins : int, optional
         Number of population bins for discretization (default: 1000)
@@ -70,26 +70,26 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
         (0 ≤ Omega < 1)
     Gini_climate : float
         Gini index of income distribution after climate damage is applied
-        (typically Gini_climate > Gini_current for finite k_damage_halfsat)
+        (typically Gini_climate > Gini_current for finite y_damage_halfsat)
 
     Notes
     -----
     **Damage Function (Half-Saturation Model):**
         ω_max(ΔT) = psi1 · ΔT + psi2 · ΔT²  [Barrage & Nordhaus 2023]
-        ω(y, ΔT) = ω_max · k_halfsat / (k_halfsat + y)
-                 = ω_max · (1 - y / (k_halfsat + y))
+        ω(y, ΔT) = ω_max · y_damage_halfsat / (y_damage_halfsat + y)
+                 = ω_max · (1 - y / (y_damage_halfsat + y))
 
     where:
     - At income y = 0: ω = ω_max (maximum damage for poorest)
-    - At income y = k_damage_halfsat: ω = ω_max/2 (half of maximum damage)
+    - At income y = y_damage_halfsat: ω = ω_max/2 (half of maximum damage)
     - As income y → ∞: ω → 0 (damage approaches zero for wealthy)
 
     **Analytical Solution for Aggregate Damage:**
     For Pareto income distribution y(F) = ȳ · (1 - 1/a) · (1-F)^(-1/a), the
     aggregate damage is computed analytically as:
 
-        β = k_halfsat · a / (ȳ · (a-1))
-        Ω = ω_max · (k_halfsat / ȳ) · ₂F₁(1, a, a+1, -β)
+        b = y_damage_halfsat · a / (ȳ · (a-1))
+        Ω = ω_max · (y_damage_halfsat / ȳ) · ₂F₁(1, a, a+1, -b)
 
     where ₂F₁ is the Gauss hypergeometric function. This closed-form solution
     replaces numerical integration and is exact (within numerical precision).
@@ -100,8 +100,8 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     distribution. See calculate_climate_damage_gini_effect() for details.
 
     **Special cases:**
-    - k_damage_halfsat → ∞: β → 0, ₂F₁(1,a,a+1,0) = 1, uniform damage
-    - k_damage_halfsat → 0: β → ∞, maximum regressive damage
+    - y_damage_halfsat → ∞: β → 0, ₂F₁(1,a,a+1,0) = 1, uniform damage
+    - y_damage_halfsat → 0: β → ∞, maximum regressive damage
     - ΔT = 0: ω_max = 0, no damage, Omega = 0, Gini_climate = Gini_current
     - a → ∞: Gini → 0 (perfect equality), damage becomes uniform
 
@@ -113,15 +113,15 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
 
     Examples
     --------
-    Uniform damage (very high k_damage_halfsat):
+    Uniform damage (very high y_damage_halfsat):
     >>> params = {'psi1': 0.0, 'psi2': 0.02,
-    ...           'k_damage_halfsat': 1e12}
+    ...           'y_damage_halfsat': 1e12}
     >>> Omega, G_climate = calculate_climate_damage_and_gini_effect(
     ...     delta_T=2.0, Gini_current=0.4, y_mean=50000, params=params)
     >>> # Omega ≈ 0.08, G_climate ≈ 0.4 (approximately uniform)
 
     Income-dependent damage:
-    >>> params['k_damage_halfsat'] = 10000
+    >>> params['y_damage_halfsat'] = 10000
     >>> Omega, G_climate = calculate_climate_damage_and_gini_effect(
     ...     delta_T=2.0, Gini_current=0.4, y_mean=50000, params=params)
     >>> # Omega > 0.08, G_climate > 0.4 (inequality increases)
@@ -140,7 +140,7 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     # Extract parameters
     psi1 = params['psi1']
     psi2 = params['psi2']
-    k_halfsat = params['k_damage_halfsat']
+    y_damage_halfsat = params['y_damage_halfsat']
 
     # Maximum damage fraction (temperature-dependent component)
     # Barrage & Nordhaus (2023) quadratic damage function:
@@ -148,8 +148,8 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     omega_max = psi1 * delta_T + psi2 * (delta_T ** 2)
 
     # Special case: very high halfsat means approximately uniform damage
-    # When k_halfsat >> income, ω(y) ≈ ω_max for all y
-    if k_halfsat > 1e10:
+    # When y_damage_halfsat >> income, ω(y) ≈ ω_max for all y
+    if y_damage_halfsat > 1e10:
         # Nearly uniform damage: all income levels experience ~ω_max
         Omega_uniform = omega_max
         return Omega_uniform, Gini_current
@@ -168,25 +168,26 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     #   Ω = ∫ ω(y(F)) · y(F) · dF / ∫ y(F) · dF
     #
     # For Pareto distribution y(F) = ȳ·(1-1/a)·(1-F)^(-1/a) and
-    # damage function ω(y) = ω_max · k/(k+y), this integral has the
+    # damage function ω(y) = ω_max · y_damage_halfsat/(y_damage_halfsat+y), this integral has the
     # closed-form solution:
     #
-    #   Ω = ω_max · (k/ȳ) · ₂F₁(1, a, a+1, -β)
+    #   Ω = ω_max · (y_damage_halfsat/ȳ) · ₂F₁(1, a, a+1, -b)
     #
-    # where β = k·a/(ȳ·(a-1)) is a dimensionless parameter and
+    # where b = y_damage_halfsat·a/(ȳ·(a-1)) is a dimensionless parameter and
     # ₂F₁ is the Gauss hypergeometric function.
     #
     # Derivation: The integral reduces to a beta function integral that
     # can be expressed in terms of ₂F₁. This avoids numerical integration.
     # ═══════════════════════════════════════════════════════════════════
 
-    # Dimensionless parameter β controlling damage distribution
-    # β large → damage concentrated on poor; β small → more uniform
-    beta = k_halfsat * a / (y_mean * (a - 1.0))
+    # Dimensionless parameter b controlling damage distribution
+    # b large → damage concentrated on poor; b small → more uniform
+    b = (a * y_damage_halfsat) / ((a - 1.0) * y_mean)
 
     # Aggregate damage via hypergeometric function
-    # ₂F₁(1, a, a+1, -β) evaluated using mpmath for high precision
-    Omega = omega_max * (k_halfsat / y_mean) * float(hyp2f1(1, a, a + 1, -beta))
+    # Original (tested) formula: ₂F₁(1, a, a+1, -b)
+    # This matches numerical integration to high precision
+    Omega = omega_max * (y_damage_halfsat / y_mean) * float(hyp2f1(1, a, a + 1, -b))
 
     # ═══════════════════════════════════════════════════════════════════
     # ANALYTICAL SOLUTION FOR POST-DAMAGE GINI
@@ -204,15 +205,15 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     # ═══════════════════════════════════════════════════════════════════
 
     Gini_climate = calculate_climate_damage_gini_effect(
-        a,           # Pareto parameter (a > 1)
-        k_halfsat,   # Half-saturation income level ($)
-        y_mean,      # Mean income before damage ($)
-        omega_max    # Maximum damage fraction (0 ≤ ω_max < 1)
+        a,                  # Pareto parameter (a > 1)
+        y_damage_halfsat,   # Half-saturation income level ($)
+        y_mean,             # Mean income before damage ($)
+        omega_max           # Maximum damage fraction (0 ≤ ω_max < 1)
     )
 
     return float(Omega), float(Gini_climate)
 
-def calculate_climate_damage_gini_effect(a, k_halfsat, y_mean, omega_max):
+def calculate_climate_damage_gini_effect(a, y_damage_halfsat, y_mean, omega_max):
     """
     Compute post-damage Gini index using analytical solution.
 
@@ -224,8 +225,8 @@ def calculate_climate_damage_gini_effect(a, k_halfsat, y_mean, omega_max):
     ----------
     a : float
         Pareto parameter (a > 1). Related to pre-damage Gini by G₀ = 1/(2a-1).
-    k_halfsat : float
-        Income half-saturation for climate damage ($, k ≥ 0).
+    y_damage_halfsat : float
+        Income half-saturation for climate damage ($, y_damage_halfsat ≥ 0).
     y_mean : float
         Mean income before climate damage ($, y > 0).
     omega_max : float
@@ -241,33 +242,33 @@ def calculate_climate_damage_gini_effect(a, k_halfsat, y_mean, omega_max):
     **Mathematical Framework:**
 
     For a Pareto distribution with Lorenz curve L(F) = 1 - (1-F)^(1-1/a),
-    applying damage ω(y) = ω_max · k/(k+y) creates a new distribution:
+    applying damage ω(y) = ω_max · y_damage_halfsat/(y_damage_halfsat+y) creates a new distribution:
 
         y_damaged(F) = [1 - ω(y(F))] · y(F)
 
     The Gini index of this damaged distribution is computed using:
 
     **Key Quantities:**
-        S₀ = (a-1)/(2a-1)        - Integral of undamaged Lorenz curve
-        G₀ = 1/(2a-1)            - Undamaged Gini coefficient
-        β  = k·a/(ȳ·(a-1))       - Dimensionless damage parameter
+        S₀ = (a-1)/(2a-1)                            - Integral of undamaged Lorenz curve
+        G₀ = 1/(2a-1)                                - Undamaged Gini coefficient
+        β  = y_damage_halfsat·a/(ȳ·(a-1))           - Dimensionless damage parameter
 
-    **Damage Integrals (via hypergeometric functions):**
-        D  = ω · (k/ȳ) · ₂F₁(1, a, a+1, -β)                     - Aggregate damage fraction
-        Sᵈ = ω · (a·k/ȳ) · (1/(2a-1)) · ₂F₁(1, 2a-1, 2a, -β)   - Damage-weighted Lorenz integral
+    **Hypergeometric Functions:**
+        Φ = ₂F₁(a-1, 1, a, -b)      - Mean damage factor
+        H = ₂F₁(1, 2a-1, 2a, -b)    - Gini adjustment factor
+
+    where b = y_damage_halfsat·a/(ȳ·(a-1))
 
     **Post-Damage Gini:**
-        G_new = 1 - 2·(S₀ - Sᵈ)/(1 - D)
-
-    The change in Gini is:
-        ΔG = G_new - G₀ = 2·(Sᵈ - S₀·D)/(1 - D)
+        ω_mean = ω_max · Φ                                           - Mean damage
+        G_new = 1 - (1 - G₀) · (1 - ω_max · H) / (1 - ω_mean)
 
     This formula captures two effects:
-    1. Total income reduction (denominator: 1-D)
-    2. Regressive damage distribution (numerator: Sᵈ ≠ S₀·D when β > 0)
+    1. Total income reduction (via ω_mean in denominator)
+    2. Regressive damage distribution (via H term in numerator)
 
     **Physical Interpretation:**
-    - When β → 0 (k_halfsat → ∞): uniform damage, Sᵈ = S₀·D, so ΔG = 0
+    - When β → 0 (y_damage_halfsat → ∞): uniform damage, Sᵈ = S₀·D, so ΔG = 0
     - When β > 0: poor suffer more, Sᵈ < S₀·D, so ΔG > 0 (inequality increases)
     - Larger β → more regressive damage → larger increase in Gini
 
@@ -279,8 +280,8 @@ def calculate_climate_damage_gini_effect(a, k_halfsat, y_mean, omega_max):
     # Validate inputs
     if a <= 1:
         raise ValueError("a must be > 1 (ensures finite Pareto Gini and damage term).")
-    if y_mean <= 0 or k_halfsat < 0:
-        raise ValueError("Require y_mean > 0 and k_halfsat >= 0.")
+    if y_mean <= 0 or y_damage_halfsat < 0:
+        raise ValueError("Require y_mean > 0 and y_damage_halfsat >= 0.")
 
     # ═══════════════════════════════════════════════════════════════════
     # STEP 1: Compute baseline Lorenz curve properties
@@ -295,47 +296,40 @@ def calculate_climate_damage_gini_effect(a, k_halfsat, y_mean, omega_max):
     # (Not used in final calculation but shown for completeness)
 
     # ═══════════════════════════════════════════════════════════════════
-    # STEP 2: Compute dimensionless damage parameter β
+    # STEP 2: Compute dimensionless damage parameter b
     # ═══════════════════════════════════════════════════════════════════
 
-    # β = k·a/(ȳ·(a-1)) controls the regressivity of climate damage
-    # - β → 0: damage becomes uniform (k_halfsat → ∞)
-    # - β → ∞: damage highly concentrated on poor (k_halfsat → 0)
-    beta = k_halfsat * a / (y_mean * (a - 1.0))
+    # b = y_damage_halfsat·a/(ȳ·(a-1)) controls the regressivity of climate damage
+    # - b → 0: damage becomes uniform (y_damage_halfsat → ∞)
+    # - b → ∞: damage highly concentrated on poor (y_damage_halfsat → 0)
+    b = (a * y_damage_halfsat) / ((a - 1.0) * y_mean)
 
     # ═══════════════════════════════════════════════════════════════════
-    # STEP 3: Compute damage integrals using hypergeometric functions
+    # STEP 3: Compute hypergeometric functions for damage and Gini
     # ═══════════════════════════════════════════════════════════════════
 
-    # D = ∫₀¹ ω(y(F)) · y(F) dF / ∫₀¹ y(F) dF
-    # This is the aggregate damage fraction (same as Omega from main function)
-    # Analytical form: D = ω · (k/ȳ) · ₂F₁(1, a, a+1, -β)
-    D = omega_max * (k_halfsat / y_mean) * float(hyp2f1(1.0, a, a + 1.0, -beta))
-
-    # Sᵈ = ∫₀¹ L_damaged(F) dF where L_damaged is the Lorenz curve of
-    # the damaged income distribution
-    # Analytical form: Sᵈ = ω · (a·k/ȳ) · (1/(2a-1)) · ₂F₁(1, 2a-1, 2a, -β)
-    Sd = omega_max * (a * k_halfsat / y_mean) * (1.0 / (2.0 * a - 1.0)) \
-         * float(hyp2f1(1.0, 2.0 * a - 1.0, 2.0 * a, -beta))
+    # Phi = ₂F₁(a-1, 1, a, -b) gives mean damage factor
+    # H = ₂F₁(1, 2a-1, 2a, -b) gives Gini adjustment factor
+    Phi = float(hyp2f1(a - 1.0, 1.0, a, -b))
+    H = float(hyp2f1(1.0, 2.0 * a - 1.0, 2.0 * a, -b))
 
     # ═══════════════════════════════════════════════════════════════════
     # STEP 4: Compute post-damage Gini coefficient
     # ═══════════════════════════════════════════════════════════════════
 
-    # The Gini coefficient of the damaged distribution is:
-    # G_new = 1 - 2·∫₀¹ L_damaged(F) dF
-    #
-    # The damaged Lorenz curve integral scales as:
-    # ∫ L_damaged dF = (S₀ - Sᵈ)/(1 - D)
-    #
-    # Therefore:
-    # G_new = 1 - 2·(S₀ - Sᵈ)/(1 - D)
-    #
-    # This can also be written as:
-    # G_new = G₀ + ΔG where ΔG = 2·(Sᵈ - S₀·D)/(1 - D)
-    #
-    # When damage is uniform (β=0): Sᵈ = S₀·D, so ΔG = 0 (Gini unchanged)
-    # When damage is regressive (β>0): Sᵈ < S₀·D, so ΔG > 0 (Gini increases)
-    G_new = 1.0 - 2.0 * (S0 - Sd) / (1.0 - D)
+    # Mean damage across the income distribution
+    omega_mean = omega_max * Phi
+
+    # Denominator accounts for mean income reduction
+    denom = 1.0 - omega_mean
+
+    # Baseline (pre-damage) Gini
+    G0 = 1.0 / (2.0 * a - 1.0)
+
+    # Post-damage Gini coefficient
+    # This formula accounts for both:
+    # 1. The inequality in damage distribution (via H term)
+    # 2. The reduction in mean income (via denom term)
+    G_new = 1.0 - (1.0 - G0) * (1.0 - omega_max * H) / denom
 
     return float(G_new)
