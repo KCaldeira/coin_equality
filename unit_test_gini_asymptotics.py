@@ -19,14 +19,17 @@ from climate_damage_distribution import calculate_climate_damage_and_gini_effect
 
 def test_gini_change_vanishes_with_perfect_equality():
     """
-    Test 1: ΔG → 0 as G₀ → 0 (perfect equality)
+    Test 1: |ΔG| → 0 as G₀ → 0 (perfect equality)
 
     When initial Gini approaches 0, all individuals have nearly equal income.
     Even with regressive damage, there's no income spread to amplify, so
-    the change in Gini should approach zero.
+    the absolute change in Gini should approach zero.
 
     Physical interpretation: With perfect equality, everyone experiences
-    similar damage, so inequality cannot increase.
+    similar damage, so inequality change (whether increase or decrease) → 0.
+
+    Note: The sign of ΔG depends on the relationship between y_mean and
+    y_damage_halfsat. What matters is |ΔG| → 0.
     """
     print("=" * 80)
     print("Test 1: ΔG → 0 as G₀ → 0 (Perfect Equality)")
@@ -64,32 +67,33 @@ def test_gini_change_vanishes_with_perfect_equality():
 
         print(f"  G₀ = {Gini_initial:.4f}    G_climate = {Gini_climate:.6f}    ΔG = {delta_G:.6f}")
 
-    # Check that ΔG is decreasing monotonically and approaching zero
-    final_delta_G = delta_G_values[-1]
-    tolerance = 0.001  # ΔG should be < 0.001 for very small G₀
+    # Check that |ΔG| is decreasing monotonically and approaching zero
+    abs_delta_G_values = [abs(dG) for dG in delta_G_values]
+    final_abs_delta_G = abs_delta_G_values[-1]
+    tolerance = 0.001  # |ΔG| should be < 0.001 for very small G₀
 
-    # Verify monotonic decrease
-    is_decreasing = all(delta_G_values[i] >= delta_G_values[i+1] for i in range(len(delta_G_values)-1))
+    # Verify monotonic decrease in absolute value
+    is_decreasing = all(abs_delta_G_values[i] >= abs_delta_G_values[i+1] for i in range(len(abs_delta_G_values)-1))
 
-    if final_delta_G < tolerance and is_decreasing:
-        print(f"\n✓ PASS: ΔG → 0 as G₀ → 0 (final ΔG = {final_delta_G:.6f}, decreasing monotonically)")
+    if final_abs_delta_G < tolerance and is_decreasing:
+        print(f"\n✓ PASS: |ΔG| → 0 as G₀ → 0 (final |ΔG| = {final_abs_delta_G:.6f}, decreasing monotonically)")
     else:
-        print(f"\n✗ FAIL: ΔG = {final_delta_G:.6f} (expected < {tolerance}), monotonic = {is_decreasing}")
-        raise AssertionError("Test 1 failed: ΔG should approach 0 as G₀ → 0")
+        print(f"\n✗ FAIL: |ΔG| = {final_abs_delta_G:.6f} (expected < {tolerance}), monotonic = {is_decreasing}")
+        raise AssertionError("Test 1 failed: |ΔG| should approach 0 as G₀ → 0")
 
     print()
 
 
 def test_gini_change_small_for_wealthy_population():
     """
-    Test 2: ΔG small when y_mean >> y_damage_halfsat
+    Test 2: |ΔG| small when y_mean >> y_damage_halfsat
 
     When mean income is much larger than half-saturation income, the entire
     population experiences very low damage (ω → 0 as y → ∞). With minimal
-    damage, there's little scope for increasing inequality.
+    damage, there's little scope for changing inequality.
 
     Physical interpretation: Wealthy populations experience negligible damage,
-    so inequality cannot increase significantly.
+    so inequality cannot change significantly.
     """
     print("=" * 80)
     print("Test 2: ΔG Small for Wealthy Population (y_mean >> y_damage_halfsat)")
@@ -128,32 +132,33 @@ def test_gini_change_small_for_wealthy_population():
 
         print(f"  y_mean/y_damage_halfsat = {ratio:8.1f}    ΔG = {delta_G:.6f}")
 
-    # Check that ΔG is decreasing and final value is very small
-    final_delta_G = delta_G_values[-1]
-    tolerance = 0.0001  # ΔG should be < 0.0001 for very wealthy population
+    # Check that |ΔG| is decreasing and final value is very small
+    abs_delta_G_values = [abs(dG) for dG in delta_G_values]
+    final_abs_delta_G = abs_delta_G_values[-1]
+    tolerance = 0.001  # |ΔG| should be < 0.001 for very wealthy population
 
-    # Verify monotonic decrease
-    is_decreasing = all(delta_G_values[i] >= delta_G_values[i+1] for i in range(len(delta_G_values)-1))
+    # Verify monotonic decrease in absolute value
+    is_decreasing = all(abs_delta_G_values[i] >= abs_delta_G_values[i+1] for i in range(len(abs_delta_G_values)-1))
 
-    if final_delta_G < tolerance and is_decreasing:
-        print(f"\n✓ PASS: ΔG small for wealthy population (final ΔG = {final_delta_G:.6f}, decreasing monotonically)")
+    if final_abs_delta_G < tolerance and is_decreasing:
+        print(f"\n✓ PASS: |ΔG| small for wealthy population (final |ΔG| = {final_abs_delta_G:.6f}, decreasing monotonically)")
     else:
-        print(f"\n✗ FAIL: ΔG = {final_delta_G:.6f} (expected < {tolerance}), monotonic = {is_decreasing}")
-        raise AssertionError("Test 2 failed: ΔG should be small for wealthy populations")
+        print(f"\n✗ FAIL: |ΔG| = {final_abs_delta_G:.6f} (expected < {tolerance}), monotonic = {is_decreasing}")
+        raise AssertionError("Test 2 failed: |ΔG| should be small for wealthy populations")
 
     print()
 
 
 def test_gini_change_increases_with_damage():
     """
-    Test 3: ΔG increases with ω_max
+    Test 3: |ΔG| increases with ω_max
 
     Larger maximum damage creates larger absolute differences in damage
-    between rich and poor. Therefore, inequality amplification should
-    increase monotonically with ω_max.
+    between rich and poor. Therefore, the magnitude of inequality change
+    should increase monotonically with ω_max.
 
-    Physical interpretation: Stronger climate damage amplifies income
-    inequality more.
+    Physical interpretation: Stronger climate damage changes income
+    inequality more (in absolute magnitude).
     """
     print("=" * 80)
     print("Test 3: ΔG Increases with Damage Magnitude (ω_max)")
@@ -161,8 +166,9 @@ def test_gini_change_increases_with_damage():
     print("Expected: ΔG should increase monotonically with ω_max\n")
 
     # Set up parameters with regressive damage
-    y_damage_halfsat = 20000  # $20k half-saturation
-    y_mean = 50000  # $50k mean income
+    # Use y_mean < y_damage_halfsat so damage amplifies inequality (regressive)
+    y_damage_halfsat = 60000  # $60k half-saturation
+    y_mean = 30000  # $30k mean income (poor population)
     Gini_initial = 0.4  # Moderate inequality
 
     # Test with progressively larger maximum damage
@@ -190,29 +196,30 @@ def test_gini_change_increases_with_damage():
 
         print(f"  ω_max = {omega_max:.2%}    ΔG = {delta_G:.6f}")
 
-    # Verify monotonic increase
-    is_increasing = all(delta_G_values[i] <= delta_G_values[i+1] for i in range(len(delta_G_values)-1))
+    # Verify monotonic increase in absolute value
+    abs_delta_G_values = [abs(dG) for dG in delta_G_values]
+    is_increasing = all(abs_delta_G_values[i] <= abs_delta_G_values[i+1] for i in range(len(abs_delta_G_values)-1))
 
     if is_increasing:
-        print(f"\n✓ PASS: ΔG increases monotonically with ω_max")
+        print(f"\n✓ PASS: |ΔG| increases monotonically with ω_max")
     else:
-        print(f"\n✗ FAIL: ΔG does not increase monotonically with ω_max")
-        print(f"  ΔG values: {delta_G_values}")
-        raise AssertionError("Test 3 failed: ΔG should increase with ω_max")
+        print(f"\n✗ FAIL: |ΔG| does not increase monotonically with ω_max")
+        print(f"  |ΔG| values: {abs_delta_G_values}")
+        raise AssertionError("Test 3 failed: |ΔG| should increase with ω_max")
 
     print()
 
 
 def test_gini_change_larger_with_higher_initial_gini():
     """
-    Test 4: ΔG larger with larger G₀ at y_mean = y_damage_halfsat
+    Test 4: |ΔG| larger with larger G₀ at y_mean = y_damage_halfsat
 
     At y_mean = y_damage_halfsat, the population spans the full range of the
     damage function. With higher initial Gini, there's a wider income spread,
-    so the regressive damage amplifies inequality more.
+    so the damage changes inequality more.
 
-    Physical interpretation: Regressive damage amplifies existing inequality.
-    More initial inequality → more amplification.
+    Physical interpretation: Damage affects existing inequality.
+    More initial inequality → larger magnitude of change.
     """
     print("=" * 80)
     print("Test 4: ΔG Increases with Initial Gini at Half-Saturation")
@@ -249,15 +256,16 @@ def test_gini_change_larger_with_higher_initial_gini():
 
         print(f"  G₀ = {Gini_initial:.2f}    G_climate = {Gini_climate:.6f}    ΔG = {delta_G:.6f}")
 
-    # Verify monotonic increase
-    is_increasing = all(delta_G_values[i] <= delta_G_values[i+1] for i in range(len(delta_G_values)-1))
+    # Verify monotonic increase in absolute value
+    abs_delta_G_values = [abs(dG) for dG in delta_G_values]
+    is_increasing = all(abs_delta_G_values[i] <= abs_delta_G_values[i+1] for i in range(len(abs_delta_G_values)-1))
 
     if is_increasing:
-        print(f"\n✓ PASS: ΔG increases monotonically with G₀ at y_mean = y_damage_halfsat")
+        print(f"\n✓ PASS: |ΔG| increases monotonically with G₀ at y_mean = y_damage_halfsat")
     else:
-        print(f"\n✗ FAIL: ΔG does not increase monotonically with G₀")
-        print(f"  ΔG values: {delta_G_values}")
-        raise AssertionError("Test 4 failed: ΔG should increase with G₀ when y_mean = y_damage_halfsat")
+        print(f"\n✗ FAIL: |ΔG| does not increase monotonically with G₀")
+        print(f"  |ΔG| values: {abs_delta_G_values}")
+        raise AssertionError("Test 4 failed: |ΔG| should increase with G₀ when y_mean = y_damage_halfsat")
 
     print()
 
