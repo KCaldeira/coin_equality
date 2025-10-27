@@ -138,7 +138,7 @@ This is the total amount society allocates to emissions abatement, where:
 The fraction of potential emissions that are abated, where:
 - `E_pot(t) = σ(t) · Y_gross(t)` = potential (unabated) emissions
 - `θ₁(t)` = marginal cost of abatement as μ→1 ($ tCO₂⁻¹)
-- `θ₂` = abatement cost exponent
+- `θ₂` = abatement cost exponent (θ₂=2 gives quadratic cost function)
 
 This formulation differs from Nordhaus in that reducing carbon intensity σ(t) reduces the cost of abating remaining emissions, since there are fewer emissions to abate.
 
@@ -397,7 +397,7 @@ Economic parameters:
 | `δ` | Capital depreciation rate | yr⁻¹ | `delta` |
 | `s` | Savings rate (fraction of net production saved) | - | `s` |
 
-Climate parameters:
+Climate and abatement parameters:
 
 | Parameter | Description | Units | JSON Key |
 |-----------|-------------|-------|----------|
@@ -405,6 +405,7 @@ Climate parameters:
 | `psi2` | Quadratic climate damage coefficient [Barrage & Nordhaus 2023] | °C⁻² | `psi2` |
 | `y_damage_halfsat` | Income half-saturation for climate damage (lower = more regressive) | $ | `y_damage_halfsat` |
 | `k_climate` | Temperature sensitivity to cumulative emissions | °C tCO₂⁻¹ | `k_climate` |
+| `θ₂` | Abatement cost exponent (controls cost curve shape) | - | `theta2` |
 
 Utility and inequality parameters:
 
@@ -416,12 +417,6 @@ Utility and inequality parameters:
 | `Gini_fract` | Fraction of effective Gini change as instantaneous step (0 = no step, 1 = full step) | - | `Gini_fract` |
 | `Gini_restore` | Rate at which Gini restores to initial value (0 = no restoration) | yr⁻¹ | `Gini_restore` |
 | `ΔL` | Fraction of income available for redistribution (<1: active redistribution; >=1: redistribution disabled, pure abatement mode) | - | `deltaL` |
-
-Abatement cost parameters:
-
-| Parameter | Description | Units | JSON Key |
-|-----------|-------------|-------|----------|
-| `θ₂` | Abatement cost exponent | - | `theta2` |
 
 ### Time-Dependent Functions
 
@@ -553,7 +548,6 @@ Each JSON configuration file must contain:
    - Climate: `psi1`, `psi2`, `y_damage_halfsat`, `k_climate`
    - Utility: `eta`, `rho`
    - Distribution: `Gini_initial`, `Gini_fract`, `Gini_restore`, `deltaL`
-   - Abatement: `theta2`
 
 4. **`time_functions`** - Time-dependent functions (A, L, sigma, theta1), each specified with:
    - `type`: One of six available function types (see details below)

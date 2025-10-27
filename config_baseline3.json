@@ -29,8 +29,10 @@
     "_Gini_restore": "Rate at which Gini restores to initial value (yr^-1, 0=no restoration, positive=restoration to Gini_initial)",
     "deltaL": 0.02,
     "_deltaL": "Fraction of income available for redistribution (5%)",
+    "theta1": 1000.0,
+    "_theta1": "Abatement cost coefficient ($ tCO2^-1)",
     "theta2": 2.0,
-    "_theta2": "Abatement cost exponent (quadratic)"
+    "_theta2": "Abatement cost exponent"
   },
 
   "time_functions": {
@@ -40,30 +42,30 @@
       "type": "exponential_growth",
       "initial_value": 454.174,
       "growth_rate": 0.01,
-      "_growth_rate": "TFP consistent with steady state at s = 0.3, alpha = 0.3, delta = 0.1 and L = 10e9; 1% annual TFP growth"
+      "_growth_rate": "TFP consistent with steady state at s = 0.3, alpha = 0.3, delta = 0.1 and L = 10e9; 1% annual TFP growth",
     },
     "L": {
       "_description": "Population",
       "type": "exponential_growth",
       "initial_value": 10e9,
       "growth_rate": 0.01,
-      "_growth_rate": "1% annual population growth"
+      "_growth_rate": "1% annual population growth",
     },
     "sigma": {
       "_description": "Carbon intensity of GDP",
       "type": "exponential_growth",
       "initial_value": 0.0005,
       "growth_rate": -0.02,
-      "_growth_rate": "Declining at 2% per year (decarbonization)"
+      "_growth_rate": "Declining at 2% per year (decarbonization)",
     },
     "theta1": {
       "_description": "Abatement cost per ton of CO2 for the last ton abated ($/tCO2)",
       "type": "exponential_growth",
       "initial_value": 1000,
       "growth_rate": -0.02,
-      "_growth_rate": "Assume 5% of global GDP to abate all emissions. Declining at 1% per year (technological progress)"
-    }
-  },
+      "_growth_rate": "Assume 5% of global GDP to abate all emissions. Declining at 1% per year (technological progress)",
+    },
+  }
 
   "integration_parameters": {
     "_description": "Time integration settings",
@@ -76,15 +78,15 @@
     "atol": 1e-9,
     "_tolerances": "Reserved for future adaptive solvers",
     "plot_short_horizon": 100.0,
-    "_plot_short_horizon": "Time horizon (years) for short-term detailed plots. Creates second PDF book with results from t_start to this time."
-  },
+    "_plot_short_horizon": "Time horizon (years) for short-term detailed plots. Creates second PDF book with results from t_start to this time.",
+  }
 
   "control_function": {
     "_description": "Allocation policy between abatement and redistribution (also used as initial guess for optimization)",
     "type": "constant",
     "value": 0.5,
-    "_value": "50% to abatement, 50% to redistribution; this value is used as initial guess for single-point optimization"
-  },
+    "_value": "50% to abatement, 50% to redistribution; this value is used as initial guess for single-point optimization",
+  }
 
   "optimization_parameters": {
     "_description": "Parameters for optimization runs",
@@ -99,6 +101,6 @@
     "_algorithm": "Options: LN_BOBYQA (local, smooth), GN_ISRES (global, stochastic, good for multi-modal), GN_DIRECT_L (global, deterministic), LN_COBYLA (local), LN_NELDERMEAD (local simplex)",
     "_stopping_criteria": "NLopt stopping criteria. For f ∈ [0,1], absolute tolerance makes more sense than relative.",
     "xtol_abs": 1e-10,
-    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |Δf| < 1e-10. Appropriate since f ∈ [0,1]."
-  }
+    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |Δf| < 1e-10. Appropriate since f ∈ [0,1].",
+  },
 }

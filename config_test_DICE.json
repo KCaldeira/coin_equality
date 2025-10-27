@@ -28,17 +28,24 @@
     "Gini_restore": 0.0,
     "_Gini_restore": "Rate at which Gini restores to initial value (yr^-1, 0=no restoration, positive=restoration to Gini_initial) 0.1 means 10% per year restoration rate",
     "deltaL": 1.0,
-    "_deltaL": "Income fraction available for redistribution, >= 1.0 disables redistribution and places no bounds on abatement"
+    "_deltaL": "Income fraction available for redistribution, >= 1.0 disables redistribution and places no bounds on abatement",
+    "theta1": 1000.0,
+    "_theta1": "Abatement cost coefficient ($ tCO2^-1)",
+    "theta2": 2.0,
+    "_theta2": "Abatement cost exponent"
   },
 
   "time_functions": {
     "_description": "Time-dependent exogenous functions",
     "A": {
       "_description": "Total factor productivity (TFP)",
-      "type": "exponential_growth",
+      "type": "gompertz_growth",
       "initial_value": 454.174,
-      "growth_rate": 0.01,
-      "_growth_rate": "TFP consistent with steady state at s = 0.3, alpha = 0.3, delta = 0.1 and L = 10e9; 1% annual TFP growth"
+      "_initial_value": "DICE is 5.84 with capital stock in trillions; pop in millions",
+      "final_value": 0.01,
+      "_final_value": "DICE is 38743.985 with capital stock in trillions; pop in millions",
+      "adjustment_coefficient": -0.0015,
+      "_adjustment_coefficient": "analytic representation of Barrage and Nordhaus 2023 TFP projection"
     },
     "L": {
       "_description": "Population",

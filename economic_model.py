@@ -89,6 +89,7 @@ def calculate_tendencies(state, params):
     L = params['L']
     sigma = params['sigma']
     theta1 = params['theta1']
+    theta2 = params['theta2']
     delta_L = params['delta_L']
     Gini_initial = params['Gini_initial']
     Gini_fract = params['Gini_fract']
@@ -142,7 +143,7 @@ def calculate_tendencies(state, params):
 
     # Eq 1.6: Abatement fraction
     if Epot > 0 and abatecost > 0:
-        mu = (abatecost * 2.0 / (Epot * theta1)) ** (1 / 2.0)
+        mu = (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2)
     else:
         mu = 0.0
 
