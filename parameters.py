@@ -117,6 +117,65 @@ def create_piecewise_linear(time_points, values):
     return lambda t: np.interp(t, time_points, values)
 
 
+def create_double_exponential_growth(initial_value, growth_rate_1, growth_rate_2, fract_1):
+    """
+    Create a double exponential growth function (Barrage & Nordhaus 2023).
+
+    Parameters
+    ----------
+    initial_value : float
+        Value at t=0
+    growth_rate_1 : float
+        First growth rate (yr^-1)
+    growth_rate_2 : float
+        Second growth rate (yr^-1)
+    fract_1 : float
+        Fraction assigned to first exponential (0 ≤ fract_1 ≤ 1)
+
+    Returns
+    -------
+    callable
+        Function f(t) = initial_value * (fract_1 * exp(growth_rate_1 * t) + (1 - fract_1) * exp(growth_rate_2 * t))
+
+    Examples
+    --------
+    Carbon intensity with two-phase decline:
+    >>> sigma = create_double_exponential_growth(0.5, -0.02, -0.005, 0.7)
+    """
+    return lambda t: initial_value * (fract_1 * np.exp(growth_rate_1 * t) + (1 - fract_1) * np.exp(growth_rate_2 * t))
+
+
+def create_gompertz_growth(initial_value, final_value, adjustment_coefficient):
+    """
+    Create a Gompertz growth function.
+
+    Parameters
+    ----------
+    initial_value : float
+        Value at t=0
+    final_value : float
+        Asymptotic limit as t → ∞ (for adjustment_coefficient < 0)
+    adjustment_coefficient : float
+        Growth rate parameter (yr^-1). Typically negative for growth from initial to final value.
+
+    Returns
+    -------
+    callable
+        Function L(t) = final_value * (initial_value / final_value) ** exp(adjustment_coefficient * t)
+
+    Notes
+    -----
+    At t=0: L(0) = initial_value
+    As t → ∞ (with adjustment_coefficient < 0): L(t) → final_value
+
+    Examples
+    --------
+    Population growing from 7B to 10B:
+    >>> L = create_gompertz_growth(7e9, 10e9, -0.02)
+    """
+    return lambda t: final_value * (initial_value / final_value) ** np.exp(adjustment_coefficient * t)
+
+
 # =============================================================================
 # Control Function Factories
 # =============================================================================
@@ -474,6 +533,19 @@ def _create_time_function(func_spec):
         return create_piecewise_linear(
             func_spec['time_points'],
             func_spec['values']
+        )
+    elif func_type == 'double_exponential_growth':
+        return create_double_exponential_growth(
+            func_spec['initial_value'],
+            func_spec['growth_rate_1'],
+            func_spec['growth_rate_2'],
+            func_spec['fract_1']
+        )
+    elif func_type == 'gompertz_growth':
+        return create_gompertz_growth(
+            func_spec['initial_value'],
+            func_spec['final_value'],
+            func_spec['adjustment_coefficient']
         )
 
 

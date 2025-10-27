@@ -379,7 +379,7 @@ These functions are evaluated at each time step:
 | `σ(t)` | Carbon intensity of GDP | tCO₂ $⁻¹ | `sigma` |
 | `θ₁(t)` | Marginal abatement cost as μ→1 | $ tCO₂⁻¹ | `theta1` |
 
-Each function is specified by `type` and type-specific parameters (e.g., `initial_value`, `growth_rate`).
+Each function is specified by `type` and type-specific parameters (e.g., `initial_value`, `growth_rate`). Six function types are available: `constant`, `exponential_growth`, `logistic_growth`, `piecewise_linear`, `double_exponential_growth` (Barrage & Nordhaus 2023), and `gompertz_growth` (Barrage & Nordhaus 2023). See the Configuration section below for detailed specifications.
 
 ### Control Variable
 
@@ -501,8 +501,45 @@ Each JSON configuration file must contain:
    - Abatement: `theta2`
 
 4. **`time_functions`** - Time-dependent functions (A, L, sigma, theta1), each specified with:
-   - `type`: "constant", "exponential_growth", "logistic_growth", or "piecewise_linear"
+   - `type`: One of six available function types (see details below)
    - Type-specific parameters (e.g., `initial_value`, `growth_rate`)
+
+   **Available Time Function Types:**
+
+   a. **`constant`** - Returns fixed value for all times
+      - Parameters: `value`
+      - Equation: `f(t) = value`
+
+   b. **`exponential_growth`** - Exponential growth or decay
+      - Parameters: `initial_value`, `growth_rate`
+      - Equation: `f(t) = initial_value · exp(growth_rate · t)`
+
+   c. **`logistic_growth`** - S-curve growth approaching asymptotic limit
+      - Parameters: `L0` (initial), `L_inf` (limit), `growth_rate`
+      - Equation: `f(t) = L_inf / (1 + ((L_inf/L0) - 1) · exp(-growth_rate · t))`
+
+   d. **`piecewise_linear`** - Linear interpolation between discrete points
+      - Parameters: `time_points` (array), `values` (array)
+      - Equation: Linear interpolation between (time_points, values)
+
+   e. **`double_exponential_growth`** - Weighted sum of two exponentials (Barrage & Nordhaus 2023)
+      - Parameters: `initial_value`, `growth_rate_1`, `growth_rate_2`, `fract_1`
+      - Equation: `f(t) = initial_value · (fract_1 · exp(growth_rate_1 · t) + (1 - fract_1) · exp(growth_rate_2 · t))`
+      - **Purpose**: Models carbon intensity (sigma) with fast initial decline transitioning to slower long-term decline
+      - **Typical values**: Curve fit to DICE2023 parameters:
+        - `growth_rate_1 = -0.015` (fast initial decarbonization)
+        - `growth_rate_2 = -0.005` (slower asymptotic decline)
+        - `fract_1 = 0.70` (70% weight on fast decline)
+
+   f. **`gompertz_growth`** - Gompertz growth function (continuous form of Barrage & Nordhaus 2023 finite-difference model)
+      - Parameters: `initial_value`, `final_value`, `adjustment_coefficient`
+      - Equation: `L(t) = final_value · (initial_value / final_value)^exp(adjustment_coefficient · t)`
+      - **Purpose**: Models population growth approaching asymptotic limit
+      - **Properties**: At t=0: L(0) = initial_value; as t→∞: L(t) → final_value (for negative adjustment_coefficient)
+      - **Typical values**: Based on DICE2023 parameters:
+        - `initial_value = 7.0e9` (7 billion people)
+        - `final_value = 10.0e9` (10 billion asymptotic limit)
+        - `adjustment_coefficient = -0.02` (controls approach rate to limit)
 
 5. **`integration_parameters`** - Solver configuration:
    - `t_start`, `t_end`, `dt`, `rtol`, `atol`
@@ -529,6 +566,36 @@ This ensures the model starts from a consistent economic equilibrium with specif
 ### Example Configuration
 
 See `config_baseline.json` for a complete example. To create new scenarios, copy and modify this file.
+
+**Example: Population with Gompertz growth**
+```json
+"L": {
+  "type": "gompertz_growth",
+  "initial_value": 7.0e9,
+  "final_value": 10.0e9,
+  "adjustment_coefficient": -0.02
+}
+```
+
+**Example: Carbon intensity with double exponential decline**
+```json
+"sigma": {
+  "type": "double_exponential_growth",
+  "initial_value": 0.0005,
+  "growth_rate_1": -0.015,
+  "growth_rate_2": -0.005,
+  "fract_1": 0.70
+}
+```
+
+**Example: TFP with simple exponential growth**
+```json
+"A": {
+  "type": "exponential_growth",
+  "initial_value": 454.174,
+  "growth_rate": 0.01
+}
+```
 
 ### Loading Configuration
 

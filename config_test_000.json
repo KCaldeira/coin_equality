@@ -44,24 +44,35 @@
     },
     "L": {
       "_description": "Population",
-      "type": "exponential_growth",
-      "initial_value": 10e9,
-      "growth_rate": 0.01,
-      "_growth_rate": "1% annual population growth"
+      "type": "gompertz_growth",
+      "initial_value": 7.752e9,
+      "final_value": 10.825e9,
+      "adjustment_coefficient": -0.03133,
+      "_adjustment_coefficient": "analytic representation of Barrage and Nordhaus 2023 population projection"
     },
     "sigma": {
       "_description": "Carbon intensity of GDP",
-      "type": "exponential_growth",
+        "type": "double_exponential_growth",
       "initial_value": 0.0005,
-      "growth_rate": -0.02,
-      "_growth_rate": "Declining at 2% per year (decarbonization)"
+      "_initial_value": "Meant to reflect 50 GtCO2/$100 trillion GDP; Fix to be more in line with Barage & Nordhaus 2023",
+      "growth_rate_1": -0.017866,
+      "_growth_rate_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
+      "growth_rate_2": -0.001100,
+      "_growth_rate_2": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
+      "fract_1": 0.751177,
+      "_fract_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023" 
     },
     "theta1": {
       "_description": "Abatement cost per ton of CO2 for the last ton abated ($/tCO2)",
-      "type": "exponential_growth",
-      "initial_value": 1000,
-      "growth_rate": -0.02,
-      "_growth_rate": "Assume 5% of global GDP to abate all emissions. Declining at 1% per year (technological progress)"
+      "type": "double_exponential_growth",
+      "initial_value": 695.177385,
+      "_initial_value": "Best 2 double exponential fit to Barage & Nordhaus 2023",
+      "growth_rate_1": -0.023000,
+      "_growth_rate_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
+      "growth_rate_2": -0.000650,
+      "_growth_rate_2": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
+      "fract_1": 0.310452,
+      "_fract_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023" 
     }
   },
 
