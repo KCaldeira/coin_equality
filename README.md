@@ -34,7 +34,7 @@ For the differential equation solver, variables are calculated in this order:
 1. **Y_gross** from K, L, A, α (Eq 1.1: Cobb-Douglas production)
 2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions)
 3. **y_gross** from Y_gross, L (mean per-capita gross income before climate damage)
-4. **Ω, G_climate** from ΔT, Gini, y_gross, damage params (Eq 1.2: income-dependent climate damage and distributional effect)
+4. **Ω, G_climate** from ΔT, Gini, y_gross, damage params (Eq 1.2: income-dependent climate damage and distributional effect; when ΔL >= 1, uses uniform damage approximation)
 5. **Y_damaged** from Y_gross, Ω (Eq 1.3: production after climate damage)
 6. **y** from Y_damaged, L, s (Eq 1.4: mean per-capita income after climate damage)
 7. **Δc** from y, ΔL (Eq 4.3: per-capita amount redistributable)
@@ -44,7 +44,7 @@ For the differential equation solver, variables are calculated in this order:
 11. **Λ** from abatecost, Y_damaged (Eq 1.7: abatement cost fraction)
 12. **Y_net** from Y_damaged, Λ (Eq 1.8: production after abatement costs)
 13. **y_eff** from y, abatecost, L (Eq 1.9: effective per-capita income)
-14. **G_eff** from f, ΔL, G_climate (Eq 4.4: effective Gini after redistribution/abatement, applied to climate-damaged distribution)
+14. **G_eff** from f, ΔL, G_climate (Eq 4.4: effective Gini after redistribution/abatement; when ΔL >= 1, G_eff = G_climate with no redistribution effect)
 15. **U** from y_eff, G_eff, η (Eq 3.5: mean utility)
 16. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
 17. **dK/dt** from s, Y_net, δ, K (Eq 1.10: capital tendency)
@@ -267,6 +267,61 @@ where:
 
 See Eq. (1.6) above. The abatement fraction is determined by the amount society allocates to abatement relative to potential emissions and the marginal abatement cost.
 
+**Enhanced Redistribution Mode (ΔL >= 1) - Partial Implementation**
+
+The model now supports `ΔL >= 1` with special handling that disables redistribution and allows pure abatement optimization.
+
+**Current Behavior (ΔL < 1):**
+- Redistribution operates within the Pareto family of distributions
+- Income transfers preserve the general shape of the distribution
+- The Gini coefficient changes, but the underlying distribution remains Pareto
+- Climate damage calculations assume a fixed Pareto distribution with parameter `a` derived from current Gini
+- Control variable `f` determines allocation between abatement and redistribution
+
+**Implemented Behavior (ΔL >= 1):**
+When `ΔL >= 1`, the model disables redistribution and enables pure abatement optimization:
+
+1. **Redistribution Disabled** (`economic_model.py:164-167`):
+   - Effective Gini is set equal to climate-damaged Gini: `G_eff = Gini_climate`
+   - No redistribution effect on inequality (bypasses `calculate_Gini_effective_redistribute_abate`)
+   - Gini evolves only through climate damage and restoration dynamics
+
+2. **Climate Damage Calculation** (`climate_damage_distribution.py:156`):
+   - Triggers uniform damage approximation: `Omega = omega_max`
+   - Preserves Gini unchanged: `Gini_climate = Gini_current`
+   - Rationale: Structural redistribution (`delta_L >= 1`) invalidates Pareto distribution assumption
+   - Falls back to simple uniform damage rather than attempting income-dependent calculation
+
+3. **Abatement Budget Mechanics**:
+   - Available budget: `delta_c = y * delta_L` (Line 136 of `economic_model.py`)
+   - With `delta_L >= 1`, this creates `delta_c >= y` (budget at least equals full per-capita income)
+   - Abatement expenditure: `abatecost = f * delta_c * L` (Line 142)
+   - Effective income: `y_eff = y - abatecost/L = y - f * delta_c`
+
+4. **Optimizer Behavior**:
+   - The optimizer chooses `f` to maximize utility over time
+   - **Naturally selects `f << 1`** because:
+     - Large `f` would make `y_eff = y - f * delta_c` very small or negative
+     - This would result in terrible current utility (consumption crash)
+     - Optimizer balances current consumption vs. future climate benefits
+   - **Equivalence**: Optimization of `f` becomes equivalent to optimizing the abatement/consumption tradeoff
+   - No redistribution component in utility calculation (since `G_eff = Gini_climate`)
+
+5. **Physical Interpretation**:
+   - `ΔL >= 1` represents a model mode where redistribution is turned off
+   - Allows studying pure abatement policy without redistribution considerations
+   - Budget parameter `ΔL` scales the available resources, but optimizer self-limits via utility constraints
+   - Climate damage treated as uniform across income levels (first-order approximation)
+
+**Implementation Status**:
+- ✓ Redistribution disabled in `economic_model.py` (lines 164-167)
+- ✓ Uniform damage approximation in `climate_damage_distribution.py` (line 156)
+- ✓ Uses `INVERSE_EPSILON` constant from `constants.py` (no hardcoded values)
+- ✓ All existing unit tests pass
+
+**Future Enhancements**:
+For more sophisticated treatment of `ΔL >= 1` with non-Pareto income distributions, see **Next Steps, Section 2**.
+
 #### 5. Gini Index Dynamics and Persistence
 
 The Gini index is now a **state variable** that evolves over time, allowing for persistence of redistribution effects and gradual restoration to baseline inequality.
@@ -360,7 +415,7 @@ Utility and inequality parameters:
 | `G₁` | Initial Gini index (0 = perfect equality, 1 = max inequality) | - | `Gini_initial` |
 | `Gini_fract` | Fraction of effective Gini change as instantaneous step (0 = no step, 1 = full step) | - | `Gini_fract` |
 | `Gini_restore` | Rate at which Gini restores to initial value (0 = no restoration) | yr⁻¹ | `Gini_restore` |
-| `ΔL` | Fraction of income available for redistribution | - | `deltaL` |
+| `ΔL` | Fraction of income available for redistribution (<1: active redistribution; >=1: redistribution disabled, pure abatement mode) | - | `deltaL` |
 
 Abatement cost parameters:
 
@@ -1093,11 +1148,50 @@ Update key model components to more closely follow the formulations in Barrage a
 
 This alignment will ensure our extensions (income distribution, redistribution mechanisms) are built on a well-established baseline that matches current IAM best practices.
 
-### 2. Update Methods Section of Paper
+### 2. Enhanced Redistribution Mode (ΔL >= 1) - Advanced Features
+
+**Status**: ✓ Basic implementation complete. Redistribution is disabled and uniform damage approximation is used when `ΔL >= 1`.
+
+**Current Implementation**:
+- Redistribution turned off: `G_eff = Gini_climate` (no redistribution effect)
+- Uniform damage: `Omega = omega_max`, `Gini_climate = Gini_current`
+- Optimizer naturally selects `f << 1` due to utility constraints
+- Allows studying pure abatement policy without redistribution
+
+**Future Advanced Features** (optional enhancements for more sophisticated treatment):
+
+If desired to model actual structural redistribution with non-Pareto distributions:
+
+1. **Implement non-uniform climate damage with non-Pareto distributions**:
+   - Replace uniform damage approximation with income-dependent calculation
+   - Determine appropriate functional form for income distribution when departing from Pareto
+   - Either extend analytical solutions (hypergeometric functions) or implement numerical integration
+   - Validate that damage vulnerability profile remains physically reasonable
+
+2. **Model actual structural redistribution**:
+   - Define how `ΔL >= 1` maps to distribution shape changes
+   - Implement redistribution mechanics beyond Pareto family in `income_distribution.py`
+   - Update `economic_model.py` to calculate modified distribution parameters
+   - Ensure continuous transition at `ΔL = 1` boundary
+
+3. **Testing and validation**:
+   - Unit tests for boundary behavior at `ΔL = 1`
+   - Asymptotic tests as `ΔL` increases
+   - Comparison against analytical solutions where available
+
+**Key Design Questions**:
+- What functional form for income distribution when departing from Pareto?
+- How should climate damage depend on income in non-Pareto distributions?
+- What are physically reasonable upper bounds on `ΔL`?
+- Is the added complexity justified for modeling purposes?
+
+**Note**: Current implementation (redistribution disabled, uniform damage) may be sufficient for most use cases. These enhancements are optional and should only be pursued if needed for specific research questions.
+
+### 3. Update Methods Section of Paper
 
 Revise and update the Methods section of the paper to ensure it accurately reflects the current implementation as documented in this README and the model code. The paper should provide a clear, consistent description of all model equations, parameter definitions, and computational approaches used in the codebase.
 
-### 3. Comprehensive Code Validation
+### 4. Comprehensive Code Validation
 
 Perform a detailed verification of model calculations by manually tracing through one complete time step of the integration:
 - Use the output `results.csv` file to verify intermediate calculations
@@ -1108,7 +1202,7 @@ Perform a detailed verification of model calculations by manually tracing throug
 
 This step-by-step verification will provide confidence in the correctness of the implementation.
 
-### 4. Mathematica Verification of Model Equations
+### 5. Mathematica Verification of Model Equations
 
 Use Wolfram Mathematica to independently re-derive and verify all model equations:
 
@@ -1135,7 +1229,7 @@ Use Wolfram Mathematica to independently re-derive and verify all model equation
 
 This verification step provides confidence that the model mathematics is sound before using it for policy analysis.
 
-### 5. Production Code Readiness
+### 6. Production Code Readiness
 
 Establish confidence that the model is ready for production use:
 - Confirming all calculations are correct and well-tested

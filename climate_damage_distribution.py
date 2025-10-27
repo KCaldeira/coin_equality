@@ -36,6 +36,7 @@ References: Analytical solutions derived with assistance from ChatGPT (2025).
 
 from income_distribution import a_from_G
 from mpmath import hyp2f1
+from constants import INVERSE_EPSILON
 
 
 def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, params):
@@ -60,8 +61,8 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
         - 'psi2': quadratic damage coefficient (°C⁻²)
         - 'y_damage_halfsat': income half-saturation constant ($)
           (income level at which damage is 50% of maximum)
-    n_bins : int, optional
-        Number of population bins for discretization (default: 1000)
+        - 'delta_L': fraction of income available for redistribution (optional, default 0)
+          When delta_L >= 1, triggers uniform damage approximation
 
     Returns
     -------
@@ -102,6 +103,7 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     **Special cases:**
     - y_damage_halfsat → ∞: β → 0, ₂F₁(1,a,a+1,0) = 1, uniform damage
     - y_damage_halfsat → 0: β → ∞, maximum regressive damage
+    - delta_L >= 1: structural redistribution beyond Pareto family, uniform damage approximation
     - ΔT = 0: ω_max = 0, no damage, Omega = 0, Gini_climate = Gini_current
     - a → ∞: Gini → 0 (perfect equality), damage becomes uniform
 
@@ -141,15 +143,17 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     psi1 = params['psi1']
     psi2 = params['psi2']
     y_damage_halfsat = params['y_damage_halfsat']
+    delta_L = params.get('delta_L', 0)
 
     # Maximum damage fraction (temperature-dependent component)
     # Barrage & Nordhaus (2023) quadratic damage function:
     # ω_max(ΔT) = psi1 · ΔT + psi2 · ΔT²
     omega_max = psi1 * delta_T + psi2 * (delta_T ** 2)
 
-    # Special case: very high halfsat means approximately uniform damage
-    # When y_damage_halfsat >> income, ω(y) ≈ ω_max for all y
-    if y_damage_halfsat > 1e10:
+    # Special case: uniform damage approximation
+    # When y_damage_halfsat >> income, ω(y) ≈ ω_max for all y (approximately uniform)
+    # When delta_L >= 1, structural redistribution invalidates Pareto distribution assumption
+    if y_damage_halfsat > INVERSE_EPSILON or delta_L >= 1:
         # Nearly uniform damage: all income levels experience ~ω_max
         Omega_uniform = omega_max
         return Omega_uniform, Gini_current

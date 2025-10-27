@@ -17,3 +17,9 @@ NEG_BIGNUM = -1e30
 # - Ensuring values stay strictly positive (e.g., A2 ≥ ε)
 # - Root finding bracket offsets
 EPSILON = 1e-12
+
+# Large value for detecting effectively infinite parameters
+# Used for:
+# - Checking if y_damage_halfsat is so large that damage is effectively uniform
+# - Detecting when parameters should trigger special case handling
+INVERSE_EPSILON = 1.0 / EPSILON

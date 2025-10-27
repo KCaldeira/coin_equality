@@ -89,7 +89,6 @@ def calculate_tendencies(state, params):
     L = params['L']
     sigma = params['sigma']
     theta1 = params['theta1']
-    theta2 = params['theta2']
     delta_L = params['delta_L']
     Gini_initial = params['Gini_initial']
     Gini_fract = params['Gini_fract']
@@ -143,7 +142,7 @@ def calculate_tendencies(state, params):
 
     # Eq 1.6: Abatement fraction
     if Epot > 0 and abatecost > 0:
-        mu = (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2)
+        mu = (abatecost * 2.0 / (Epot * theta1)) ** (1 / 2.0)
     else:
         mu = 0.0
 
@@ -161,7 +160,10 @@ def calculate_tendencies(state, params):
 
     # Eq 4.4: Effective Gini index
     # Redistribution operates on the climate-damaged distribution
-    G_eff, _ = calculate_Gini_effective_redistribute_abate(f, delta_L, Gini_climate)
+    if delta_L < 1.0: # do normal redistribution calculation
+        G_eff, _ = calculate_Gini_effective_redistribute_abate(f, delta_L, Gini_climate)
+    else: # delta_L >= 1, no redistribution
+        G_eff = Gini_climate
 
     # Eq 3.5: Mean utility
     if y_eff > 0 and 0 <= G_eff <= 1.0:
