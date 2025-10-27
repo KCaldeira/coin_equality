@@ -40,9 +40,9 @@
     "A": {
       "_description": "Total factor productivity (TFP)",
       "type": "gompertz_growth",
-      "initial_value": 454.174,
+      "initial_value": 739.619,
       "_initial_value": "DICE is 5.84 with capital stock in trillions; pop in millions",
-      "final_value": 0.01,
+      "final_value": 4906815.811,
       "_final_value": "DICE is 38743.985 with capital stock in trillions; pop in millions",
       "adjustment_coefficient": -0.0015,
       "_adjustment_coefficient": "analytic representation of Barrage and Nordhaus 2023 TFP projection"
@@ -57,15 +57,13 @@
     },
     "sigma": {
       "_description": "Carbon intensity of GDP",
-        "type": "double_exponential_growth",
-      "initial_value": 0.0005,
-      "_initial_value": "Meant to reflect 50 GtCO2/$100 trillion GDP; Fix to be more in line with Barage & Nordhaus 2023",
-      "growth_rate_1": -0.017866,
-      "_growth_rate_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
-      "growth_rate_2": -0.001100,
-      "_growth_rate_2": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
-      "fract_1": 0.751177,
-      "_fract_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023" 
+        "type": "gompertz_growth",
+      "initial_value": 0.000291355,
+      "_initial_value": "tons CO2 per $, from kg per $ in Barage & Nordhaus 2023",
+        "final_value": 0.000044681,
+      "_final_value": "tons CO2 per $, from kgCO2 per $ in Barage & Nordhaus 2023",
+      "adjustment_coefficient": -0.008164,
+      "_adjustment_coefficient": "analytic representation of Barrage and Nordhaus 2023 carbon intensity projection"
     },
     "theta1": {
       "_description": "Abatement cost per ton of CO2 for the last ton abated ($/tCO2)",

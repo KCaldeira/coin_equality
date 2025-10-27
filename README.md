@@ -56,7 +56,7 @@ For the differential equation solver, variables are calculated in this order:
 
 **Eq. (1.1) - Production Function (Cobb-Douglas):**
 ```
-Y_gross(t) = A(t) · K(t)^α · L(t)^(1-α)
+Y_gross(t) =  K(t)^α · (A(t) · L(t))^(1-α)
 ```
 
 **Eq. (1.2) - Income-Dependent Climate Damage:**
