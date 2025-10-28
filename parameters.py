@@ -265,6 +265,9 @@ class ScalarParameters:
         Fraction of income available for redistribution
     theta2 : float
         Abatement cost exponent
+    mu_max : float
+        Maximum allowed abatement fraction (cap on μ)
+        Default: INVERSE_EPSILON (effectively no cap)
     """
     alpha: float
     delta: float
@@ -280,6 +283,13 @@ class ScalarParameters:
     Gini_restore: float
     deltaL: float
     theta2: float
+    mu_max: float = None  # Will be set to INVERSE_EPSILON in __post_init__ if None
+
+    def __post_init__(self):
+        """Set default for mu_max if not provided."""
+        from constants import INVERSE_EPSILON
+        if self.mu_max is None:
+            object.__setattr__(self, 'mu_max', INVERSE_EPSILON)
 
 
 @dataclass
@@ -462,7 +472,7 @@ def evaluate_params_at_time(t, config):
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
         'alpha', 'delta', 's', 'psi1', 'psi2', 'y_damage_halfsat', 'k_climate',
-        'eta', 'rho', 'Gini_initial', 'Gini_fract', 'Gini_restore', 'delta_L', 'theta2',
+        'eta', 'rho', 'Gini_initial', 'Gini_fract', 'Gini_restore', 'delta_L', 'theta2', 'mu_max',
         'A', 'L', 'sigma', 'theta1', 'f'
     """
     sp = config.scalar_params
@@ -484,6 +494,7 @@ def evaluate_params_at_time(t, config):
         'Gini_restore': sp.Gini_restore,
         'delta_L': sp.deltaL,
         'theta2': sp.theta2,
+        'mu_max': sp.mu_max,
 
         # Time-dependent function evaluations
         'A': tf['A'](t),

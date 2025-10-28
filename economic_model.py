@@ -38,6 +38,7 @@ def calculate_tendencies(state, params):
         - 'sigma': Carbon intensity of GDP (current, tCO2 $^-1)
         - 'theta1': Abatement cost coefficient (current, $ tCO2^-1)
         - 'theta2': Abatement cost exponent
+        - 'mu_max': Maximum allowed abatement fraction (cap on μ)
         - 'Gini_initial': Initial Gini index
         - 'Gini_fract': Fraction of Gini change as instantaneous step
         - 'Gini_restore': Rate of restoration to Gini_initial (yr^-1)
@@ -90,6 +91,7 @@ def calculate_tendencies(state, params):
     sigma = params['sigma']
     theta1 = params['theta1']
     theta2 = params['theta2']
+    mu_max = params['mu_max']
     delta_L = params['delta_L']
     Gini_initial = params['Gini_initial']
     Gini_fract = params['Gini_fract']
@@ -142,10 +144,15 @@ def calculate_tendencies(state, params):
     abatecost = f * delta_c * L
 
     # Eq 1.6: Abatement fraction
+    # Note that if the calculated mu exceeds mu_max, and it is cropped to mu_max,
+    # then it is just money wasted and the optimizer should do better.
     if Epot > 0 and abatecost > 0:
-        mu = (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2)
+        mu = min(mu_max, (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2))
     else:
         mu = 0.0
+
+    # Marginal abatement cost at current mu
+    marginal_abatement_cost = theta1 * mu ** (theta2 - 1)
 
     # Eq 1.7: Abatement cost fraction
     if Y_damaged > 0 and abatecost > 0:
@@ -205,6 +212,7 @@ def calculate_tendencies(state, params):
         'mu': mu,
         'Lambda': Lambda,
         'abatecost': abatecost,
+        'marginal_abatement_cost': marginal_abatement_cost,
         'y_eff': y_eff,
         'G_eff': G_eff,
         'U': U,
@@ -290,6 +298,7 @@ def integrate_model(config):
         'mu': np.zeros(n_steps),
         'Lambda': np.zeros(n_steps),
         'abatecost': np.zeros(n_steps),
+        'marginal_abatement_cost': np.zeros(n_steps),
         'y_eff': np.zeros(n_steps),
         'G_eff': np.zeros(n_steps),
         'U': np.zeros(n_steps),
@@ -332,6 +341,7 @@ def integrate_model(config):
         results['mu'][i] = outputs['mu']
         results['Lambda'][i] = outputs['Lambda']
         results['abatecost'][i] = outputs['abatecost']
+        results['marginal_abatement_cost'][i] = outputs['marginal_abatement_cost']
         results['y_eff'][i] = outputs['y_eff']
         results['G_eff'][i] = outputs['G_eff']
         results['U'][i] = outputs['U']

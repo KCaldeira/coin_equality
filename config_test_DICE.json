@@ -29,7 +29,9 @@
     "deltaL": 1.0,
     "_deltaL": "Income fraction available for redistribution, >= 1.0 disables redistribution and places no bounds on abatement",
     "theta2": 2.6,
-    "_theta2": "Abatement cost exponent"
+    "_theta2": "Abatement cost exponent",
+    "mu_max": 1.2,
+    "_mu_max": "Maximum allowed abatement fraction (cap on μ). Values >1 allow carbon removal."
   },
   "time_functions": {
     "_description": "Time-dependent exogenous functions",

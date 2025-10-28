@@ -40,7 +40,7 @@ For the differential equation solver, variables are calculated in this order:
 7. **Δc** from y, ΔL (Eq 4.3: per-capita amount redistributable)
 8. **E_pot** from σ, Y_gross (Eq 2.1: potential emissions)
 9. **abatecost** from f, Δc, L (Eq 1.5: abatement expenditure)
-10. **μ** from abatecost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated)
+10. **μ** from abatecost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated, capped at μ_max)
 11. **Λ** from abatecost, Y_damaged (Eq 1.7: abatement cost fraction)
 12. **Y_net** from Y_damaged, Λ (Eq 1.8: production after abatement costs)
 13. **y_eff** from y, abatecost, L (Eq 1.9: effective per-capita income)
@@ -133,12 +133,15 @@ This is the total amount society allocates to emissions abatement, where:
 
 **Eq. (1.6) - Abatement Fraction:**
 ```
-μ(t) = [abatecost(t) · θ₂ / (E_pot(t) · θ₁(t))]^(1/θ₂)
+μ(t) = min(μ_max, [abatecost(t) · θ₂ / (E_pot(t) · θ₁(t))]^(1/θ₂))
 ```
 The fraction of potential emissions that are abated, where:
 - `E_pot(t) = σ(t) · Y_gross(t)` = potential (unabated) emissions
 - `θ₁(t)` = marginal cost of abatement as μ→1 ($ tCO₂⁻¹)
 - `θ₂` = abatement cost exponent (θ₂=2 gives quadratic cost function)
+- `μ_max` = maximum allowed abatement fraction (cap on μ)
+
+The calculated μ is capped at μ_max. Values of μ_max > 1 allow for carbon dioxide removal (negative emissions). If μ_max is not specified in the configuration, it defaults to INVERSE_EPSILON (effectively no cap).
 
 This formulation differs from Nordhaus in that reducing carbon intensity σ(t) reduces the cost of abating remaining emissions, since there are fewer emissions to abate.
 
@@ -406,6 +409,7 @@ Climate and abatement parameters:
 | `y_damage_halfsat` | Income half-saturation for climate damage (lower = more regressive) | $ | `y_damage_halfsat` |
 | `k_climate` | Temperature sensitivity to cumulative emissions | °C tCO₂⁻¹ | `k_climate` |
 | `θ₂` | Abatement cost exponent (controls cost curve shape) | - | `theta2` |
+| `μ_max` | Maximum allowed abatement fraction (cap on μ). Values >1 allow carbon removal. Defaults to INVERSE_EPSILON (no cap) if omitted. | - | `mu_max` |
 
 Utility and inequality parameters:
 

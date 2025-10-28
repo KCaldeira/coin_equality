@@ -37,7 +37,8 @@ VARIABLE_METADATA = {
     'f': {'description': 'Abatement Allocation Fraction', 'units': '', 'group': 'policy'},
     'mu': {'description': 'Emissions Abatement Fraction', 'units': '', 'group': 'abatement'},
     'sigma': {'description': 'Carbon Intensity of GDP', 'units': 'tCO₂/$', 'group': 'climate'},
-    'theta1': {'description': 'Marginal Abatement Cost', 'units': '$/tCO₂', 'group': 'abatement'},
+    'theta1': {'description': 'Marginal Abatement Cost at mu=1', 'units': '$/tCO₂', 'group': 'abatement'},
+    'marginal_abatement_cost': {'description': 'Marginal Abatement Cost', 'units': '$/tCO₂', 'group': 'abatement'},
     'y': {'description': 'Mean Per-Capita Income', 'units': '$/person', 'group': 'economic'},
     'y_eff': {'description': 'Effective Per-Capita Income', 'units': '$/person', 'group': 'economic'}
 }
@@ -63,7 +64,8 @@ VARIABLE_GROUPS = {
     'physical_variables': [
         {'type': 'combined', 'title': 'Emissions', 'variables': ['E', 'dEcum_dt'], 'units': 'GtCO₂/yr'},
         {'type': 'single', 'variables': ['Ecum']},
-        {'type': 'single', 'variables': ['delta_T']}
+        {'type': 'single', 'variables': ['delta_T']},
+        {'type': 'single', 'variables': ['marginal_abatement_cost']}
     ],
     'specified_functions': [
         {'type': 'single', 'variables': ['L']},
