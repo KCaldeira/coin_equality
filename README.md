@@ -1080,17 +1080,20 @@ Instead of spacing control points equally in time, points are distributed to pro
 
 The control point times are calculated based on:
 1. **Average TFP growth rate**: `k_A = ln(A(t_end)/A(t_start)) / (t_end - t_start)`
-2. **Effective consumption discount rate**: `r_c = ρ + η · k_A · (1 - α)`
+2. **Effective consumption discount rate**: `r_c_effective = ρ + η · k_A · (1 - α)`
    - `ρ`: pure rate of time preference
    - `η`: coefficient of relative risk aversion
    - `α`: capital share of income
+3. **Weighting discount rate**: `r_c = (r_c_effective + ρ) / 2`
+   - Uses the mean of the pure rate of time preference and the effective discount rate
+   - Provides a balance between pure time preference and consumption-adjusted discounting
 
 For iteration with N+1 control points (k = 0, 1, ..., N):
 ```
 t(k) = -(1/r_c) · ln(1 - (k/N) · (1 - exp(-r_c · t_end)))
 ```
 
-This formula ensures that each interval between control points contributes approximately equally to the discounted objective, with more points concentrated in early periods where discounting matters most.
+This formula ensures that each interval between control points contributes approximately equally to the discounted objective, with more points concentrated in early periods where discounting matters most. The averaging of discount rates provides a pragmatic middle ground between pure time preference and growth-adjusted discounting.
 
 **Iteration schedule:**
 
