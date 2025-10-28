@@ -18,8 +18,8 @@ from matplotlib.ticker import FuncFormatter
 VARIABLE_METADATA = {
     't': {'description': 'Time', 'units': 'yr', 'group': 'time'},
     'A': {'description': 'Total Factor Productivity', 'units': '', 'group': 'economic'},
-    'E': {'description': 'Actual Emissions', 'units': 'GtCO₂/yr', 'group': 'climate'},
-    'Ecum': {'description': 'Cumulative Emissions', 'units': 'GtCO₂', 'group': 'climate'},
+    'E': {'description': 'Actual Emissions', 'units': 'tCO₂/yr', 'group': 'climate'},
+    'Ecum': {'description': 'Cumulative Emissions', 'units': 'tCO₂', 'group': 'climate'},
     'G_eff': {'description': 'Effective Gini Index', 'units': '', 'group': 'inequality'},
     'K': {'description': 'Capital Stock', 'units': '$', 'group': 'economic'},
     'L': {'description': 'Population', 'units': 'people', 'group': 'economic'},
@@ -30,7 +30,7 @@ VARIABLE_METADATA = {
     'Y_gross': {'description': 'Gross GDP', 'units': '$', 'group': 'economic'},
     'Y_net': {'description': 'Net GDP', 'units': '$', 'group': 'economic'},
     'abatecost': {'description': 'Abatement Expenditure', 'units': '$', 'group': 'abatement'},
-    'dEcum_dt': {'description': 'Emissions Rate', 'units': 'GtCO₂/yr', 'group': 'climate'},
+    'dEcum_dt': {'description': 'Emissions Rate', 'units': 'tCO₂/yr', 'group': 'climate'},
     'dK_dt': {'description': 'Capital Growth Rate', 'units': '$/yr', 'group': 'economic'},
     'delta_T': {'description': 'Temperature Change', 'units': '°C', 'group': 'climate'},
     'delta_c': {'description': 'Per-Capita Redistributable Income', 'units': '$/person', 'group': 'inequality'},
@@ -62,7 +62,7 @@ VARIABLE_GROUPS = {
         {'type': 'single', 'variables': ['delta_c']}
     ],
     'physical_variables': [
-        {'type': 'combined', 'title': 'Emissions', 'variables': ['E', 'dEcum_dt'], 'units': 'GtCO₂/yr'},
+        {'type': 'combined', 'title': 'Emissions', 'variables': ['E', 'dEcum_dt'], 'units': 'tCO₂/yr'},
         {'type': 'single', 'variables': ['Ecum']},
         {'type': 'single', 'variables': ['delta_T']},
         {'type': 'single', 'variables': ['marginal_abatement_cost']}
