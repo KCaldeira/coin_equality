@@ -338,7 +338,27 @@ def calculate_climate_damage_gini_effect(a, y_damage_halfsat, y_mean, omega_max)
         G_new = 1.0 - (1.0 - G0) * (1.0 - omega_max * H) / denom
     else:
         # If denom <= 0, all income lost; Gini undefined, set to G0
-        print("Warning: Mean income after damage is zero or negative; setting Gini to pre-damage value.")
-        G_new = G0
+        print(f"\n{'='*70}")
+        print(f"ERROR: Mean income after damage is zero or negative")
+        print(f"{'='*70}")
+        print(f"Function inputs:")
+        print(f"  y_mean = {y_mean:.6f} $/person/yr")
+        print(f"  y_damage_halfsat = {y_damage_halfsat:.6f} $")
+        print(f"  omega_max = {omega_max:.10f}")
+        print(f"  a (Pareto param) = {a:.6f}")
+        print(f"\nCalculated values:")
+        print(f"  G0 (pre-damage Gini) = {G0:.6f}")
+        print(f"  b (damage concentration) = {b:.6f}")
+        print(f"  Phi (mean damage factor) = {Phi:.10f}")
+        print(f"  omega_mean = omega_max * Phi = {omega_mean:.10f}")
+        print(f"  denom = 1.0 - omega_mean = {denom:.10f}")
+        print(f"\nPROBLEM: omega_mean >= 1.0 means climate damage >= 100% of mean income!")
+        print(f"{'='*70}\n")
+        raise RuntimeError(
+            f"Climate damage calculation failed: mean damage omega_mean = {omega_mean:.6f} >= 1.0. "
+            f"This implies total income loss, which is physically impossible. "
+            f"Inputs: y_mean={y_mean:.1f}$/person/yr, omega_max={omega_max:.6f}, "
+            f"y_damage_halfsat={y_damage_halfsat:.1f}, a={a:.4f}"
+        )
 
     return float(G_new)
