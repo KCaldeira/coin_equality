@@ -64,6 +64,10 @@ def calculate_utility_weighted_times(n_points, config):
     k_A = np.log(A_end / A_start) / (t_end - t_start)
     r_c = rho + eta * k_A * (1 - alpha)
 
+    # use the mean of discount rate and pure rate of time preference
+    # no theoretical justification
+    r_c = (r_c + rho)/2.0
+
     N = n_points - 1
     k_values = np.arange(n_points)
 
