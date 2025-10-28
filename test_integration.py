@@ -41,7 +41,7 @@ def main():
     print(f'  eta = {config.scalar_params.eta}')
     print(f'  rho = {config.scalar_params.rho}')
     print(f'  Gini_initial = {config.scalar_params.Gini_initial}')
-    print(f'  deltaL = {config.scalar_params.deltaL}')
+    print(f'  fract_gdp = {config.scalar_params.fract_gdp}')
 
     # Run integration
     print(f'\nRunning integration...')

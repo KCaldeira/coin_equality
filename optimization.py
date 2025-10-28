@@ -382,10 +382,10 @@ class UtilityOptimizer:
         if algorithm is None:
             algorithm = 'LN_SBPLX'
 
-        deltaL = self.base_config.scalar_params.deltaL
-        if abs(deltaL) < EPSILON:
+        fract_gdp = self.base_config.scalar_params.fract_gdp
+        if abs(fract_gdp) < EPSILON:
             self.degenerate_case = True
-            self.degenerate_reason = "deltaL = 0: No income available for redistribution or abatement. Control values have no effect on outcome."
+            self.degenerate_reason = "fract_gdp = 0: No income available for redistribution or abatement. Control values have no effect on outcome."
             control_times_array = np.array(control_times)
             initial_guess_array = np.array(initial_guess)
             obj = self.calculate_objective(initial_guess_array, control_times_array)

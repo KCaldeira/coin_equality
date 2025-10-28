@@ -499,7 +499,7 @@ def main():
 
     if opt_results.get('status') == 'degenerate':
         print(f"\n*** DEGENERATE CASE DETECTED ***")
-        print(f"No income available for redistribution or abatement (deltaL = 0)")
+        print(f"No income available for redistribution or abatement (fract_gdp = 0)")
         print(f"Control values have no effect on outcome.")
         print(f"Returning initial guess values.\n")
     elif not is_iterative and 'termination_name' in opt_results:

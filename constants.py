@@ -12,7 +12,7 @@ NEG_BIGNUM = -1e30
 # Small epsilon for numerical comparisons and bounds
 # Used for:
 # - Comparing floats to unity (e.g., eta ≈ 1)
-# - Checking if values are effectively zero (e.g., deltaL ≈ 0)
+# - Checking if values are effectively zero (e.g., fract_gdp ≈ 0)
 # - Bounding variables away from exact 0 or 1 (e.g., Gini ∈ (ε, 1-ε))
 # - Ensuring values stay strictly positive (e.g., A2 ≥ ε)
 # - Root finding bracket offsets
@@ -23,3 +23,7 @@ EPSILON = 1e-12
 # - Checking if y_damage_halfsat is so large that damage is effectively uniform
 # - Detecting when parameters should trigger special case handling
 INVERSE_EPSILON = 1.0 / EPSILON
+
+# Maximum iterations for initial capital stock convergence
+# Used in integrate_model() to ensure convergence of K0 with climate damage
+MAX_INITIAL_CAPITAL_ITERATIONS = 100

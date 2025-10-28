@@ -9,7 +9,7 @@ import numpy as np
 from income_distribution import calculate_Gini_effective_redistribute_abate
 from parameters import evaluate_params_at_time
 from climate_damage_distribution import calculate_climate_damage_and_gini_effect
-from constants import EPSILON, NEG_BIGNUM
+from constants import EPSILON, NEG_BIGNUM, MAX_INITIAL_CAPITAL_ITERATIONS
 
 
 def calculate_tendencies(state, params, store_detailed_output=True):
@@ -42,7 +42,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         - 'Gini_initial': Initial Gini index
         - 'Gini_fract': Fraction of Gini change as instantaneous step
         - 'Gini_restore': Rate of restoration to Gini_initial (yr^-1)
-        - 'delta_L': Fraction of income to redistribute
+        - 'fract_gdp': Fraction of GDP available for redistribution and abatement
         - 'f': Fraction allocated to abatement vs redistribution
 
     Returns
@@ -92,7 +92,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     theta1 = params['theta1']
     theta2 = params['theta2']
     mu_max = params['mu_max']
-    delta_L = params['delta_L']
+    fract_gdp = params['fract_gdp']
     Gini_initial = params['Gini_initial']
     Gini_fract = params['Gini_fract']
     Gini_restore = params['Gini_restore']
@@ -135,7 +135,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     y = (1 - s) * Y_damaged / L
 
     # Eq 4.3: Per-capita amount redistributed
-    delta_c = y * delta_L
+    delta_c = y * fract_gdp
 
     # Eq 2.1: Potential emissions (unabated)
     Epot = sigma * Y_gross
@@ -168,9 +168,9 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
     # Eq 4.4: Effective Gini index
     # Redistribution operates on the climate-damaged distribution
-    if delta_L < 1.0: # do normal redistribution calculation
-        G_eff, _ = calculate_Gini_effective_redistribute_abate(f, delta_L, Gini_climate)
-    else: # delta_L >= 1, no redistribution
+    if fract_gdp < 1.0: # do normal redistribution calculation
+        G_eff, _ = calculate_Gini_effective_redistribute_abate(f, fract_gdp, Gini_climate)
+    else: # fract_gdp >= 1, no redistribution
         G_eff = Gini_climate
 
     # Eq 3.5: Mean utility
@@ -196,9 +196,12 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     dGini_dt = -Gini_restore * (Gini - Gini_initial)
     Gini_step_change = Gini_fract * (G_eff - Gini)
 
+    # Prepare output
+    results = {}
+
     if store_detailed_output:
         # Return full diagnostics for CSV/PDF output
-        return {
+        results.update({
             'dK_dt': dK_dt,
             'dEcum_dt': E,
             'dGini_dt': dGini_dt,
@@ -222,16 +225,18 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             # STUB: Additional diagnostics to be added (~20 variables)
             # TODO: Add more intermediate calculations here as needed
             # Examples: consumption, investment, damage costs, welfare components, etc.
-        }
-    else:
+        })
+    
         # Return minimal variables needed for optimization
-        return {
-            'U': U,
-            'dK_dt': dK_dt,
-            'dEcum_dt': E,
-            'dGini_dt': dGini_dt,
-            'Gini_step_change': Gini_step_change,
-        }
+    results.update( {
+        'U': U,
+        'dK_dt': dK_dt,
+        'dEcum_dt': E,
+        'dGini_dt': dGini_dt,
+        'Gini_step_change': Gini_step_change,
+    })
+    
+    return results
 
 
 def integrate_model(config, store_detailed_output=True):
@@ -288,8 +293,38 @@ def integrate_model(config, store_detailed_output=True):
     s = config.scalar_params.s
     delta = config.scalar_params.delta
     alpha = config.scalar_params.alpha
+    fract_gdp = config.scalar_params.fract_gdp
 
-    K0 = ((s * A0 / delta) ** (1 / (1 - alpha))) * L0
+    # get guess from last iteration (or from initial guess at first iteration)
+    f0 = config.control_function(t_start)
+    lambda0 = (1-s) * f0 * fract_gdp
+
+    # take abatement cost and initial climate damage into account for initial capital
+    Ecum_initial = config.scalar_params.Ecum_initial
+    params = evaluate_params_at_time(t_start, config)
+    k_climate = params['k_climate']
+    Gini = config.scalar_params.Gini_initial
+    delta_T = k_climate * Ecum_initial
+
+    # iterate to find K0 that is consistent with climate damage from initial emissions
+    Omega_prev = 1.0
+    Omega_current = 0.0
+    n_iterations = 0
+
+    while np.abs(Omega_current - Omega_prev) > EPSILON:
+        n_iterations += 1
+        if n_iterations > MAX_INITIAL_CAPITAL_ITERATIONS:
+            raise RuntimeError(
+                f"Initial capital stock failed to converge after {MAX_INITIAL_CAPITAL_ITERATIONS} iterations. "
+                f"Omega_prev = {Omega_prev:.10f}, Omega_current = {Omega_current:.10f}, "
+                f"difference = {np.abs(Omega_current - Omega_prev):.2e} (tolerance: {EPSILON:.2e})"
+            )
+        Omega_prev = Omega_current
+        K0 = ((s * (1 - Omega_prev) * (1 - lambda0) * A0 / delta) ** (1 / (1 - alpha))) * L0
+        y_gross = A0 * (K0 ** alpha) * (L0 ** (1 - alpha)) / L0
+        Omega_current, _ = calculate_climate_damage_and_gini_effect(
+            delta_T, Gini, y_gross, params
+        )
 
     state = {
         'K': K0,
@@ -298,11 +333,7 @@ def integrate_model(config, store_detailed_output=True):
     }
 
     # Initialize storage for variables
-    results = {
-        't': t_array,
-        'U': np.zeros(n_steps),
-        'L': np.zeros(n_steps),  # Needed for objective function
-    }
+    results = {}
 
     if store_detailed_output:
         # Add storage for all diagnostic variables
@@ -336,6 +367,13 @@ def integrate_model(config, store_detailed_output=True):
             # STUB: Additional storage arrays for ~20 new diagnostics
             # TODO: Add storage for future intermediate calculations
         })
+
+    # Always store time and objective function variables      
+    results = {
+        't': t_array,
+        'U': np.zeros(n_steps),
+        'L': np.zeros(n_steps),  # Needed for objective function
+    }
 
     # Time stepping loop
     for i, t in enumerate(t_array):

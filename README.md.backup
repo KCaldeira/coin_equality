@@ -34,17 +34,17 @@ For the differential equation solver, variables are calculated in this order:
 1. **Y_gross** from K, L, A, α (Eq 1.1: Cobb-Douglas production)
 2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions)
 3. **y_gross** from Y_gross, L (mean per-capita gross income before climate damage)
-4. **Ω, G_climate** from ΔT, Gini, y_gross, damage params (Eq 1.2: income-dependent climate damage and distributional effect; when f_gdp >= 1, uses uniform damage approximation)
+4. **Ω, G_climate** from ΔT, Gini, y_gross, damage params (Eq 1.2: income-dependent climate damage and distributional effect; when ΔL >= 1, uses uniform damage approximation)
 5. **Y_damaged** from Y_gross, Ω (Eq 1.3: production after climate damage)
 6. **y** from Y_damaged, L, s (Eq 1.4: mean per-capita income after climate damage)
-7. **c_redist** from y, f_gdp (Eq 4.3: per-capita amount redistributable)
+7. **Δc** from y, ΔL (Eq 4.3: per-capita amount redistributable)
 8. **E_pot** from σ, Y_gross (Eq 2.1: potential emissions)
-9. **abatecost** from f, c_redist, L (Eq 1.5: abatement expenditure)
+9. **abatecost** from f, Δc, L (Eq 1.5: abatement expenditure)
 10. **μ** from abatecost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated, capped at μ_max)
 11. **Λ** from abatecost, Y_damaged (Eq 1.7: abatement cost fraction)
 12. **Y_net** from Y_damaged, Λ (Eq 1.8: production after abatement costs)
 13. **y_eff** from y, abatecost, L (Eq 1.9: effective per-capita income)
-14. **G_eff** from f, f_gdp, G_climate (Eq 4.4: effective Gini after redistribution/abatement; when f_gdp >= 1, G_eff = G_climate with no redistribution effect)
+14. **G_eff** from f, ΔL, G_climate (Eq 4.4: effective Gini after redistribution/abatement; when ΔL >= 1, G_eff = G_climate with no redistribution effect)
 15. **U** from y_eff, G_eff, η (Eq 3.5: mean utility)
 16. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
 17. **dK/dt** from s, Y_net, δ, K (Eq 1.10: capital tendency)
@@ -124,11 +124,11 @@ y(t) = (1 - s) · Y_damaged(t) / L(t)
 
 **Eq. (1.5) - Abatement Cost:**
 ```
-abatecost(t) = f · c_redist(t) · L(t)
+abatecost(t) = f · Δc(t) · L(t)
 ```
 This is the total amount society allocates to emissions abatement, where:
 - `f` = fraction of redistributable resources allocated to abatement (0 ≤ f ≤ 1)
-- `c_redist(t)` = per-capita amount of income available for redistribution
+- `Δc(t)` = per-capita amount of income available for redistribution
 - `L(t)` = population
 
 **Eq. (1.6) - Abatement Fraction:**
@@ -228,14 +228,14 @@ U = ln(y) + ln((1-G)/(1+G)) + 2G/(1+G)                              for η = 1
 
 The model considers allocation of resources between income redistribution and emissions abatement. The key parameters are:
 - `G₁` = initial Gini index
-- `f_gdp` = fraction of total income to be redistributed (specified exogenously)
+- `ΔL` = fraction of total income to be redistributed (specified exogenously)
 - `f` = fraction of redistributable resources allocated to abatement (0 ≤ f ≤ 1)
 
 **Eq. (4.1) - Fraction of Income Redistributed:**
 
-Given `f_gdp` and `G₁`, we numerically solve for `G₂` (the Gini index after full redistribution) using the relationship:
+Given `ΔL` and `G₁`, we numerically solve for `G₂` (the Gini index after full redistribution) using the relationship:
 ```
-f_gdp(F*) = [2(G₁-G₂)/(1-G₁)(1+G₂)] · [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^((1+G₁)(1-G₂)/(2(G₂-G₁)))
+ΔL(F*) = [2(G₁-G₂)/(1-G₁)(1+G₂)] · [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^((1+G₁)(1-G₂)/(2(G₂-G₁)))
 ```
 where `F*` is the crossing rank (see Eq. 4.2).
 
@@ -248,7 +248,7 @@ F* = 1 - [((1+G₁)(1-G₂))/((1-G₁)(1+G₂))]^(((1+G₁)(1+G₂))/(2(G₂-G�
 
 **Eq. (4.3) - Per-Capita Amount Redistributed:**
 ```
-c_redist = y · f_gdp
+Δc = y · ΔL
 ```
 where `y` is mean per-capita income.
 
@@ -258,7 +258,7 @@ When fraction `f` of redistributable resources goes to abatement instead of redi
 
 For reference, the formula is:
 ```
-G_eff(f) = (1-f_gdp)/(1-f·f_gdp) · [1 - (1 - G₁)^((1-f_gdp(1-F*))/(1-f_gdp))]
+G_eff(f) = (1-ΔL)/(1-f·ΔL) · [1 - (1 - G₁)^((1-ΔL(1-F*))/(1-ΔL))]
 ```
 
 where:
@@ -270,19 +270,19 @@ where:
 
 See Eq. (1.6) above. The abatement fraction is determined by the amount society allocates to abatement relative to potential emissions and the marginal abatement cost.
 
-**Enhanced Redistribution Mode (f_gdp >= 1) - Partial Implementation**
+**Enhanced Redistribution Mode (ΔL >= 1) - Partial Implementation**
 
-The model now supports `f_gdp >= 1` with special handling that disables redistribution and allows pure abatement optimization.
+The model now supports `ΔL >= 1` with special handling that disables redistribution and allows pure abatement optimization.
 
-**Current Behavior (f_gdp < 1):**
+**Current Behavior (ΔL < 1):**
 - Redistribution operates within the Pareto family of distributions
 - Income transfers preserve the general shape of the distribution
 - The Gini coefficient changes, but the underlying distribution remains Pareto
 - Climate damage calculations assume a fixed Pareto distribution with parameter `a` derived from current Gini
 - Control variable `f` determines allocation between abatement and redistribution
 
-**Implemented Behavior (f_gdp >= 1):**
-When `f_gdp >= 1`, the model disables redistribution and enables pure abatement optimization:
+**Implemented Behavior (ΔL >= 1):**
+When `ΔL >= 1`, the model disables redistribution and enables pure abatement optimization:
 
 1. **Redistribution Disabled** (`economic_model.py:164-167`):
    - Effective Gini is set equal to climate-damaged Gini: `G_eff = Gini_climate`
@@ -311,9 +311,9 @@ When `f_gdp >= 1`, the model disables redistribution and enables pure abatement 
    - No redistribution component in utility calculation (since `G_eff = Gini_climate`)
 
 5. **Physical Interpretation**:
-   - `f_gdp >= 1` represents a model mode where redistribution is turned off
+   - `ΔL >= 1` represents a model mode where redistribution is turned off
    - Allows studying pure abatement policy without redistribution considerations
-   - Budget parameter `f_gdp` scales the available resources, but optimizer self-limits via utility constraints
+   - Budget parameter `ΔL` scales the available resources, but optimizer self-limits via utility constraints
    - Climate damage treated as uniform across income levels (first-order approximation)
 
 **Implementation Status**:
@@ -323,7 +323,7 @@ When `f_gdp >= 1`, the model disables redistribution and enables pure abatement 
 - ✓ All existing unit tests pass
 
 **Future Enhancements**:
-For more sophisticated treatment of `f_gdp >= 1` with non-Pareto income distributions, see **Next Steps, Section 2**.
+For more sophisticated treatment of `ΔL >= 1` with non-Pareto income distributions, see **Next Steps, Section 2**.
 
 #### 5. Gini Index Dynamics and Persistence
 
@@ -421,7 +421,7 @@ Utility and inequality parameters:
 | `G₁` | Initial Gini index (0 = perfect equality, 1 = max inequality) | - | `Gini_initial` |
 | `Gini_fract` | Fraction of effective Gini change as instantaneous step (0 = no step, 1 = full step) | - | `Gini_fract` |
 | `Gini_restore` | Rate at which Gini restores to initial value (0 = no restoration) | yr⁻¹ | `Gini_restore` |
-| `f_gdp` | Fraction of income available for redistribution (<1: active redistribution; >=1: redistribution disabled, pure abatement mode) | - | `fract_gdp` |
+| `ΔL` | Fraction of income available for redistribution (<1: active redistribution; >=1: redistribution disabled, pure abatement mode) | - | `deltaL` |
 
 ### Time-Dependent Functions
 
@@ -495,21 +495,21 @@ The `income_distribution.py` module provides the core mathematical functions for
 
 - **`crossing_rank_from_G(Gini_initial, G2)`** - Computes the population rank `F*` where income remains unchanged during redistribution from `Gini_initial` to `G2` (equation 10)
 
-### Inverse Problem: Finding G2 from f_gdp
+### Inverse Problem: Finding G2 from ΔL
 
 - **`_phi(r)`** - Helper function for numerical root finding; computes `φ(r) = (r-1) · r^(1/(r-1)-1)` with proper handling of edge cases
 
-- **`G2_from_deltaL(deltaL, Gini_initial)`** - **Solves the inverse problem**: given an initial Gini `Gini_initial` and a desired redistribution amount `f_gdp`, numerically finds the target Gini `G2` that would result from full redistribution. Uses `scipy.optimize.root_scalar` with Brent's method. Returns `(G2, remainder)` where remainder is non-zero if `f_gdp` exceeds the maximum possible for the Pareto family (caps at G2=0).
+- **`G2_from_deltaL(deltaL, Gini_initial)`** - **Solves the inverse problem**: given an initial Gini `Gini_initial` and a desired redistribution amount `ΔL`, numerically finds the target Gini `G2` that would result from full redistribution. Uses `scipy.optimize.root_scalar` with Brent's method. Returns `(G2, remainder)` where remainder is non-zero if `ΔL` exceeds the maximum possible for the Pareto family (caps at G2=0).
 
 ### Effective Gini Calculation
 
 - **`calculate_Gini_effective_redistribute_abate(f, deltaL, Gini_initial)`** - **Main function** that calculates the effective Gini index when fraction `f` of redistributable resources is allocated to emissions abatement instead of redistribution.
 
   **Algorithm:**
-  1. Solves for full-redistribution target `G2` from `f_gdp` and `Gini_initial`
+  1. Solves for full-redistribution target `G2` from `ΔL` and `Gini_initial`
   2. Computes crossing rank `F*` for the `(Gini_initial → G2)` transition
-  3. Calculates effective redistribution amount `f_gdp_eff` at the same `F*` for partial allocation
-  4. Solves for Pareto-equivalent `G2_eff` from `f_gdp_eff`
+  3. Calculates effective redistribution amount `ΔL_eff` at the same `F*` for partial allocation
+  4. Solves for Pareto-equivalent `G2_eff` from `ΔL_eff`
 
   **Parameters:**
   - `f = 0`: All resources to redistribution → minimum Gini (maximum equality)
@@ -552,7 +552,7 @@ Each JSON configuration file must contain:
    - Economic: `alpha`, `delta`, `s`
    - Climate: `psi1`, `psi2`, `y_damage_halfsat`, `k_climate`
    - Utility: `eta`, `rho`
-   - Distribution: `Gini_initial`, `Gini_fract`, `Gini_restore`, `fract_gdp`
+   - Distribution: `Gini_initial`, `Gini_fract`, `Gini_restore`, `deltaL`
 
 4. **`time_functions`** - Time-dependent functions (A, L, sigma, theta1), each specified with:
    - `type`: One of six available function types (see details below)
@@ -629,7 +629,7 @@ K₀ = [(s · (1 - Ω) · (1 - λ) · A(0)) / δ]^(1/(1-α)) · L(0)
 ```
 where:
 - `Ω` = aggregate climate damage fraction (depends on K₀ through y_gross)
-- `λ = (1-s) · f(0) · f_gdp` = abatement cost fraction
+- `λ = (1-s) · f(0) · ΔL` = abatement cost fraction
 
 The algorithm iterates until Ω converges (tolerance: 1e-12):
 
@@ -1188,9 +1188,9 @@ Update key model components to more closely follow the formulations in Barrage a
 
 This alignment will ensure our extensions (income distribution, redistribution mechanisms) are built on a well-established baseline that matches current IAM best practices.
 
-### 2. Enhanced Redistribution Mode (f_gdp >= 1) - Advanced Features
+### 2. Enhanced Redistribution Mode (ΔL >= 1) - Advanced Features
 
-**Status**: ✓ Basic implementation complete. Redistribution is disabled and uniform damage approximation is used when `f_gdp >= 1`.
+**Status**: ✓ Basic implementation complete. Redistribution is disabled and uniform damage approximation is used when `ΔL >= 1`.
 
 **Current Implementation**:
 - Redistribution turned off: `G_eff = Gini_climate` (no redistribution effect)
@@ -1209,20 +1209,20 @@ If desired to model actual structural redistribution with non-Pareto distributio
    - Validate that damage vulnerability profile remains physically reasonable
 
 2. **Model actual structural redistribution**:
-   - Define how `f_gdp >= 1` maps to distribution shape changes
+   - Define how `ΔL >= 1` maps to distribution shape changes
    - Implement redistribution mechanics beyond Pareto family in `income_distribution.py`
    - Update `economic_model.py` to calculate modified distribution parameters
-   - Ensure continuous transition at `f_gdp = 1` boundary
+   - Ensure continuous transition at `ΔL = 1` boundary
 
 3. **Testing and validation**:
-   - Unit tests for boundary behavior at `f_gdp = 1`
-   - Asymptotic tests as `f_gdp` increases
+   - Unit tests for boundary behavior at `ΔL = 1`
+   - Asymptotic tests as `ΔL` increases
    - Comparison against analytical solutions where available
 
 **Key Design Questions**:
 - What functional form for income distribution when departing from Pareto?
 - How should climate damage depend on income in non-Pareto distributions?
-- What are physically reasonable upper bounds on `f_gdp`?
+- What are physically reasonable upper bounds on `ΔL`?
 - Is the added complexity justified for modeling purposes?
 
 **Note**: Current implementation (redistribution disabled, uniform damage) may be sufficient for most use cases. These enhancements are optional and should only be pursued if needed for specific research questions.

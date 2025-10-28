@@ -261,8 +261,8 @@ class ScalarParameters:
         Fraction of effective Gini change as instantaneous step (0 <= Gini_fract <= 1)
     Gini_restore : float
         Rate at which Gini restores to initial value (yr^-1, 0=no restoration)
-    deltaL : float
-        Fraction of income available for redistribution
+    fract_gdp : float
+        Fraction of GDP available for redistribution and abatement
     theta2 : float
         Abatement cost exponent
     mu_max : float
@@ -284,7 +284,7 @@ class ScalarParameters:
     Gini_initial: float
     Gini_fract: float
     Gini_restore: float
-    deltaL: float
+    fract_gdp: float
     theta2: float
     mu_max: float = None  # Will be set to INVERSE_EPSILON in __post_init__ if None
     Ecum_initial: float = 0.0  # Default to zero (no prior emissions)
@@ -476,7 +476,7 @@ def evaluate_params_at_time(t, config):
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
         'alpha', 'delta', 's', 'psi1', 'psi2', 'y_damage_halfsat', 'k_climate',
-        'eta', 'rho', 'Gini_initial', 'Gini_fract', 'Gini_restore', 'delta_L', 'theta2', 'mu_max',
+        'eta', 'rho', 'Gini_initial', 'Gini_fract', 'Gini_restore', 'fract_gdp', 'theta2', 'mu_max',
         'A', 'L', 'sigma', 'theta1', 'f'
     """
     sp = config.scalar_params
@@ -496,7 +496,7 @@ def evaluate_params_at_time(t, config):
         'Gini_initial': sp.Gini_initial,
         'Gini_fract': sp.Gini_fract,
         'Gini_restore': sp.Gini_restore,
-        'delta_L': sp.deltaL,
+        'fract_gdp': sp.fract_gdp,
         'theta2': sp.theta2,
         'mu_max': sp.mu_max,
 

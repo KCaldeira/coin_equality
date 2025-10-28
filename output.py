@@ -197,7 +197,7 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
         if opt_results['status'] == 'degenerate':
             writer.writerow([])
             writer.writerow(['WARNING: DEGENERATE CASE'])
-            writer.writerow(['Reason', 'No income available for redistribution or abatement (deltaL = 0)'])
+            writer.writerow(['Reason', 'No income available for redistribution or abatement (fract_gdp = 0)'])
             writer.writerow(['Note', 'Control values have no effect on outcome. Returning initial guess.'])
         writer.writerow([])
 
