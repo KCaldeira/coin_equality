@@ -1,21 +1,20 @@
 {
   "run_name": "test_LN_SBPLX_0.00_7",
   "description": "Baseline scenario using GN_ISRES",
-
   "scalar_parameters": {
     "alpha": 0.3,
     "_alpha": "Capital share of income",
-    "delta": 0.10,
+    "delta": 0.1,
     "_delta": "Capital depreciation rate (10% per year)",
     "s": 0.3,
     "_s": "Savings rate (30% of net production)",
     "psi1": 0,
-    "_psi1": "Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]",
-    "psi2":  0.003467,
-    "_psi2": "Quadratic climate damage coefficient (°C⁻²) [0.003467 from Barrage & Nordhaus 2023]",
-    "y_damage_halfsat": 1e20,
+    "_psi1": "Linear climate damage coefficient (\u00b0C\u207b\u00b9) [Barrage & Nordhaus 2023]",
+    "psi2": 0.003467,
+    "_psi2": "Quadratic climate damage coefficient (\u00b0C\u207b\u00b2) [0.003467 from Barrage & Nordhaus 2023]",
+    "y_damage_halfsat": 1e+20,
     "_y_damage_halfsat": "Income level ($) at which climate damage is half of maximum (lower = more regressive damage). Set very high (e.g., 1e12) for uniform damage",
-    "k_climate": 0.5e-12,
+    "k_climate": 5e-13,
     "_k_climate": "Temperature sensitivity to cumulative  (K/tCO2) 0.5e-12 ~ 1.8 K per 1000 GtC [noe we are in CO2 units]",
     "eta": 1.5,
     "_eta": "Coefficient of relative risk aversion",
@@ -23,18 +22,15 @@
     "_rho": "Pure rate of time preference (1 % per year)",
     "Gini_initial": 0.67,
     "_Gini_initial": "Initial Gini index (moderate inequality)",
-    "Gini_fract": 0.10,
+    "Gini_fract": 0.1,
     "_Gini_fract": "Fraction of effective Gini change that occurs as instantaneous step (0=no step change, 1=full step change) 0.1 means 10% of total change is step change",
-    "Gini_restore": 0.10,
+    "Gini_restore": 0.1,
     "_Gini_restore": "Rate at which Gini restores to initial value (yr^-1, 0=no restoration, positive=restoration to Gini_initial) 0.1 means 10% per year restoration rate",
     "deltaL": 0.02,
     "_deltaL": "Fraction of income available for redistribution (5%)",
-    "theta1": 1000.0,
-    "_theta1": "Abatement cost coefficient ($ tCO2^-1)",
     "theta2": 2.0,
     "_theta2": "Abatement cost exponent"
   },
-
   "time_functions": {
     "_description": "Time-dependent exogenous functions",
     "A": {
@@ -47,19 +43,19 @@
     "L": {
       "_description": "Population",
       "type": "gompertz_growth",
-      "initial_value": 7.752e9,
-      "final_value": 10.825e9,
+      "initial_value": 7752000000.0,
+      "final_value": 10825000000.0,
       "adjustment_coefficient": -0.03133,
       "_adjustment_coefficient": "analytic representation of Barrage and Nordhaus 2023 population projection"
     },
     "sigma": {
       "_description": "Carbon intensity of GDP",
-        "type": "double_exponential_growth",
+      "type": "double_exponential_growth",
       "initial_value": 0.0005,
       "_initial_value": "Meant to reflect 50 GtCO2/$100 trillion GDP; Fix to be more in line with Barage & Nordhaus 2023",
       "growth_rate_1": -0.017866,
       "_growth_rate_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
-      "growth_rate_2": -0.001100,
+      "growth_rate_2": -0.0011,
       "_growth_rate_2": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
       "fract_1": 0.751177,
       "_fract_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023"
@@ -69,15 +65,14 @@
       "type": "double_exponential_growth",
       "initial_value": 695.177385,
       "_initial_value": "Best 2 double exponential fit to Barage & Nordhaus 2023",
-      "growth_rate_1": -0.023000,
+      "growth_rate_1": -0.023,
       "_growth_rate_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
-      "growth_rate_2": -0.000650,
+      "growth_rate_2": -0.00065,
       "_growth_rate_2": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
       "fract_1": 0.310452,
       "_fract_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023"
     }
   },
-
   "integration_parameters": {
     "_description": "Time integration settings",
     "t_start": 0.0,
@@ -85,35 +80,33 @@
     "_t_end": "Integrate for 400 years",
     "dt": 1.0,
     "_dt": "1-year time step (Euler method)",
-    "rtol": 1e-6,
-    "atol": 1e-9,
+    "rtol": 1e-06,
+    "atol": 1e-09,
     "_tolerances": "Reserved for future adaptive solvers",
     "plot_short_horizon": 100.0,
     "_plot_short_horizon": "Time horizon (years) for short-term detailed plots. Creates second PDF book with results from t_start to this time."
   },
-
   "control_function": {
     "_description": "Allocation policy between abatement and redistribution (also used as initial guess for optimization)",
     "type": "constant",
     "value": 0.5,
     "_value": "50% to abatement, 50% to redistribution; this value is used as initial guess for single-point optimization"
   },
-
   "optimization_parameters": {
     "_description": "ITERATIVE REFINEMENT MODE: control_times is integer (number of iterations), initial_guess is scalar",
     "max_evaluations": 10000,
     "_max_evaluations": "Maximum number of objective function evaluations PER ITERATION",
     "control_times": 5,
     "_control_times": "INTEGER: Number of refinement iterations. Final iteration will have n_points_final control points if specified.",
-    "initial_guess": 0.00,
+    "initial_guess": 0.0,
     "_initial_guess": "SCALAR: Initial f value for both t_start and t_end in first iteration. Subsequent iterations use PCHIP interpolation from previous solution",
-    "n_points_final":65,
+    "n_points_final": 65,
     "_n_points_final": "Target number of control points in final iteration. Refinement base = (n_points_final - 1)^(1/(n_iterations - 1)). Omit to use default base=2.0",
     "_algorithm_note": "Optional: specify NLopt algorithm. Omit to use default (LN_SBPLX). Local algorithms recommended for iterative refinement.",
     "algorithm": "LN_SBPLX",
     "_algorithm": "LN_SBPLX (local derivative-free Subplex, default, robust for noisy objectives)",
-    "_stopping_criteria": "NLopt stopping criteria. For f ∈ [0,1], absolute tolerance makes more sense than relative.",
+    "_stopping_criteria": "NLopt stopping criteria. For f \u2208 [0,1], absolute tolerance makes more sense than relative.",
     "xtol_abs": 1e-10,
-    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |Δf| < 1e-10. Appropriate since f ∈ [0,1]."
+    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |\u0394f| < 1e-10. Appropriate since f \u2208 [0,1]."
   }
 }

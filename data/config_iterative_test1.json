@@ -29,11 +29,9 @@
     "_Gini_restore": "Rate at which Gini restores to initial value (yr^-1)",
     "deltaL": 0.02,
     "_deltaL": "Fraction of income available for redistribution (2%)",
-    "theta1": 1000.0,
-    "_theta1": "Abatement cost coefficient ($ tCO2^-1)",
     "theta2": 2.0,
-    "_theta2": "Abatement cost exponent",
-  }
+    "_theta2": "Abatement cost exponent"
+  },
 
   "time_functions": {
     "_description": "Time-dependent exogenous functions",
