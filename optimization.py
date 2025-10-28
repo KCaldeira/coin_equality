@@ -279,7 +279,8 @@ class UtilityOptimizer:
             control_function=control_function
         )
 
-        results = integrate_model(config)
+        # Use store_detailed_output=False during optimization for better performance
+        results = integrate_model(config, store_detailed_output=False)
 
         rho = self.base_config.scalar_params.rho
         t = results['t']

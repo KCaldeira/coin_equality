@@ -12,7 +12,7 @@ from climate_damage_distribution import calculate_climate_damage_and_gini_effect
 from constants import EPSILON, NEG_BIGNUM
 
 
-def calculate_tendencies(state, params):
+def calculate_tendencies(state, params, store_detailed_output=True):
     """
     Calculate time derivatives and all derived variables.
 
@@ -196,31 +196,45 @@ def calculate_tendencies(state, params):
     dGini_dt = -Gini_restore * (Gini - Gini_initial)
     Gini_step_change = Gini_fract * (G_eff - Gini)
 
-    return {
-        'dK_dt': dK_dt,
-        'dEcum_dt': E,
-        'dGini_dt': dGini_dt,
-        'Gini_step_change': Gini_step_change,
-        'Y_gross': Y_gross,
-        'delta_T': delta_T,
-        'Omega': Omega,
-        'Gini_climate': Gini_climate,
-        'Y_damaged': Y_damaged,
-        'Y_net': Y_net,
-        'y': y,
-        'delta_c': delta_c,
-        'mu': mu,
-        'Lambda': Lambda,
-        'abatecost': abatecost,
-        'marginal_abatement_cost': marginal_abatement_cost,
-        'y_eff': y_eff,
-        'G_eff': G_eff,
-        'U': U,
-        'E': E,
-    }
+    if store_detailed_output:
+        # Return full diagnostics for CSV/PDF output
+        return {
+            'dK_dt': dK_dt,
+            'dEcum_dt': E,
+            'dGini_dt': dGini_dt,
+            'Gini_step_change': Gini_step_change,
+            'Y_gross': Y_gross,
+            'delta_T': delta_T,
+            'Omega': Omega,
+            'Gini_climate': Gini_climate,
+            'Y_damaged': Y_damaged,
+            'Y_net': Y_net,
+            'y': y,
+            'delta_c': delta_c,
+            'mu': mu,
+            'Lambda': Lambda,
+            'abatecost': abatecost,
+            'marginal_abatement_cost': marginal_abatement_cost,
+            'y_eff': y_eff,
+            'G_eff': G_eff,
+            'U': U,
+            'E': E,
+            # STUB: Additional diagnostics to be added (~20 variables)
+            # TODO: Add more intermediate calculations here as needed
+            # Examples: consumption, investment, damage costs, welfare components, etc.
+        }
+    else:
+        # Return minimal variables needed for optimization
+        return {
+            'U': U,
+            'dK_dt': dK_dt,
+            'dEcum_dt': E,
+            'dGini_dt': dGini_dt,
+            'Gini_step_change': Gini_step_change,
+        }
 
 
-def integrate_model(config):
+def integrate_model(config, store_detailed_output=True):
     """
     Integrate the model forward in time using Euler's method.
 
@@ -228,18 +242,25 @@ def integrate_model(config):
     ----------
     config : ModelConfiguration
         Complete model configuration including parameters and time-dependent functions
+    store_detailed_output : bool, optional
+        If True (default), stores all diagnostic variables for CSV/PDF output.
+        If False, stores only t, U needed for optimization objective calculation.
 
     Returns
     -------
     dict
         Time series results with keys:
         - 't': array of time points
+        - 'U': array of utility values (always stored)
+        - 'L': array of population values (always stored, needed for objective function)
+
+        If store_detailed_output=True, also includes:
         - 'K': array of capital stock values
         - 'Ecum': array of cumulative emissions values
         - 'Gini': array of Gini index values
-        - 'A', 'L', 'sigma', 'theta1', 'f': time-dependent inputs
+        - 'A', 'sigma', 'theta1', 'f': time-dependent inputs
         - All derived variables: Y_gross, delta_T, Omega, Gini_climate, Y_damaged, Y_net,
-          y, delta_c, mu, Lambda, abatecost, y_eff, G_eff, U, E
+          y, delta_c, mu, Lambda, abatecost, marginal_abatement_cost, y_eff, G_eff, E
         - 'dK_dt', 'dEcum_dt', 'dGini_dt', 'Gini_step_change': tendencies
 
     Notes
@@ -276,38 +297,45 @@ def integrate_model(config):
         'Gini': config.scalar_params.Gini_initial
     }
 
-    # Initialize storage for all variables
+    # Initialize storage for variables
     results = {
         't': t_array,
-        'K': np.zeros(n_steps),
-        'Ecum': np.zeros(n_steps),
-        'Gini': np.zeros(n_steps),
-        'A': np.zeros(n_steps),
-        'L': np.zeros(n_steps),
-        'sigma': np.zeros(n_steps),
-        'theta1': np.zeros(n_steps),
-        'f': np.zeros(n_steps),
-        'Y_gross': np.zeros(n_steps),
-        'delta_T': np.zeros(n_steps),
-        'Omega': np.zeros(n_steps),
-        'Gini_climate': np.zeros(n_steps),
-        'Y_damaged': np.zeros(n_steps),
-        'Y_net': np.zeros(n_steps),
-        'y': np.zeros(n_steps),
-        'delta_c': np.zeros(n_steps),
-        'mu': np.zeros(n_steps),
-        'Lambda': np.zeros(n_steps),
-        'abatecost': np.zeros(n_steps),
-        'marginal_abatement_cost': np.zeros(n_steps),
-        'y_eff': np.zeros(n_steps),
-        'G_eff': np.zeros(n_steps),
         'U': np.zeros(n_steps),
-        'E': np.zeros(n_steps),
-        'dK_dt': np.zeros(n_steps),
-        'dEcum_dt': np.zeros(n_steps),
-        'dGini_dt': np.zeros(n_steps),
-        'Gini_step_change': np.zeros(n_steps),
+        'L': np.zeros(n_steps),  # Needed for objective function
     }
+
+    if store_detailed_output:
+        # Add storage for all diagnostic variables
+        results.update({
+            'K': np.zeros(n_steps),
+            'Ecum': np.zeros(n_steps),
+            'Gini': np.zeros(n_steps),
+            'A': np.zeros(n_steps),
+            'sigma': np.zeros(n_steps),
+            'theta1': np.zeros(n_steps),
+            'f': np.zeros(n_steps),
+            'Y_gross': np.zeros(n_steps),
+            'delta_T': np.zeros(n_steps),
+            'Omega': np.zeros(n_steps),
+            'Gini_climate': np.zeros(n_steps),
+            'Y_damaged': np.zeros(n_steps),
+            'Y_net': np.zeros(n_steps),
+            'y': np.zeros(n_steps),
+            'delta_c': np.zeros(n_steps),
+            'mu': np.zeros(n_steps),
+            'Lambda': np.zeros(n_steps),
+            'abatecost': np.zeros(n_steps),
+            'marginal_abatement_cost': np.zeros(n_steps),
+            'y_eff': np.zeros(n_steps),
+            'G_eff': np.zeros(n_steps),
+            'E': np.zeros(n_steps),
+            'dK_dt': np.zeros(n_steps),
+            'dEcum_dt': np.zeros(n_steps),
+            'dGini_dt': np.zeros(n_steps),
+            'Gini_step_change': np.zeros(n_steps),
+            # STUB: Additional storage arrays for ~20 new diagnostics
+            # TODO: Add storage for future intermediate calculations
+        })
 
     # Time stepping loop
     for i, t in enumerate(t_array):
@@ -315,41 +343,44 @@ def integrate_model(config):
         params = evaluate_params_at_time(t, config)
 
         # Calculate all variables and tendencies at current time
-        outputs = calculate_tendencies(state, params)
+        outputs = calculate_tendencies(state, params, store_detailed_output)
 
-        # Store state variables
-        results['K'][i] = state['K']
-        results['Ecum'][i] = state['Ecum']
-        results['Gini'][i] = state['Gini']
-
-        # Store time-dependent inputs
-        results['A'][i] = params['A']
-        results['L'][i] = params['L']
-        results['sigma'][i] = params['sigma']
-        results['theta1'][i] = params['theta1']
-        results['f'][i] = params['f']
-
-        # Store all derived variables
-        results['Y_gross'][i] = outputs['Y_gross']
-        results['delta_T'][i] = outputs['delta_T']
-        results['Omega'][i] = outputs['Omega']
-        results['Gini_climate'][i] = outputs['Gini_climate']
-        results['Y_damaged'][i] = outputs['Y_damaged']
-        results['Y_net'][i] = outputs['Y_net']
-        results['y'][i] = outputs['y']
-        results['delta_c'][i] = outputs['delta_c']
-        results['mu'][i] = outputs['mu']
-        results['Lambda'][i] = outputs['Lambda']
-        results['abatecost'][i] = outputs['abatecost']
-        results['marginal_abatement_cost'][i] = outputs['marginal_abatement_cost']
-        results['y_eff'][i] = outputs['y_eff']
-        results['G_eff'][i] = outputs['G_eff']
+        # Always store variables needed for objective function
         results['U'][i] = outputs['U']
-        results['E'][i] = outputs['E']
-        results['dK_dt'][i] = outputs['dK_dt']
-        results['dEcum_dt'][i] = outputs['dEcum_dt']
-        results['dGini_dt'][i] = outputs['dGini_dt']
-        results['Gini_step_change'][i] = outputs['Gini_step_change']
+        results['L'][i] = params['L']
+
+        if store_detailed_output:
+            # Store state variables
+            results['K'][i] = state['K']
+            results['Ecum'][i] = state['Ecum']
+            results['Gini'][i] = state['Gini']
+
+            # Store time-dependent inputs
+            results['A'][i] = params['A']
+            results['sigma'][i] = params['sigma']
+            results['theta1'][i] = params['theta1']
+            results['f'][i] = params['f']
+
+            # Store all derived variables
+            results['Y_gross'][i] = outputs['Y_gross']
+            results['delta_T'][i] = outputs['delta_T']
+            results['Omega'][i] = outputs['Omega']
+            results['Gini_climate'][i] = outputs['Gini_climate']
+            results['Y_damaged'][i] = outputs['Y_damaged']
+            results['Y_net'][i] = outputs['Y_net']
+            results['y'][i] = outputs['y']
+            results['delta_c'][i] = outputs['delta_c']
+            results['mu'][i] = outputs['mu']
+            results['Lambda'][i] = outputs['Lambda']
+            results['abatecost'][i] = outputs['abatecost']
+            results['marginal_abatement_cost'][i] = outputs['marginal_abatement_cost']
+            results['y_eff'][i] = outputs['y_eff']
+            results['G_eff'][i] = outputs['G_eff']
+            results['E'][i] = outputs['E']
+            results['dK_dt'][i] = outputs['dK_dt']
+            results['dEcum_dt'][i] = outputs['dEcum_dt']
+            results['dGini_dt'][i] = outputs['dGini_dt']
+            results['Gini_step_change'][i] = outputs['Gini_step_change']
 
         # Euler step: update state for next iteration (skip on last step)
         if i < n_steps - 1:

@@ -1,5 +1,5 @@
 {
-  "run_name": "DICE_2x_0.02_10k",
+  "run_name": "DICE_2x_0.02_10k_0.67",
   "description": "Baseline scenario using GN_ISRES",
   "scalar_parameters": {
     "alpha": 0.3,
