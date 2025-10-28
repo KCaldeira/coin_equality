@@ -338,9 +338,6 @@ def integrate_model(config, store_detailed_output=True):
     if store_detailed_output:
         # Add storage for all diagnostic variables
         results.update({
-            'K': np.zeros(n_steps),
-            'Ecum': np.zeros(n_steps),
-            'Gini': np.zeros(n_steps),
             'A': np.zeros(n_steps),
             'sigma': np.zeros(n_steps),
             'theta1': np.zeros(n_steps),
@@ -368,12 +365,15 @@ def integrate_model(config, store_detailed_output=True):
             # TODO: Add storage for future intermediate calculations
         })
 
-    # Always store time and objective function variables      
-    results = {
+    # Always store time, state variables, and objective function variables
+    results.update({
         't': t_array,
+        'K': np.zeros(n_steps),
+        'Ecum': np.zeros(n_steps),
+        'Gini': np.zeros(n_steps),
         'U': np.zeros(n_steps),
         'L': np.zeros(n_steps),  # Needed for objective function
-    }
+    })
 
     # Time stepping loop
     for i, t in enumerate(t_array):
