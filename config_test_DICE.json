@@ -31,7 +31,9 @@
     "theta2": 2.6,
     "_theta2": "Abatement cost exponent",
     "mu_max": 1.2,
-    "_mu_max": "Maximum allowed abatement fraction (cap on μ). Values >1 allow carbon removal."
+    "_mu_max": "Maximum allowed abatement fraction (cap on μ). Values >1 allow carbon removal.",
+    "Ecum_initial": 2.4943e+12,
+    "_Ecum_initial": "Initial cumulative CO2 emissions (tCO2). Set to 0 for no prior emissions. 1.24715/k_climate to match 2020 Barrage & Nordhaus 2023."
   },
   "time_functions": {
     "_description": "Time-dependent exogenous functions",
@@ -99,11 +101,11 @@
     "_description": "ITERATIVE REFINEMENT MODE: control_times is integer (number of iterations), initial_guess is scalar",
     "max_evaluations": 10000,
     "_max_evaluations": "Maximum number of objective function evaluations PER ITERATION",
-    "control_times": 5,
+    "control_times": 4,
     "_control_times": "INTEGER: Number of refinement iterations. Final iteration will have n_points_final control points if specified.",
     "initial_guess": 0.0,
     "_initial_guess": "SCALAR: Initial f value for both t_start and t_end in first iteration. Subsequent iterations use PCHIP interpolation from previous solution",
-    "n_points_final": 65,
+    "n_points_final": 50,
     "_n_points_final": "Target number of control points in final iteration. Refinement base = (n_points_final - 1)^(1/(n_iterations - 1)). Omit to use default base=2.0",
     "_algorithm_note": "Optional: specify NLopt algorithm. Omit to use default (LN_SBPLX). Local algorithms recommended for iterative refinement.",
     "algorithm": "LN_SBPLX",

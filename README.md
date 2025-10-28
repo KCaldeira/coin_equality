@@ -410,6 +410,7 @@ Climate and abatement parameters:
 | `k_climate` | Temperature sensitivity to cumulative emissions | °C tCO₂⁻¹ | `k_climate` |
 | `θ₂` | Abatement cost exponent (controls cost curve shape) | - | `theta2` |
 | `μ_max` | Maximum allowed abatement fraction (cap on μ). Values >1 allow carbon removal. Defaults to INVERSE_EPSILON (no cap) if omitted. | - | `mu_max` |
+| `Ecum_initial` | Initial cumulative CO2 emissions. Defaults to 0.0 (no prior emissions) if omitted. | tCO₂ | `Ecum_initial` |
 
 Utility and inequality parameters:
 
@@ -606,16 +607,16 @@ See `config_baseline.json` for extensive examples of documentation.
 
 ### Initial Conditions
 
-Initial conditions are **computed automatically** (not specified in JSON):
+Initial conditions are **computed automatically**:
 
-- **`Ecum(0) = 0`**: No cumulative emissions at start
+- **`Ecum(0) = Ecum_initial`**: Initial cumulative emissions from configuration (defaults to 0.0 if not specified)
 - **`K(0)`**: Steady-state capital stock with no climate damage or abatement:
   ```
   K₀ = (s · A(0) / δ)^(1/(1-α)) · L(0)
   ```
 - **`Gini(0) = Gini_initial`**: Initial Gini index from configuration
 
-This ensures the model starts from a consistent economic equilibrium with specified initial inequality.
+This ensures the model starts from a consistent economic equilibrium. Setting `Ecum_initial` > 0 allows modeling scenarios with pre-existing climate change (e.g., starting from year 2020 conditions).
 
 ### Example Configuration
 

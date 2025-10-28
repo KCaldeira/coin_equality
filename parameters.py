@@ -268,6 +268,9 @@ class ScalarParameters:
     mu_max : float
         Maximum allowed abatement fraction (cap on μ)
         Default: INVERSE_EPSILON (effectively no cap)
+    Ecum_initial : float
+        Initial cumulative CO2 emissions (tCO2)
+        Default: 0.0 (no prior emissions)
     """
     alpha: float
     delta: float
@@ -284,6 +287,7 @@ class ScalarParameters:
     deltaL: float
     theta2: float
     mu_max: float = None  # Will be set to INVERSE_EPSILON in __post_init__ if None
+    Ecum_initial: float = 0.0  # Default to zero (no prior emissions)
 
     def __post_init__(self):
         """Set default for mu_max if not provided."""

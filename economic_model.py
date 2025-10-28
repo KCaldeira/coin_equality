@@ -248,7 +248,7 @@ def integrate_model(config):
     This ensures all functional relationships are satisfied exactly at output points.
 
     Initial conditions are computed automatically:
-    - Ecum(0) = 0 (no cumulative emissions)
+    - Ecum(0) = Ecum_initial (initial cumulative emissions from configuration)
     - K(0) = (s·A(0)/δ)^(1/(1-α))·L(0) (steady-state capital)
     - Gini(0) = Gini_initial (initial Gini index from configuration)
     """
@@ -272,7 +272,7 @@ def integrate_model(config):
 
     state = {
         'K': K0,
-        'Ecum': 0.0,
+        'Ecum': config.scalar_params.Ecum_initial,
         'Gini': config.scalar_params.Gini_initial
     }
 
