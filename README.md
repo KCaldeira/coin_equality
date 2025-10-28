@@ -56,7 +56,7 @@ For the differential equation solver, variables are calculated in this order:
 
 **Eq. (1.1) - Production Function (Cobb-Douglas):**
 ```
-Y_gross(t) =  K(t)^α · (A(t) · L(t))^(1-α)
+Y_gross(t) = A(t) · K(t)^α · L(t)^(1-α)
 ```
 
 **Eq. (1.2) - Income-Dependent Climate Damage:**
@@ -582,9 +582,10 @@ Each JSON configuration file must contain:
 
    f. **`gompertz_growth`** - Gompertz growth function (continuous form of Barrage & Nordhaus 2023 finite-difference model)
       - Parameters: `initial_value`, `final_value`, `adjustment_coefficient`
-      - Equation: `L(t) = final_value · (initial_value / final_value)^exp(adjustment_coefficient · t)`
+      - Equation: `L(t) = final_value · exp(ln(initial_value / final_value) · exp(adjustment_coefficient · t))`
       - **Purpose**: Models population growth approaching asymptotic limit
       - **Properties**: At t=0: L(0) = initial_value; as t→∞: L(t) → final_value (for negative adjustment_coefficient)
+      - **Note**: This form using exp/log has better numerical properties than the equivalent power form `(initial_value / final_value)^exp(...)`
       - **Typical values**: Based on DICE2023 parameters:
         - `initial_value = 7.0e9` (7 billion people)
         - `final_value = 10.0e9` (10 billion asymptotic limit)
@@ -615,6 +616,8 @@ This ensures the model starts from a consistent economic equilibrium with specif
 ### Example Configuration
 
 See `config_baseline.json` for a complete example. To create new scenarios, copy and modify this file.
+
+**Note**: `config_test_DICE.json` provides a configuration for simulations close to the parameters and setup presented in Barrage & Nordhaus (2023), including Gompertz population growth, double exponential functions for carbon intensity and abatement costs, and settings that replicate DICE2023 behavior (deltaL = 1.0 for pure abatement mode, Gini_initial = 0.0 for no inequality).
 
 **Example: Population with Gompertz growth**
 ```json

@@ -173,7 +173,7 @@ def create_gompertz_growth(initial_value, final_value, adjustment_coefficient):
     Population growing from 7B to 10B:
     >>> L = create_gompertz_growth(7e9, 10e9, -0.02)
     """
-    return lambda t: final_value * np.exp(np.ln(initial_value / final_value) * np.exp(adjustment_coefficient * t))
+    return lambda t: final_value * np.exp(np.log(initial_value / final_value) * np.exp(adjustment_coefficient * t))
 
 
 # =============================================================================
