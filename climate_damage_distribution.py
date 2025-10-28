@@ -334,6 +334,11 @@ def calculate_climate_damage_gini_effect(a, y_damage_halfsat, y_mean, omega_max)
     # This formula accounts for both:
     # 1. The inequality in damage distribution (via H term)
     # 2. The reduction in mean income (via denom term)
-    G_new = 1.0 - (1.0 - G0) * (1.0 - omega_max * H) / denom
+    if denom > 0:
+        G_new = 1.0 - (1.0 - G0) * (1.0 - omega_max * H) / denom
+    else:
+        # If denom <= 0, all income lost; Gini undefined, set to G0
+        print("Warning: Mean income after damage is zero or negative; setting Gini to pre-damage value.")
+        G_new = G0
 
     return float(G_new)
