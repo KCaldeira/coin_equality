@@ -86,6 +86,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     s = params['s']
     k_climate = params['k_climate']
     eta = params['eta']
+    rho = params['rho']
+    t = params['t']
     A = params['A']
     L = params['L']
     sigma = params['sigma']
@@ -151,9 +153,6 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     else:
         mu = 0.0
 
-    # Marginal abatement cost at current mu
-    marginal_abatement_cost = theta1 * mu ** (theta2 - 1)
-
     # Eq 1.7: Abatement cost fraction
     if Y_damaged > 0 and abatecost > 0:
         Lambda = abatecost / Y_damaged
@@ -200,6 +199,14 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     results = {}
 
     if store_detailed_output:
+        # Additional calculated variables for detailed output only
+        marginal_abatement_cost = theta1 * mu ** (theta2 - 1)  # Social cost of carbon
+        total_climate_damage = Y_gross * Omega  # Total dollar value of climate damage
+        gross_investment = s * Y_damaged  # Investment before depreciation
+        consumption = y * L  # Total consumption
+        discounted_utility = U * np.exp(-rho * t)  # Discounted utility
+        abatement_cost_fraction = f * delta_c  # Abatement cost as fraction of y
+
         # Return full diagnostics for CSV/PDF output
         results.update({
             'dK_dt': dK_dt,
@@ -222,9 +229,12 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             'G_eff': G_eff,
             'U': U,
             'E': E,
-            # STUB: Additional diagnostics to be added (~20 variables)
-            # TODO: Add more intermediate calculations here as needed
-            # Examples: consumption, investment, damage costs, welfare components, etc.
+            'total_climate_damage': total_climate_damage,
+            'gross_investment': gross_investment,
+            'consumption': consumption,
+            'discounted_utility': discounted_utility,
+            'abatement_cost_fraction': abatement_cost_fraction,
+            's': s,  # Savings rate (currently constant, may become time-dependent)
         })
     
         # Return minimal variables needed for optimization
@@ -361,8 +371,12 @@ def integrate_model(config, store_detailed_output=True):
             'dEcum_dt': np.zeros(n_steps),
             'dGini_dt': np.zeros(n_steps),
             'Gini_step_change': np.zeros(n_steps),
-            # STUB: Additional storage arrays for ~20 new diagnostics
-            # TODO: Add storage for future intermediate calculations
+            'total_climate_damage': np.zeros(n_steps),
+            'gross_investment': np.zeros(n_steps),
+            'consumption': np.zeros(n_steps),
+            'discounted_utility': np.zeros(n_steps),
+            'abatement_cost_fraction': np.zeros(n_steps),
+            's': np.zeros(n_steps),
         })
 
     # Always store time, state variables, and objective function variables
@@ -419,6 +433,11 @@ def integrate_model(config, store_detailed_output=True):
             results['dEcum_dt'][i] = outputs['dEcum_dt']
             results['dGini_dt'][i] = outputs['dGini_dt']
             results['Gini_step_change'][i] = outputs['Gini_step_change']
+            results['total_climate_damage'][i] = outputs['total_climate_damage']
+            results['gross_investment'][i] = outputs['gross_investment']
+            results['consumption'][i] = outputs['consumption']
+            results['discounted_utility'][i] = outputs['discounted_utility']
+            results['abatement_cost_fraction'][i] = outputs['abatement_cost_fraction']
 
         # Euler step: update state for next iteration (skip on last step)
         if i < n_steps - 1:

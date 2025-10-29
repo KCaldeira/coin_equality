@@ -483,6 +483,9 @@ def evaluate_params_at_time(t, config):
     tf = config.time_functions
 
     return {
+        # Time
+        't': t,
+
         # Scalar parameters
         'alpha': sp.alpha,
         'delta': sp.delta,

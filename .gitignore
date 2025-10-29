@@ -28,6 +28,14 @@ build/
 .DS_Store
 Thumbs.db
 
+# Office temporary files
+~*.xlsx
+~*.docx
+~*.pptx
+~*.xls
+~*.doc
+~*.ppt
+
 # Data files (uncomment if you want to ignore data directories)
 # data/
 # output/

@@ -289,9 +289,42 @@ def write_results_csv(results, output_dir, filename='results.csv'):
     """
     csv_path = os.path.join(output_dir, filename)
 
-    # Get variable names with 't' first, then rest sorted
-    other_vars = sorted([k for k in results.keys() if k != 't'])
-    var_names = ['t'] + other_vars
+    # Define column order as specified
+    ordered_columns = [
+        't',  # 1. time
+        'A',  # 2. total factor productivity
+        'mu',  # 3. abatement fraction
+        'theta1',  # 4. price of abatement at mu = 1
+        'sigma',  # 5. carbon intensity of GDP
+        'L',  # 6. population
+        'Ecum',  # 7. cumulative emissions
+        'delta_T',  # 8. global mean temperature
+        'Omega',  # 9. total damages as fraction of output (Lambda in user's description)
+        'total_climate_damage',  # 10. total climate damage (Y_gross * Omega)
+        'Y_damaged',  # 11. output after damages before abatement
+        'abatement_cost_fraction',  # 12. fraction of output after damages that is abatement cost (f * delta_c)
+        'abatecost',  # 13. abatement cost
+        'Y_net',  # 14. output net of climate damages and abatement cost
+        'E',  # 15. CO2 emissions in tCO2/yr
+        'gross_investment',  # 16. gross investment (s * Y_damaged)
+        'K',  # 17. capital in 2019$
+        'consumption',  # 18. consumption (y * L)
+        'dK_dt',  # 19. net capital accumulation
+        'y',  # 20. per-capita consumption
+        'Gini',  # 21. baseline Gini index
+        'G_eff',  # 22. effective Gini index
+        'dGini_dt',  # 23. continuous change in Gini index
+        'Gini_step_change',  # 24. step function change in Gini index
+        'U',  # 25. mean utility of consumption per capita
+        'discounted_utility',  # 26. discounted utility = U * exp(-rho*t)
+        's',  # 27. savings rate
+        'f',  # 28. control rate (allocation to abatement)
+        'marginal_abatement_cost',  # 29. social cost of carbon
+    ]
+
+    # Add any remaining variables not in the ordered list
+    remaining_vars = sorted([k for k in results.keys() if k not in ordered_columns])
+    var_names = ordered_columns + remaining_vars
 
     # Open CSV file and write
     with open(csv_path, 'w', newline='') as csvfile:
