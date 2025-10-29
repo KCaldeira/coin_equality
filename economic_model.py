@@ -438,6 +438,7 @@ def integrate_model(config, store_detailed_output=True):
             results['consumption'][i] = outputs['consumption']
             results['discounted_utility'][i] = outputs['discounted_utility']
             results['abatement_cost_fraction'][i] = outputs['abatement_cost_fraction']
+            results['s'][i] = outputs['s']
 
         # Euler step: update state for next iteration (skip on last step)
         if i < n_steps - 1:

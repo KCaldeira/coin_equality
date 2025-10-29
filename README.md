@@ -983,11 +983,12 @@ The clamp is applied during integration rather than modifying E itself, allowing
 The results dictionary contains arrays for:
 - **Time**: `t`
 - **State variables**: `K`, `Ecum`, `Gini`
-- **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`
+- **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`, `s`
 - **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_eff`
-- **Climate variables**: `delta_T`, `Omega`, `E`
-- **Abatement variables**: `mu`, `Lambda`, `abatecost`, `delta_c`
-- **Inequality/utility**: `G_eff`, `U`
+- **Climate variables**: `delta_T`, `Omega`, `E`, `total_climate_damage`
+- **Abatement variables**: `mu`, `Lambda`, `abatecost`, `delta_c`, `abatement_cost_fraction`, `marginal_abatement_cost`
+- **Investment/consumption**: `gross_investment`, `consumption`
+- **Inequality/utility**: `G_eff`, `Gini_climate`, `U`, `discounted_utility`
 - **Tendencies**: `dK_dt`, `dEcum_dt`, `dGini_dt`, `Gini_step_change`
 
 All arrays have the same length corresponding to time points from `t_start` to `t_end` in steps of `dt`.
@@ -1011,7 +1012,7 @@ This creates a directory: `./data/output/{run_name}_YYYYMMDD-HHMMSS/`
 
 **CSV File (`results.csv`):**
 - Each column is a model variable
-- Time column ('t') is always the first column, followed by other variables in alphabetical order
+- Columns are ordered by category (time, inputs, economic flow, emissions, investment, utility, etc.)
 - Each row is a time point
 - First row contains variable names (header)
 - Can be loaded into Excel, Python (pandas), R, etc.

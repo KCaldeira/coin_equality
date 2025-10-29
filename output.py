@@ -326,12 +326,61 @@ def write_results_csv(results, output_dir, filename='results.csv'):
     remaining_vars = sorted([k for k in results.keys() if k not in ordered_columns])
     var_names = ordered_columns + remaining_vars
 
+    # Define variable descriptions and units
+    var_info = {
+        't': ('Time', 'yr'),
+        'A': ('Total factor productivity', '$'),
+        'mu': ('Abatement fraction', 'dimensionless'),
+        'theta1': ('Marginal abatement cost at mu=1', '$/tCO2'),
+        'sigma': ('Carbon intensity of GDP', 'tCO2/$'),
+        'L': ('Population', 'persons'),
+        'Ecum': ('Cumulative CO2 emissions', 'tCO2'),
+        'delta_T': ('Global mean temperature change', '°C'),
+        'Omega': ('Climate damage as fraction of gross output', 'dimensionless'),
+        'total_climate_damage': ('Total climate damage', '$/yr'),
+        'Y_damaged': ('Output after climate damage before abatement', '$/yr'),
+        'abatement_cost_fraction': ('Abatement cost as fraction of after-damage income', 'dimensionless'),
+        'abatecost': ('Total abatement expenditure', '$/yr'),
+        'Y_net': ('Output net of climate damage and abatement cost', '$/yr'),
+        'E': ('CO2 emissions', 'tCO2/yr'),
+        'gross_investment': ('Gross investment', '$/yr'),
+        'K': ('Capital stock', '$'),
+        'consumption': ('Total consumption', '$/yr'),
+        'dK_dt': ('Net capital accumulation', '$/yr'),
+        'y': ('Per-capita consumption', '$/person/yr'),
+        'Gini': ('Gini index before redistribution', 'dimensionless'),
+        'G_eff': ('Gini index after redistribution', 'dimensionless'),
+        'dGini_dt': ('Continuous Gini change rate', '1/yr'),
+        'Gini_step_change': ('Discontinuous Gini step change', 'dimensionless'),
+        'U': ('Mean utility per capita', 'dimensionless'),
+        'discounted_utility': ('Discounted utility per capita', 'dimensionless'),
+        's': ('Savings rate', 'dimensionless'),
+        'f': ('Control: fraction allocated to abatement vs redistribution', 'dimensionless'),
+        'marginal_abatement_cost': ('Marginal abatement cost (social cost of carbon)', '$/tCO2'),
+        'Y_gross': ('Gross production before climate damage', '$/yr'),
+        'Gini_climate': ('Gini index after climate damage before redistribution', 'dimensionless'),
+        'y_eff': ('Effective per-capita income after abatement', '$/person/yr'),
+        'Lambda': ('Abatement cost as fraction of damaged output', 'dimensionless'),
+        'delta_c': ('Per-capita redistributable income', '$/person/yr'),
+        'dEcum_dt': ('Rate of cumulative emissions change', 'tCO2/yr'),
+    }
+
+    # Create headers with format: "variable, description, (units)"
+    headers = []
+    for var in var_names:
+        if var in var_info:
+            desc, units = var_info[var]
+            headers.append(f"{var}, {desc}, ({units})")
+        else:
+            # Fallback for any variables not in the dictionary
+            headers.append(var)
+
     # Open CSV file and write
     with open(csv_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
 
         # Write header
-        writer.writerow(var_names)
+        writer.writerow(headers)
 
         # Get number of time points
         n_points = len(results['t'])
