@@ -1279,6 +1279,162 @@ Establish confidence that the model is ready for production use:
 - Creating comprehensive test cases that verify expected model behavior
 - Establishing this codebase as a reliable tool for research and analysis
 
+## Planned Enhancement: Dual Optimization of Savings Rate and Abatement Allocation
+
+### Overview
+
+We plan to extend the model to simultaneously optimize both:
+1. **f(t)** - allocation fraction between abatement and redistribution (current)
+2. **s(t)** - savings rate (currently fixed, will become time-dependent)
+
+This enhancement will allow the model to optimize the tradeoff between present consumption and future consumption (via savings/investment) while simultaneously optimizing the allocation of resources between climate mitigation and inequality reduction.
+
+### Implementation Plan
+
+The implementation will parallel the existing optimization structure for f(t), creating independent control points and decision times for s(t):
+
+#### Phase 1: Make Savings Rate Time-Dependent
+**Status:** ✅ Completed
+
+1. **Move s from scalar_params to time_functions** ✅
+   - Removed `s` from `ScalarParameters` dataclass in `parameters.py`
+   - Added `s` to time-dependent functions in configuration files
+   - Updated `evaluate_params_at_time()` to evaluate `s(t)` from time functions
+   - s(t) is evaluated at each timestep and can be bounded by configuration
+
+2. **Update all code references to s** ✅
+   - In `economic_model.py`: s is now treated as time-dependent parameter from `params` dict
+   - In `integrate_model()`: s is obtained from `evaluate_params_at_time(t_start, config)`
+   - Initial capital iteration correctly uses time-dependent s(0)
+   - Verified s is correctly stored in results and output to CSV
+
+3. **Update configuration files** ✅
+   - Converted `s` from scalar parameter to time function in both config files:
+     - `config_test_DICE.json`
+     - `config_test_DICE_2x_0.02_10k_0.67.json`
+   - Using `"type": "constant"` with same value (0.23974) to preserve behavior
+   - Tested: time-dependent s(t) = constant reproduces previous results exactly
+
+4. **Documentation updates** ✅
+   - Updated `test_integration.py` to display s(0) from time_functions
+   - Docstrings in `evaluate_params_at_time()` updated to list s as time-dependent
+   - s is now part of the time-dependent evaluation pipeline alongside A, L, sigma, theta1
+
+#### Phase 2: Extend Control Function Structure
+**Status:** Not started
+
+1. **Modify control function to return both f and s**
+   - Change `control_function(t)` signature from returning scalar to returning tuple `(f, s)`
+   - Update `create_control_function_from_points()` to handle two sets of control points
+   - Each variable has independent control times and values
+
+2. **Update ModelConfiguration**
+   - Modify `control_function` to return `(f(t), s(t))`
+   - Or: Add separate `s_control_function` field (to be decided during implementation)
+
+3. **Update integrate_model()**
+   - Evaluate control function to get both f(t) and s(t)
+   - Pass both to `evaluate_params_at_time()`
+   - Ensure both variables are stored in results
+
+#### Phase 3: Extend Optimization Framework
+**Status:** Not started
+
+1. **Extend parameter vector**
+   - Current: `x = [f_1, f_2, ..., f_n]` at times `[t_1, t_2, ..., t_n]`
+   - New: `x = [f_1, ..., f_n_f, s_1, ..., s_n_s]` with independent times for each
+   - Control times: `f_times = [t_f1, ..., t_fn_f]`, `s_times = [t_s1, ..., t_sn_s]`
+
+2. **Update objective function**
+   - Unpack parameter vector into f-values and s-values
+   - Create control function that interpolates both independently
+   - Build ModelConfiguration with dual control function
+   - Run integration and compute objective (unchanged)
+
+3. **Update bounds handling**
+   - Extend bounds to cover both f and s: `0 ≤ f ≤ 1`, `0 ≤ s ≤ 1`
+   - Total parameter vector length: `n_f + n_s`
+
+4. **Update iterative refinement**
+   - Apply same number of iterations to both f and s
+   - Refine both control point sets in parallel
+   - Each maintains independent control times
+   - Use same refinement base for both (or allow different bases)
+
+#### Phase 4: Configuration and Initial Guesses
+**Status:** Not started
+
+1. **Update configuration file structure**
+   - Add `s_control_function` section parallel to `control_function`
+   - Add `s_initial_guess` to optimization parameters
+   - Add `s_control_times` (or use iterative approach like f)
+
+2. **Handle initial guesses**
+   - For single-point optimization: provide (f₀, s₀)
+   - For iterative refinement: provide initial f(t) and s(t) at endpoints
+   - Default s₀ to current scalar value for backward compatibility
+
+3. **Create test configuration**
+   - Start with fixed s(t) to verify no regression
+   - Create config with time-varying s(t) for testing
+
+#### Phase 5: Testing and Validation
+**Status:** Not started
+
+1. **Verify backward compatibility**
+   - With s(t) = constant, results should match previous version exactly
+   - Test all existing configurations still run correctly
+
+2. **Test time-dependent s**
+   - Simple prescribed s(t) trajectory (e.g., linear ramp)
+   - Verify economic variables respond correctly
+   - Check capital accumulation dynamics
+
+3. **Test dual optimization**
+   - Single control point for both (2D optimization)
+   - Multiple control points with same number for f and s
+   - Multiple control points with different numbers (n_f ≠ n_s)
+   - Iterative refinement with both variables
+
+4. **Verify optimality**
+   - Compare dual optimization results with fixed-s baseline
+   - Ensure utility improvement when s is optimized
+   - Check that optimal s(t) makes economic sense
+
+#### Phase 6: Documentation and Output
+**Status:** Not started
+
+1. **Update README.md**
+   - Document dual control variable framework
+   - Explain s(t) optimization and interpretation
+   - Add examples of dual optimization configurations
+
+2. **Update output visualization**
+   - Ensure s(t) is plotted in results
+   - Add plots showing f(t) vs s(t) tradeoffs
+   - Visualize consumption vs investment trajectories
+
+3. **Update optimization summary output**
+   - Report optimal trajectories for both f(t) and s(t)
+   - Show sensitivity analysis for both variables
+   - Document computational performance with dual optimization
+
+### Key Design Decisions
+
+1. **Independent control times**: Each variable (f, s) has its own set of control times, allowing different temporal resolution where needed
+
+2. **Parallel iteration**: During iterative refinement, both variables go through the same number of iterations, but may have different numbers of control points
+
+3. **Minimal structural change**: The implementation leverages the existing optimization framework, simply extending the parameter vector dimension
+
+4. **Backward compatibility**: Configurations can specify constant s(t) to reproduce current behavior exactly
+
+### Expected Benefits
+
+- **More realistic optimization**: Savings rate is a key economic policy variable that should be optimized alongside other controls
+- **Richer dynamics**: Time-varying s(t) allows model to balance present vs. future consumption optimally
+- **Methodological advancement**: Demonstrates framework extensibility to multi-dimensional control problems
+
 ## Project Structure
 
 ```

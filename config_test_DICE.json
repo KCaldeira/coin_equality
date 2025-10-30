@@ -6,8 +6,6 @@
     "_alpha": "Capital share of income",
     "delta": 0.1,
     "_delta": "Capital depreciation rate (10% per year)",
-    "s": 0.23974,
-    "_s": "Savings rate (30% of net production)",
     "psi1": 0,
     "_psi1": "Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]",
     "psi2": 0.003467,
@@ -76,6 +74,12 @@
       "_growth_rate_2": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
       "fract_1": 0.310452,
       "_fract_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023"
+    },
+    "s": {
+      "_description": "Savings rate (fraction of net production)",
+      "type": "constant",
+      "value": 0.23974,
+      "_value": "Constant savings rate matching DICE baseline (approximately 24%)"
     }
   },
   "integration_parameters": {

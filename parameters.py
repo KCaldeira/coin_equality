@@ -240,8 +240,6 @@ class ScalarParameters:
         Output elasticity of capital (capital share of income)
     delta : float
         Capital depreciation rate (yr^-1)
-    s : float
-        Savings rate (fraction of net production)
     psi1 : float
         Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]
     psi2 : float
@@ -274,7 +272,6 @@ class ScalarParameters:
     """
     alpha: float
     delta: float
-    s: float
     psi1: float
     psi2: float
     y_damage_halfsat: float
@@ -475,9 +472,9 @@ def evaluate_params_at_time(t, config):
     dict
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
-        'alpha', 'delta', 's', 'psi1', 'psi2', 'y_damage_halfsat', 'k_climate',
+        'alpha', 'delta', 'psi1', 'psi2', 'y_damage_halfsat', 'k_climate',
         'eta', 'rho', 'Gini_initial', 'Gini_fract', 'Gini_restore', 'fract_gdp', 'theta2', 'mu_max',
-        'A', 'L', 'sigma', 'theta1', 'f'
+        'A', 'L', 'sigma', 'theta1', 's', 'f'
     """
     sp = config.scalar_params
     tf = config.time_functions
@@ -489,7 +486,6 @@ def evaluate_params_at_time(t, config):
         # Scalar parameters
         'alpha': sp.alpha,
         'delta': sp.delta,
-        's': sp.s,
         'psi1': sp.psi1,
         'psi2': sp.psi2,
         'y_damage_halfsat': sp.y_damage_halfsat,
@@ -508,6 +504,7 @@ def evaluate_params_at_time(t, config):
         'L': tf['L'](t),
         'sigma': tf['sigma'](t),
         'theta1': tf['theta1'](t),
+        's': tf['s'](t),
 
         # Control function evaluation
         'f': config.control_function(t),

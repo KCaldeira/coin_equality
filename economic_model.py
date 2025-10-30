@@ -300,19 +300,20 @@ def integrate_model(config, store_detailed_output=True):
     # Calculate initial state
     A0 = config.time_functions['A'](t_start)
     L0 = config.time_functions['L'](t_start)
-    s = config.scalar_params.s
     delta = config.scalar_params.delta
     alpha = config.scalar_params.alpha
     fract_gdp = config.scalar_params.fract_gdp
 
-    # get guess from last iteration (or from initial guess at first iteration)
-    f0 = config.control_function(t_start)
-    lambda0 = (1-s) * f0 * fract_gdp
-
     # take abatement cost and initial climate damage into account for initial capital
     Ecum_initial = config.scalar_params.Ecum_initial
     params = evaluate_params_at_time(t_start, config)
+
+    # get time-dependent parameters at t_start
+    s = params['s']
+    f0 = params['f']
     k_climate = params['k_climate']
+    lambda0 = (1-s) * f0 * fract_gdp
+
     Gini = config.scalar_params.Gini_initial
     delta_T = k_climate * Ecum_initial
 
