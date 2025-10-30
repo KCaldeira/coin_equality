@@ -1321,21 +1321,27 @@ The implementation will parallel the existing optimization structure for f(t), c
    - s is now part of the time-dependent evaluation pipeline alongside A, L, sigma, theta1
 
 #### Phase 2: Extend Control Function Structure
-**Status:** Not started
+**Status:** ✅ Completed
 
-1. **Modify control function to return both f and s**
-   - Change `control_function(t)` signature from returning scalar to returning tuple `(f, s)`
-   - Update `create_control_function_from_points()` to handle two sets of control points
-   - Each variable has independent control times and values
+1. **Modify control function to return both f and s** ✅
+   - Created `create_dual_control_from_single(f_control, s_time_function)` to wrap f control and s time function
+   - Created `create_dual_control_from_specs(f_spec, s_spec)` for future dual control specifications
+   - Control function now returns tuple `(f, s)` instead of scalar
 
-2. **Update ModelConfiguration**
-   - Modify `control_function` to return `(f(t), s(t))`
-   - Or: Add separate `s_control_function` field (to be decided during implementation)
+2. **Update ModelConfiguration** ✅
+   - `control_function` now returns `(f(t), s(t))` tuple
+   - In `load_configuration()`, f control is wrapped with s time function to create dual control
+   - Clean transition: f comes from control_function spec, s from time_functions
 
-3. **Update integrate_model()**
-   - Evaluate control function to get both f(t) and s(t)
-   - Pass both to `evaluate_params_at_time()`
-   - Ensure both variables are stored in results
+3. **Update evaluate_params_at_time()** ✅
+   - Unpacks tuple from control_function: `f, s = config.control_function(t)`
+   - Both f and s are added to params dict for use by economic model
+   - Removed direct s evaluation from time_functions (now comes from control function)
+
+4. **Verified integrate_model() compatibility** ✅
+   - No changes needed in integrate_model() - all control function calls go through evaluate_params_at_time()
+   - Both f and s correctly stored in results and CSV output
+   - Backward compatibility maintained: constant s(t) produces identical results
 
 #### Phase 3: Extend Optimization Framework
 **Status:** Not started

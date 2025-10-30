@@ -224,6 +224,53 @@ def piecewise_constant_control(time_points, f_values):
 
 
 # =============================================================================
+# Dual Control Functions (for simultaneous optimization of f and s)
+# =============================================================================
+
+def create_dual_control_from_single(f_control, s_time_function):
+    """
+    Create a dual control function from separate f control and s time function.
+
+    This is used during Phase 2 transition to allow f to be optimized while
+    s follows a prescribed time function.
+
+    Parameters
+    ----------
+    f_control : callable
+        Single control function f(t) returning scalar
+    s_time_function : callable
+        Time function s(t) returning scalar
+
+    Returns
+    -------
+    callable
+        Dual control function returning tuple (f, s)
+    """
+    return lambda t: (f_control(t), s_time_function(t))
+
+
+def create_dual_control_from_specs(f_spec, s_spec):
+    """
+    Create a dual control function from separate specifications for f and s.
+
+    Parameters
+    ----------
+    f_spec : dict
+        Control specification for f (same format as single control function)
+    s_spec : dict
+        Control specification for s (same format as time functions)
+
+    Returns
+    -------
+    callable
+        Dual control function returning tuple (f, s)
+    """
+    f_control = _create_time_function(f_spec) if isinstance(f_spec, dict) else f_spec
+    s_control = _create_time_function(s_spec) if isinstance(s_spec, dict) else s_spec
+    return lambda t: (f_control(t), s_control(t))
+
+
+# =============================================================================
 # Parameter Dataclasses
 # =============================================================================
 
@@ -474,12 +521,18 @@ def evaluate_params_at_time(t, config):
         with keys matching those expected by calculate_tendencies():
         'alpha', 'delta', 'psi1', 'psi2', 'y_damage_halfsat', 'k_climate',
         'eta', 'rho', 'Gini_initial', 'Gini_fract', 'Gini_restore', 'fract_gdp', 'theta2', 'mu_max',
-        'A', 'L', 'sigma', 'theta1', 's', 'f'
+        'A', 'L', 'sigma', 'theta1', 'f', 's'
+
+    Notes
+    -----
+    The control function now returns a tuple (f, s) where both f and s can be
+    optimized or prescribed. This enables dual optimization of abatement allocation
+    and savings rate.
     """
     sp = config.scalar_params
     tf = config.time_functions
 
-    return {
+    params = {
         # Time
         't': t,
 
@@ -504,11 +557,14 @@ def evaluate_params_at_time(t, config):
         'L': tf['L'](t),
         'sigma': tf['sigma'](t),
         'theta1': tf['theta1'](t),
-        's': tf['s'](t),
-
-        # Control function evaluation
-        'f': config.control_function(t),
     }
+
+    # Dual control function evaluation returns (f, s)
+    f, s = config.control_function(t)
+    params['f'] = f
+    params['s'] = s
+
+    return params
 
 
 # =============================================================================
@@ -693,9 +749,15 @@ def load_configuration(config_path):
     optimization_params_data = _filter_description_keys(config_data['optimization_parameters'])
     optimization_params = OptimizationParameters(**optimization_params_data)
 
-    # Create control function (filter out description keys)
+    # Create dual control function (f, s)
+    # f comes from control_function specification
+    # s comes from time_functions (or optionally from s_control_function if specified)
     control_function_data = _filter_description_keys(config_data['control_function'])
-    control_function = _create_control_function(control_function_data)
+    f_control = _create_control_function(control_function_data)
+
+    # Wrap f_control and s time function into dual control returning (f, s)
+    s_time_function = time_functions['s']
+    control_function = create_dual_control_from_single(f_control, s_time_function)
 
     # Extract run name
     run_name = config_data['run_name']
