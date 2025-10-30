@@ -428,6 +428,17 @@ class OptimizationParameters:
         If None, uses refinement_base = 2.0 (default behavior: 2, 3, 5, 9, 17, ...)
         Example: n_points_final=17 with 5 iterations gives base ≈ 2.0
         Example: n_points_final=10 with 4 iterations gives base ≈ 2.08
+    s_control_times : list of float OR int, optional
+        Control times for s (savings rate) - parallel to control_times for f.
+        If None, s is not optimized (uses fixed s from time_functions).
+        Same format as control_times: list for direct mode, int for iterative mode.
+    s_initial_guess : list of float OR float, optional
+        Initial s values - parallel to initial_guess for f.
+        If None, s is not optimized.
+        Same format as initial_guess: list for direct mode, float for iterative mode.
+    s_n_points_final : int, optional
+        Target number of control points for s in final iteration (iterative mode only).
+        If None but s_control_times is int, uses same refinement base as f.
     """
     max_evaluations: int
     control_times: object  # list or int
@@ -438,6 +449,9 @@ class OptimizationParameters:
     xtol_rel: float = None
     xtol_abs: float = None
     n_points_final: int = None
+    s_control_times: object = None  # list or int, optional for dual optimization
+    s_initial_guess: object = None  # list or float, optional for dual optimization
+    s_n_points_final: int = None  # optional for iterative mode with s
 
     def is_iterative_refinement(self):
         """
@@ -450,6 +464,18 @@ class OptimizationParameters:
             False if direct mode (control_times is list)
         """
         return isinstance(self.control_times, int)
+
+    def is_dual_optimization(self):
+        """
+        Check if this configuration optimizes both f and s.
+
+        Returns
+        -------
+        bool
+            True if optimizing both f and s (s_control_times and s_initial_guess are set),
+            False if only optimizing f (s is fixed from time_functions)
+        """
+        return self.s_control_times is not None and self.s_initial_guess is not None
 
     def is_direct_mode(self):
         """
@@ -751,13 +777,22 @@ def load_configuration(config_path):
 
     # Create dual control function (f, s)
     # f comes from control_function specification
-    # s comes from time_functions (or optionally from s_control_function if specified)
+    # s comes from s_control_function (if present) or time_functions['s'] (default)
     control_function_data = _filter_description_keys(config_data['control_function'])
     f_control = _create_control_function(control_function_data)
 
-    # Wrap f_control and s time function into dual control returning (f, s)
-    s_time_function = time_functions['s']
-    control_function = create_dual_control_from_single(f_control, s_time_function)
+    # Check if s_control_function is specified in config (for dual optimization)
+    if 's_control_function' in config_data:
+        s_control_data = _filter_description_keys(config_data['s_control_function'])
+        s_control = _create_control_function(s_control_data)
+        control_function = create_dual_control_from_specs(
+            f_spec=f_control,
+            s_spec=s_control
+        )
+    else:
+        # Default: s comes from time_functions (single-variable optimization)
+        s_time_function = time_functions['s']
+        control_function = create_dual_control_from_single(f_control, s_time_function)
 
     # Extract run name
     run_name = config_data['run_name']

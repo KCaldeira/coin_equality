@@ -1375,21 +1375,38 @@ The implementation will parallel the existing optimization structure for f(t), c
 - ⏳ Automated dual optimization via `optimize_control_function()` (Phase 4+)
 
 #### Phase 4: Configuration and Initial Guesses
-**Status:** Not started
+**Status:** ✅ Completed
 
-1. **Update configuration file structure**
-   - Add `s_control_function` section parallel to `control_function`
-   - Add `s_initial_guess` to optimization parameters
-   - Add `s_control_times` (or use iterative approach like f)
+1. **Updated configuration file structure** ✅
+   - Added optional `s_control_function` field parallel to `control_function`
+   - If `s_control_function` present: s is treated as control variable
+   - If absent: s comes from `time_functions['s']` (backward compatible)
+   - Clean precedence: s_control_function > time_functions['s']
 
-2. **Handle initial guesses**
-   - For single-point optimization: provide (f₀, s₀)
-   - For iterative refinement: provide initial f(t) and s(t) at endpoints
-   - Default s₀ to current scalar value for backward compatibility
+2. **Extended OptimizationParameters dataclass** ✅
+   - Added `s_control_times`: int or list, parallel to `control_times` for f
+   - Added `s_initial_guess`: float or list, parallel to `initial_guess` for f
+   - Added `s_n_points_final`: int, for iterative refinement of s
+   - Added `is_dual_optimization()` method to check if optimizing both f and s
+   - All fields optional with None default (backward compatible)
 
-3. **Create test configuration**
-   - Start with fixed s(t) to verify no regression
-   - Create config with time-varying s(t) for testing
+3. **Updated load_configuration()** ✅
+   - Checks for optional `s_control_function` in JSON
+   - If present: creates dual control from both f and s control functions
+   - If absent: creates dual control from f control + s time function (default)
+   - Uses `create_dual_control_from_specs()` for dual control mode
+
+4. **Created test configurations** ✅
+   - Created `config_test_dual_simple.json` with both f and s as controls
+   - Tested with constant values: f=0.5, s=0.24
+   - Verified integration works correctly
+   - Confirmed CSV output shows s from s_control_function (0.24) not time_functions (0.23974)
+
+**Current capabilities:**
+- ✅ Configuration files can specify dual optimization
+- ✅ OptimizationParameters track both f and s control specifications
+- ✅ Full backward compatibility when s_control_function absent
+- ✅ Infrastructure ready for automated dual optimization in future phases
 
 #### Phase 5: Testing and Validation
 **Status:** Not started
