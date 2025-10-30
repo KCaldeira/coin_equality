@@ -1,0 +1,73 @@
+{
+  "run_name": "time_varying_s_test",
+  "description": "Test time-varying s(t) with prescribed trajectory",
+  "scalar_parameters": {
+    "alpha": 0.3,
+    "delta": 0.1,
+    "psi1": 0,
+    "psi2": 0.003467,
+    "y_damage_halfsat": 1e+20,
+    "k_climate": 5e-13,
+    "eta": 0.95,
+    "rho": 0.01,
+    "Gini_initial": 0.0,
+    "Gini_fract": 0.0,
+    "Gini_restore": 0.0,
+    "fract_gdp": 1.0,
+    "theta2": 2.6,
+    "mu_max": 1.2,
+    "Ecum_initial": 2494300000000.0
+  },
+  "time_functions": {
+    "A": {
+      "type": "gompertz_growth",
+      "initial_value": 739.619,
+      "final_value": 4906815.811,
+      "adjustment_coefficient": -0.0015
+    },
+    "L": {
+      "type": "gompertz_growth",
+      "initial_value": 7752000000.0,
+      "final_value": 10825000000.0,
+      "adjustment_coefficient": -0.03133
+    },
+    "sigma": {
+      "type": "gompertz_growth",
+      "initial_value": 0.000291355,
+      "final_value": 4.4681e-05,
+      "adjustment_coefficient": -0.008164
+    },
+    "theta1": {
+      "type": "double_exponential_growth",
+      "initial_value": 695.177385,
+      "growth_rate_1": -0.023,
+      "growth_rate_2": -0.00065,
+      "fract_1": 0.310452
+    },
+    "s": {
+      "_description": "Time-varying savings rate: linear ramp from 0.20 to 0.30",
+      "type": "piecewise_linear",
+      "time_points": [0, 400],
+      "values": [0.20, 0.30]
+    }
+  },
+  "integration_parameters": {
+    "t_start": 0.0,
+    "t_end": 400,
+    "dt": 1.0,
+    "rtol": 1e-06,
+    "atol": 1e-09,
+    "plot_short_horizon": 100.0
+  },
+  "control_function": {
+    "type": "constant",
+    "value": 0.5
+  },
+  "optimization_parameters": {
+    "max_evaluations": 100,
+    "control_times": 2,
+    "initial_guess": 0.5,
+    "algorithm": "LN_SBPLX",
+    "xtol_abs": 1e-10
+  }
+}
