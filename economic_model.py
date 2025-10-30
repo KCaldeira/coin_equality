@@ -309,10 +309,10 @@ def integrate_model(config, store_detailed_output=True):
     params = evaluate_params_at_time(t_start, config)
 
     # get time-dependent parameters at t_start
-    s = params['s']
+    s0 = params['s']
     f0 = params['f']
     k_climate = params['k_climate']
-    lambda0 = (1-s) * f0 * fract_gdp
+    lambda0 = (1-s0) * f0 * fract_gdp
 
     Gini = config.scalar_params.Gini_initial
     delta_T = k_climate * Ecum_initial
@@ -331,7 +331,7 @@ def integrate_model(config, store_detailed_output=True):
                 f"difference = {np.abs(Omega_current - Omega_prev):.2e} (tolerance: {EPSILON:.2e})"
             )
         Omega_prev = Omega_current
-        K0 = ((s * (1 - Omega_prev) * (1 - lambda0) * A0 / delta) ** (1 / (1 - alpha))) * L0
+        K0 = ((s0 * (1 - Omega_prev) * (1 - lambda0) * A0 / delta) ** (1 / (1 - alpha))) * L0
         y_gross = A0 * (K0 ** alpha) * (L0 ** (1 - alpha)) / L0
         Omega_current, _ = calculate_climate_damage_and_gini_effect(
             delta_T, Gini, y_gross, params

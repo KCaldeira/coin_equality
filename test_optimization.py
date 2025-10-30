@@ -153,13 +153,24 @@ def print_header(text):
 
 def print_optimization_results(opt_results, n_control_points):
     """Print formatted optimization results."""
+    # Check if s was also optimized
+    has_s_optimization = 's_control_points' in opt_results and opt_results['s_control_points'] is not None
+
     if n_control_points == 1:
         print(f"Optimal f₀:             {opt_results['optimal_values'][0]:.6f}")
+        if has_s_optimization:
+            print(f"Optimal s₀:             {opt_results['s_optimal_values'][0]:.6f}")
     else:
-        print(f"Optimal control values:")
+        print(f"Optimal f control values:")
         for t, f_val in opt_results['control_points']:
             print(f"  t={t:6.1f} yr: f={f_val:.6f}")
-    print(f"Optimal objective:      {opt_results['optimal_objective']:.6e}")
+
+        if has_s_optimization:
+            print(f"\nOptimal s control values:")
+            for t, s_val in opt_results['s_control_points']:
+                print(f"  t={t:6.1f} yr: s={s_val:.6f}")
+
+    print(f"\nOptimal objective:      {opt_results['optimal_objective']:.6e}")
     print(f"Function evaluations:   {opt_results['n_evaluations']}")
     print(f"Status:                 {opt_results['status']}")
 
@@ -539,6 +550,26 @@ def main():
 
     print_header("SAVING RESULTS")
 
+    # Create control function from optimization results
+    # Check if we optimized both f and s
+    if 's_control_points' in opt_results and opt_results['s_control_points'] is not None:
+        # Both f and s were optimized
+        from optimization import create_f_and_s_control_function_from_points
+        control_func = create_f_and_s_control_function_from_points(
+            opt_results['control_points'],
+            opt_results['s_control_points']
+        )
+    else:
+        # Only f was optimized, need to combine with s from config
+        f_control = create_control_function_from_points(opt_results['control_points'])
+        if 's' in config.time_functions:
+            s_time_function = config.time_functions['s']
+        else:
+            # Use s from base control function
+            s_time_function = lambda t: config.control_function(t)[1]
+        from parameters import create_f_and_s_control_from_single
+        control_func = create_f_and_s_control_from_single(f_control, s_time_function)
+
     optimal_config = ModelConfiguration(
         run_name=f"{config.run_name}_optimization",
         scalar_params=config.scalar_params,
@@ -546,7 +577,7 @@ def main():
         integration_params=config.integration_params,
         optimization_params=config.optimization_params,
         initial_state=config.initial_state,
-        control_function=create_control_function_from_points(opt_results['control_points'])
+        control_function=control_func
     )
 
     print("Running forward model with optimal control...")
