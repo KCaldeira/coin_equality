@@ -316,6 +316,9 @@ class ScalarParameters:
     Ecum_initial : float
         Initial cumulative CO2 emissions (tCO2)
         Default: 0.0 (no prior emissions)
+    K_initial : float
+        Initial capital stock ($)
+        Required parameter, must be specified in configuration
     """
     alpha: float
     delta: float
@@ -330,6 +333,7 @@ class ScalarParameters:
     Gini_restore: float
     fract_gdp: float
     theta2: float
+    K_initial: float
     mu_max: float = None  # Will be set to INVERSE_EPSILON in __post_init__ if None
     Ecum_initial: float = 0.0  # Default to zero (no prior emissions)
 

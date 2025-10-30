@@ -31,7 +31,9 @@
     "mu_max": 1.2,
     "_mu_max": "Maximum allowed abatement fraction (cap on μ). Values >1 allow carbon removal.",
     "Ecum_initial": 2494300000000.0,
-    "_Ecum_initial": "Initial cumulative CO2 emissions (tCO2). Set to 0 for no prior emissions. 1.24715/k_climate to match 2020 Barrage & Nordhaus 2023."
+    "_Ecum_initial": "Initial cumulative CO2 emissions (tCO2). Set to 0 for no prior emissions. 1.24715/k_climate to match 2020 Barrage & Nordhaus 2023.",
+    "K_initial": 295000000000000.0,
+    "_K_initial": "Initial capital stock ($). Represents total productive capital at start of simulation."
   },
   "time_functions": {
     "_description": "Time-dependent exogenous functions",

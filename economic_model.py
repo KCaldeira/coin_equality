@@ -308,12 +308,6 @@ def integrate_model(config, store_detailed_output=True):
     Ecum_initial = config.scalar_params.Ecum_initial
     params = evaluate_params_at_time(t_start, config)
 
-    # get time-dependent parameters at t_start
-    s0 = params['s']
-    f0 = params['f']
-    k_climate = params['k_climate']
-    lambda0 = (1-s0) * f0 * fract_gdp
-
     Gini = config.scalar_params.Gini_initial
     delta_T = k_climate * Ecum_initial
 
@@ -321,6 +315,13 @@ def integrate_model(config, store_detailed_output=True):
     Omega_prev = 1.0
     Omega_current = 0.0
     n_iterations = 0
+
+    """
+    # get time-dependent parameters at t_start
+    s0 = params['s']
+    f0 = params['f']
+    k_climate = params['k_climate']
+    lambda0 = (1-s0) * f0 * fract_gdp
 
     while np.abs(Omega_current - Omega_prev) > EPSILON:
         n_iterations += 1
@@ -337,8 +338,9 @@ def integrate_model(config, store_detailed_output=True):
             delta_T, Gini, y_gross, params
         )
 
+    """
     state = {
-        'K': K0,
+        'K': config.scalar_params.K_initial,
         'Ecum': config.scalar_params.Ecum_initial,
         'Gini': config.scalar_params.Gini_initial
     }
