@@ -224,12 +224,12 @@ def piecewise_constant_control(time_points, f_values):
 
 
 # =============================================================================
-# Dual Control Functions (for simultaneous optimization of f and s)
+# Control Functions for f and s (for simultaneous optimization of f and s)
 # =============================================================================
 
-def create_dual_control_from_single(f_control, s_time_function):
+def create_f_and_s_control_from_single(f_control, s_time_function):
     """
-    Create a dual control function from separate f control and s time function.
+    Create a control function for both f and s from separate f control and s time function.
 
     This is used during Phase 2 transition to allow f to be optimized while
     s follows a prescribed time function.
@@ -244,14 +244,14 @@ def create_dual_control_from_single(f_control, s_time_function):
     Returns
     -------
     callable
-        Dual control function returning tuple (f, s)
+        Control function returning tuple (f, s)
     """
     return lambda t: (f_control(t), s_time_function(t))
 
 
-def create_dual_control_from_specs(f_spec, s_spec):
+def create_f_and_s_control_from_specs(f_spec, s_spec):
     """
-    Create a dual control function from separate specifications for f and s.
+    Create a control function for both f and s from separate specifications for f and s.
 
     Parameters
     ----------
@@ -263,7 +263,7 @@ def create_dual_control_from_specs(f_spec, s_spec):
     Returns
     -------
     callable
-        Dual control function returning tuple (f, s)
+        Control function returning tuple (f, s)
     """
     f_control = _create_time_function(f_spec) if isinstance(f_spec, dict) else f_spec
     s_control = _create_time_function(s_spec) if isinstance(s_spec, dict) else s_spec
@@ -442,6 +442,12 @@ class OptimizationParameters:
         Target number of s control points in final iteration (iterative mode only).
         If None, uses same refinement base as f (derived from n_points_final_f).
         Can differ from n_points_final_f to allow different temporal resolution for s.
+    bounds_f : list of [float, float], optional
+        Bounds for f values as [min, max]. Default: [0.0, 1.0]
+        Example: [0.0, 0.8] to limit maximum abatement allocation to 80%
+    bounds_s : list of [float, float], optional
+        Bounds for s values as [min, max]. Default: [0.0, 1.0]
+        Example: [0.2, 0.3] to constrain savings rate between 20% and 30%
     """
     max_evaluations: int
     control_times: object  # list or int
@@ -454,6 +460,8 @@ class OptimizationParameters:
     n_points_final_f: int = None
     initial_guess_s: object = None  # list or float, enables dual optimization if present
     n_points_final_s: int = None
+    bounds_f: list = None  # [min, max] for f, defaults to [0.0, 1.0]
+    bounds_s: list = None  # [min, max] for s, defaults to [0.0, 1.0]
 
     def is_iterative_refinement(self):
         """
@@ -778,13 +786,23 @@ def load_configuration(config_path):
     optimization_params = OptimizationParameters(**optimization_params_data)
 
     # Create dual control function (f, s)
-    # f comes from control_function specification
-    # s comes from time_functions['s']
-    # Dual optimization (optimizing both f and s) is controlled by initial_guess_s in optimization_parameters
-    control_function_data = _filter_description_keys(config_data['control_function'])
-    f_control = _create_control_function(control_function_data)
-    s_time_function = time_functions['s']
-    control_function = create_dual_control_from_single(f_control, s_time_function)
+    # For optimization, these will be created from optimization results
+    # For forward runs, these come from config
+    if 'control_function' in config_data:
+        control_function_data = _filter_description_keys(config_data['control_function'])
+        f_control = _create_control_function(control_function_data)
+    else:
+        # Use initial_guess_f as default constant control function
+        f_control = lambda t: optimization_params.initial_guess_f if isinstance(optimization_params.initial_guess_f, float) else optimization_params.initial_guess_f[0]
+
+    if 's' in time_functions:
+        s_time_function = time_functions['s']
+    else:
+        # Use initial_guess_s as default constant s function
+        initial_s = optimization_params.initial_guess_s if optimization_params.initial_guess_s is not None else 0.24
+        s_time_function = lambda t: initial_s if isinstance(initial_s, float) else initial_s[0]
+
+    control_function = create_f_and_s_control_from_single(f_control, s_time_function)
 
     # Extract run name
     run_name = config_data['run_name']

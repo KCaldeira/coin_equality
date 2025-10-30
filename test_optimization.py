@@ -426,11 +426,18 @@ def main():
         print(f"Time step: {config.integration_params.dt} years")
         print(f"\nIterative refinement mode:")
         print(f"  Number of iterations: {n_iterations}")
-        print(f"  Final control points: {2**n_iterations + 1}")
+        if opt_params.n_points_final_f is not None:
+            print(f"  Final f control points: {opt_params.n_points_final_f}")
+        else:
+            print(f"  Final f control points: {round(1 + 2.0**(n_iterations - 1))}")
         print(f"  Initial guess: f = {opt_params.initial_guess_f}")
         if opt_params.initial_guess_s is not None:
             print(f"  Initial guess: s = {opt_params.initial_guess_s}")
-            print(f"  Dual optimization: YES")
+            if opt_params.n_points_final_s is not None:
+                print(f"  Final s control points: {opt_params.n_points_final_s}")
+            else:
+                print(f"  Final s control points: same as f")
+            print(f"  Optimizing both f and s: YES")
     else:
         control_times = opt_params.control_times
         n_control_points = len(control_times)
@@ -486,7 +493,9 @@ def main():
             ftol_abs=opt_params.ftol_abs,
             xtol_rel=opt_params.xtol_rel,
             xtol_abs=opt_params.xtol_abs,
-            n_points_final=opt_params.n_points_final_f
+            n_points_final=opt_params.n_points_final_f,
+            initial_guess_s_scalar=opt_params.initial_guess_s,
+            n_points_final_s=opt_params.n_points_final_s
         )
         n_final_control_points = len(opt_results['control_points'])
     else:

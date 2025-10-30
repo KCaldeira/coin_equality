@@ -74,12 +74,6 @@
       "_growth_rate_2": "2-exponential fit to sigma in Barrage & Nordhaus 2023",
       "fract_1": 0.310452,
       "_fract_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023"
-    },
-    "s": {
-      "_description": "Savings rate (fraction of net production)",
-      "type": "constant",
-      "value": 0.23974,
-      "_value": "Constant savings rate matching DICE baseline (approximately 24%)"
     }
   },
   "integration_parameters": {
@@ -95,27 +89,29 @@
     "plot_short_horizon": 100.0,
     "_plot_short_horizon": "Time horizon (years) for short-term detailed plots. Creates second PDF book with results from t_start to this time."
   },
-  "control_function": {
-    "_description": "Allocation policy between abatement and redistribution (also used as initial guess for optimization)",
-    "type": "constant",
-    "value": 0.5,
-    "_value": "50% to abatement, 50% to redistribution; this value is used as initial guess for single-point optimization"
-  },
-  "optimization_parameters": {
-    "_description": "ITERATIVE REFINEMENT MODE: control_times is integer (number of iterations), initial_guess_f is scalar",
+ "optimization_parameters": {
+    "_description": "ITERATIVE REFINEMENT MODE: control_times is integer (number of iterations), initial_guess is scalar",
     "max_evaluations": 10000,
     "_max_evaluations": "Maximum number of objective function evaluations PER ITERATION",
     "control_times": 3,
     "_control_times": "INTEGER: Number of refinement iterations. Final iteration will have n_points_final_f control points if specified.",
-    "initial_guess_f": 0.0,
+    "initial_guess_f": 0.5,
     "_initial_guess_f": "SCALAR: Initial f value for both t_start and t_end in first iteration. Subsequent iterations use PCHIP interpolation from previous solution",
-    "n_points_final_f": 30,
-    "_n_points_final_f": "Target number of control points in final iteration. Refinement base = (n_points_final_f - 1)^(1/(n_iterations - 1)). Omit to use default base=2.0",
+    "bounds_f": [0.0, 1.0],
+    "_bounds_f": "Bounds for f (abatement fraction) as [min, max]. Default: [0.0, 1.0]",
+    "n_points_final_f": 20,
+    "_n_points_final_f": "Target number of f control points in final iteration. Refinement base = (n_points_final_f - 1)^(1/(n_iterations - 1)). Omit to use default base=2.0",
+    "initial_guess_s": 0.28,
+    "_initial_guess_s": "SCALAR: Initial s value for both t_start and t_end in first iteration. Presence of this field enables dual optimization of both f and s.",
+      "bounds_s": [0.2, 0.3],
+    "_bounds_s": "Bounds for s (savings rate) as [min, max]. Default: [0.0, 1.0]. Example: [0.2, 0.3] constrains savings between 20-30%",
+    "n_points_final_s": 10,
+    "_n_points_final_s": "Target number of s control points in final iteration. Can differ from n_points_final_f to allow different temporal resolution for each variable.",
     "_algorithm_note": "Optional: specify NLopt algorithm. Omit to use default (LN_SBPLX). Local algorithms recommended for iterative refinement.",
     "algorithm": "LN_SBPLX",
     "_algorithm": "LN_SBPLX (local derivative-free Subplex, default, robust for noisy objectives)",
-    "_stopping_criteria": "NLopt stopping criteria. For f ∈ [0,1], absolute tolerance makes more sense than relative.",
+    "_stopping_criteria": "NLopt stopping criteria. For f,s ∈ [0,1], absolute tolerance makes more sense than relative.",
     "xtol_abs": 1e-10,
-    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |Δf| < 1e-10. Appropriate since f ∈ [0,1]."
+    "_xtol_abs": "Absolute tolerance on control parameters (f,s values): stops when all |Δf|,|Δs| < 1e-10. Appropriate since f,s ∈ [0,1]."
   }
 }
