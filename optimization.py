@@ -212,6 +212,34 @@ def create_control_function_from_points(control_points):
     return lambda t: evaluate_control_function(control_points, t)
 
 
+def create_dual_control_function_from_points(f_control_points, s_control_points):
+    """
+    Create a callable dual control function from separate f and s control points.
+
+    Parameters
+    ----------
+    f_control_points : list of tuples
+        List of (time, f_value) tuples defining f control points
+    s_control_points : list of tuples
+        List of (time, s_value) tuples defining s control points
+
+    Returns
+    -------
+    callable
+        Function returning (f(t), s(t)) tuple that evaluates both controls at time t
+
+    Notes
+    -----
+    f and s are interpolated independently using their own control points.
+    This allows different numbers of control points and different time spacing
+    for each variable.
+    """
+    return lambda t: (
+        evaluate_control_function(f_control_points, t),
+        evaluate_control_function(s_control_points, t)
+    )
+
+
 class UtilityOptimizer:
     """
     Optimizer for finding optimal allocation between redistribution and abatement.
@@ -242,16 +270,20 @@ class UtilityOptimizer:
         self.degenerate_case = False
         self.degenerate_reason = None
 
-    def calculate_objective(self, control_values, control_times):
+    def calculate_objective(self, control_values, control_times, s_control_values=None, s_control_times=None):
         """
         Calculate the discounted aggregate utility for given control point values.
 
         Parameters
         ----------
         control_values : array_like
-            Control function values at control_times (one per control point)
+            Control function values (f) at control_times (one per control point)
         control_times : array_like
-            Times at which control points are placed
+            Times at which f control points are placed
+        s_control_values : array_like, optional
+            Control function values (s) at s_control_times. If None, uses fixed s from time_functions.
+        s_control_times : array_like, optional
+            Times at which s control points are placed. If None, uses fixed s from time_functions.
 
         Returns
         -------
@@ -262,12 +294,26 @@ class UtilityOptimizer:
         -----
         Uses trapezoidal integration for the discounted utility integral.
         Control values are clamped to [0, 1] to handle numerical precision issues.
+
+        If s_control_values and s_control_times are provided, creates dual control function
+        with independent interpolation for f and s. Otherwise, uses fixed s(t) from configuration.
         """
         self.n_evaluations += 1
 
         control_values = np.clip(control_values, 0.0, 1.0)
-        control_points = list(zip(control_times, control_values))
-        control_function = create_control_function_from_points(control_points)
+        f_control_points = list(zip(control_times, control_values))
+
+        if s_control_values is not None and s_control_times is not None:
+            # Dual optimization mode: both f and s are control variables
+            s_control_values = np.clip(s_control_values, 0.0, 1.0)
+            s_control_points = list(zip(s_control_times, s_control_values))
+            control_function = create_dual_control_function_from_points(f_control_points, s_control_points)
+        else:
+            # Single optimization mode: only f is optimized, s is fixed from time_functions
+            f_control = create_control_function_from_points(f_control_points)
+            s_time_function = self.base_config.time_functions['s']
+            from parameters import create_dual_control_from_single
+            control_function = create_dual_control_from_single(f_control, s_time_function)
 
         config = ModelConfiguration(
             run_name=self.base_config.run_name,
