@@ -47,7 +47,7 @@ VARIABLE_METADATA = {
 # Ordered by: dimensionless ratios, dollar variables, everything else, specified functions
 VARIABLE_GROUPS = {
     'dimensionless_ratios': [
-        {'type': 'single', 'variables': ['f']},
+        {'type': 'combined', 'title': 'Control Variables', 'variables': ['f', 's'], 'units': 'fraction'},
         {'type': 'single', 'variables': ['mu']},
         {'type': 'combined', 'title': 'Economic Impact Fractions', 'variables': ['Omega', 'Lambda'], 'units': 'fraction'},
         {'type': 'single', 'variables': ['G_eff']},
@@ -178,8 +178,17 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
 
         writer.writerow(['Parameter', 'Value'])
 
+        # Check if this is dual optimization (has s values)
+        is_dual = 's_optimal_values' in opt_results and opt_results['s_optimal_values'] is not None
+
+        # Write optimal f values
         for i, val in enumerate(opt_results['optimal_values']):
             writer.writerow([f'Optimal f value at control point {i}', f"{val:.6f}"])
+
+        # Write optimal s values if dual optimization
+        if is_dual:
+            for i, val in enumerate(opt_results['s_optimal_values']):
+                writer.writerow([f'Optimal s value at control point {i}', f"{val:.6f}"])
 
         writer.writerow(['Optimal objective', f"{opt_results['optimal_objective']:.12e}"])
         writer.writerow(['Function evaluations', opt_results['n_evaluations']])
@@ -201,10 +210,19 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
             writer.writerow(['Note', 'Control values have no effect on outcome. Returning initial guess.'])
         writer.writerow([])
 
-        writer.writerow(['Final Control Points'])
+        # Write final control points for f
+        writer.writerow(['Final f(t) Control Points'])
         writer.writerow(['Time', 'f Value'])
         for time, value in opt_results['control_points']:
             writer.writerow([f"{time:.2f}", f"{value:.6f}"])
+
+        # Write final control points for s if dual optimization
+        if is_dual and 's_control_points' in opt_results:
+            writer.writerow([])
+            writer.writerow(['Final s(t) Control Points'])
+            writer.writerow(['Time', 's Value'])
+            for time, value in opt_results['s_control_points']:
+                writer.writerow([f"{time:.2f}", f"{value:.6f}"])
 
         if 'iteration_history' in opt_results:
             writer.writerow([])
