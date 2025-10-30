@@ -291,35 +291,51 @@ def write_results_csv(results, output_dir, filename='results.csv'):
 
     # Define column order as specified
     ordered_columns = [
-        't',  # 1. time
-        'A',  # 2. total factor productivity
-        'mu',  # 3. abatement fraction
-        'theta1',  # 4. price of abatement at mu = 1
-        'sigma',  # 5. carbon intensity of GDP
-        'L',  # 6. population
-        'Ecum',  # 7. cumulative emissions
-        'delta_T',  # 8. global mean temperature
-        'Omega',  # 9. total damages as fraction of output (Lambda in user's description)
-        'total_climate_damage',  # 10. total climate damage (Y_gross * Omega)
-        'Y_damaged',  # 11. output after damages before abatement
-        'abatement_cost_fraction',  # 12. fraction of output after damages that is abatement cost (f * delta_c)
-        'abatecost',  # 13. abatement cost
-        'Y_net',  # 14. output net of climate damages and abatement cost
-        'E',  # 15. CO2 emissions in tCO2/yr
-        'gross_investment',  # 16. gross investment (s * Y_damaged)
-        'K',  # 17. capital in 2019$
-        'consumption',  # 18. consumption (y * L)
-        'dK_dt',  # 19. net capital accumulation
-        'y',  # 20. per-capita consumption
-        'Gini',  # 21. baseline Gini index
-        'G_eff',  # 22. effective Gini index
-        'dGini_dt',  # 23. continuous change in Gini index
-        'Gini_step_change',  # 24. step function change in Gini index
-        'U',  # 25. mean utility of consumption per capita
-        'discounted_utility',  # 26. discounted utility = U * exp(-rho*t)
-        's',  # 27. savings rate
-        'f',  # 28. control rate (allocation to abatement)
-        'marginal_abatement_cost',  # 29. social cost of carbon
+        't',  # Time
+        # Time-dependent driving parameters
+        'A',  # Total factor productivity
+        'L',  # Population
+        'theta1',  # Marginal abatement cost at mu=1
+        'sigma',  # Carbon intensity of GDP
+        # Decision variables
+        'f',  # Control: fraction allocated to abatement
+        's',  # Savings rate
+        # State variables
+        'K',  # Capital stock
+        'Gini',  # Gini index before redistribution
+        'Ecum',  # Cumulative emissions
+        # Related to Ecum
+        'dEcum_dt',  # Rate of cumulative emissions change
+        'delta_T',  # Global mean temperature change
+        # Production chain
+        'Y_gross',  # Gross production before climate damage
+        'total_climate_damage',  # Total climate damage (Y_gross * Omega)
+        'Y_damaged',  # Output after climate damage before abatement
+        # Costs and net
+        'abatecost',  # Total abatement expenditure
+        'Y_net',  # Output net of climate damage and abatement cost
+        # Investment and consumption
+        'gross_investment',  # Gross investment
+        'consumption',  # Total consumption
+        # Per capita indices
+        'y_eff',  # Effective per-capita income after abatement
+        'delta_c',  # Per-capita redistributable income
+        'U',  # Mean utility per capita
+        'discounted_utility',  # Discounted utility per capita
+        # Dimensionless variables
+        'Omega',  # Climate damage as fraction of gross output
+        'abatement_cost_fraction',  # Abatement cost as fraction of after-damage income
+        'Lambda',  # Abatement cost as fraction of damaged output
+        'Gini_climate',  # Gini index after climate damage before redistribution
+        'G_eff',  # Gini index after redistribution
+        # Remaining variables
+        'mu',  # Abatement fraction
+        'E',  # CO2 emissions
+        'dK_dt',  # Net capital accumulation
+        'y',  # Per-capita consumption (before abatement)
+        'dGini_dt',  # Continuous Gini change rate
+        'Gini_step_change',  # Discontinuous Gini step change
+        'marginal_abatement_cost',  # Marginal abatement cost (social cost of carbon)
     ]
 
     # Add any remaining variables not in the ordered list
