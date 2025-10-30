@@ -63,17 +63,11 @@
     "type": "constant",
     "value": 0.5
   },
-  "s_control_function": {
-    "_description": "Control for s (savings rate) - presence enables dual optimization",
-    "type": "constant",
-    "value": 0.24
-  },
   "optimization_parameters": {
     "max_evaluations": 100,
     "control_times": 2,
-    "initial_guess": 0.5,
-    "s_control_times": 2,
-    "s_initial_guess": 0.24,
+    "initial_guess_f": 0.5,
+    "initial_guess_s": 0.24,
     "algorithm": "LN_SBPLX",
     "xtol_abs": 1e-10
   }

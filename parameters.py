@@ -375,8 +375,10 @@ class OptimizationParameters:
     Parameters controlling optimization.
 
     Supports two modes:
-    1. Direct multi-point optimization (control_times is list, initial_guess is list)
-    2. Iterative refinement optimization (control_times is int, initial_guess is float)
+    1. Direct multi-point optimization (control_times is list, initial_guess_f is list)
+    2. Iterative refinement optimization (control_times is int, initial_guess_f is float)
+
+    Supports dual optimization when initial_guess_s is specified.
 
     Attributes
     ----------
@@ -390,7 +392,8 @@ class OptimizationParameters:
             Iteration 1: 2 control points (t_start, t_end)
             Iteration 2: 3 control points
             Iteration k: 2^k + 1 control points
-    initial_guess : list of float OR float
+        Note: Both f and s use the same control_times in dual optimization mode.
+    initial_guess_f : list of float OR float
         Direct mode (list): Initial f values at each control time.
             Must have same length as control_times.
             Each value must satisfy 0 ≤ f ≤ 1.
@@ -422,36 +425,35 @@ class OptimizationParameters:
         Absolute tolerance on parameter changes.
         Stops when |Δx| < xtol_abs for all parameters.
         If None, uses NLopt default (0.0 = disabled).
-    n_points_final : int, optional
-        Target number of control points in final iteration (only used in iterative mode).
-        If specified, refinement_base is calculated as: (n_points_final - 1)^(1/(n_iterations - 1))
+    n_points_final_f : int, optional
+        Target number of f control points in final iteration (only used in iterative mode).
+        If specified, refinement_base is calculated as: (n_points_final_f - 1)^(1/(n_iterations - 1))
         If None, uses refinement_base = 2.0 (default behavior: 2, 3, 5, 9, 17, ...)
-        Example: n_points_final=17 with 5 iterations gives base ≈ 2.0
-        Example: n_points_final=10 with 4 iterations gives base ≈ 2.08
-    s_control_times : list of float OR int, optional
-        Control times for s (savings rate) - parallel to control_times for f.
-        If None, s is not optimized (uses fixed s from time_functions).
-        Same format as control_times: list for direct mode, int for iterative mode.
-    s_initial_guess : list of float OR float, optional
-        Initial s values - parallel to initial_guess for f.
-        If None, s is not optimized.
-        Same format as initial_guess: list for direct mode, float for iterative mode.
-    s_n_points_final : int, optional
-        Target number of control points for s in final iteration (iterative mode only).
-        If None but s_control_times is int, uses same refinement base as f.
+        Example: n_points_final_f=17 with 5 iterations gives base ≈ 2.0
+        Example: n_points_final_f=10 with 4 iterations gives base ≈ 2.08
+    initial_guess_s : list of float OR float, optional
+        Enables dual optimization of both f and s when present.
+        Direct mode (list): Initial s values at each control time.
+            Must have same length as control_times.
+            Each value must satisfy 0 ≤ s ≤ 1.
+        Iterative refinement mode (float): Single initial s value for first iteration.
+            Must satisfy 0 ≤ s ≤ 1.
+    n_points_final_s : int, optional
+        Target number of s control points in final iteration (iterative mode only).
+        If None, uses same refinement base as f (derived from n_points_final_f).
+        Can differ from n_points_final_f to allow different temporal resolution for s.
     """
     max_evaluations: int
     control_times: object  # list or int
-    initial_guess: object  # list or float
+    initial_guess_f: object  # list or float
     algorithm: str = None
     ftol_rel: float = None
     ftol_abs: float = None
     xtol_rel: float = None
     xtol_abs: float = None
-    n_points_final: int = None
-    s_control_times: object = None  # list or int, optional for dual optimization
-    s_initial_guess: object = None  # list or float, optional for dual optimization
-    s_n_points_final: int = None  # optional for iterative mode with s
+    n_points_final_f: int = None
+    initial_guess_s: object = None  # list or float, enables dual optimization if present
+    n_points_final_s: int = None
 
     def is_iterative_refinement(self):
         """
@@ -472,10 +474,10 @@ class OptimizationParameters:
         Returns
         -------
         bool
-            True if optimizing both f and s (s_control_times and s_initial_guess are set),
+            True if optimizing both f and s (initial_guess_s is set),
             False if only optimizing f (s is fixed from time_functions)
         """
-        return self.s_control_times is not None and self.s_initial_guess is not None
+        return self.initial_guess_s is not None
 
     def is_direct_mode(self):
         """
@@ -777,22 +779,12 @@ def load_configuration(config_path):
 
     # Create dual control function (f, s)
     # f comes from control_function specification
-    # s comes from s_control_function (if present) or time_functions['s'] (default)
+    # s comes from time_functions['s']
+    # Dual optimization (optimizing both f and s) is controlled by initial_guess_s in optimization_parameters
     control_function_data = _filter_description_keys(config_data['control_function'])
     f_control = _create_control_function(control_function_data)
-
-    # Check if s_control_function is specified in config (for dual optimization)
-    if 's_control_function' in config_data:
-        s_control_data = _filter_description_keys(config_data['s_control_function'])
-        s_control = _create_control_function(s_control_data)
-        control_function = create_dual_control_from_specs(
-            f_spec=f_control,
-            s_spec=s_control
-        )
-    else:
-        # Default: s comes from time_functions (single-variable optimization)
-        s_time_function = time_functions['s']
-        control_function = create_dual_control_from_single(f_control, s_time_function)
+    s_time_function = time_functions['s']
+    control_function = create_dual_control_from_single(f_control, s_time_function)
 
     # Extract run name
     run_name = config_data['run_name']

@@ -66,7 +66,7 @@
   "optimization_parameters": {
     "max_evaluations": 100,
     "control_times": 2,
-    "initial_guess": 0.5,
+    "initial_guess_f": 0.5,
     "algorithm": "LN_SBPLX",
     "xtol_abs": 1e-10
   }

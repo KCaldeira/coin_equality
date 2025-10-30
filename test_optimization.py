@@ -102,7 +102,7 @@ def parse_arguments():
 Examples:
   python test_optimization.py config_baseline.json
   python test_optimization.py config_baseline.json --scalar_parameters.alpha 0.35
-  python test_optimization.py config_baseline.json --optimization_parameters.initial_guess 0.3 --run_name "test_run"
+  python test_optimization.py config_baseline.json --optimization_parameters.initial_guess_f 0.3 --run_name "test_run"
 
 Override format:
   --key.subkey.subsubkey value
@@ -111,9 +111,11 @@ Common overrides:
   --run_name <name>
   --scalar_parameters.alpha <value>
   --scalar_parameters.rho <value>
-  --optimization_parameters.initial_guess <value>
+  --optimization_parameters.initial_guess_f <value>
+  --optimization_parameters.initial_guess_s <value>
   --optimization_parameters.max_evaluations <value>
-  --optimization_parameters.n_points_final <value>
+  --optimization_parameters.n_points_final_f <value>
+  --optimization_parameters.n_points_final_s <value>
   --time_functions.A.growth_rate <value>
         """
     )
@@ -425,7 +427,10 @@ def main():
         print(f"\nIterative refinement mode:")
         print(f"  Number of iterations: {n_iterations}")
         print(f"  Final control points: {2**n_iterations + 1}")
-        print(f"  Initial guess: f = {opt_params.initial_guess}")
+        print(f"  Initial guess: f = {opt_params.initial_guess_f}")
+        if opt_params.initial_guess_s is not None:
+            print(f"  Initial guess: s = {opt_params.initial_guess_s}")
+            print(f"  Dual optimization: YES")
     else:
         control_times = opt_params.control_times
         n_control_points = len(control_times)
@@ -437,7 +442,7 @@ def main():
 
     optimizer = UtilityOptimizer(config)
 
-    initial_guess = opt_params.initial_guess
+    initial_guess = opt_params.initial_guess_f
     max_evaluations = opt_params.max_evaluations
 
     if is_iterative:
@@ -474,14 +479,14 @@ def main():
     if is_iterative:
         opt_results = optimizer.optimize_with_iterative_refinement(
             n_iterations=opt_params.control_times,
-            initial_guess_scalar=opt_params.initial_guess,
+            initial_guess_scalar=opt_params.initial_guess_f,
             max_evaluations=max_evaluations,
             algorithm=opt_params.algorithm,
             ftol_rel=opt_params.ftol_rel,
             ftol_abs=opt_params.ftol_abs,
             xtol_rel=opt_params.xtol_rel,
             xtol_abs=opt_params.xtol_abs,
-            n_points_final=opt_params.n_points_final
+            n_points_final=opt_params.n_points_final_f
         )
         n_final_control_points = len(opt_results['control_points'])
     else:

@@ -39,7 +39,7 @@ def main():
             "python",
             "test_optimization.py",
             config_file,
-            "--optimization_parameters.initial_guess", str(ig),
+            "--optimization_parameters.initial_guess_f", str(ig),
             "--run_name", run_name
         ]
 
