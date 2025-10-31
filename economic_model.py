@@ -309,6 +309,7 @@ def integrate_model(config, store_detailed_output=True):
     params = evaluate_params_at_time(t_start, config)
 
     Gini = config.scalar_params.Gini_initial
+    k_climate = params['k_climate']
     delta_T = k_climate * Ecum_initial
 
     # iterate to find K0 that is consistent with climate damage from initial emissions
