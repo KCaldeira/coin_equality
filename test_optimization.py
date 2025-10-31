@@ -618,9 +618,14 @@ def main():
             print(f"  Iteration {iter_result['iteration']:2d}: {iter_result['n_control_points']:3d} points, "
                   f"objective = {iter_result['optimal_objective']:.6e}, "
                   f"evals = {iter_result['n_evaluations']}")
-        print(f"\nFinal control trajectory:")
+        print(f"\nFinal control trajectory (f - abatement fraction):")
         for t, f_val in opt_results['control_points']:
             print(f"  t={t:6.1f} yr: f={f_val:.6f}")
+
+        if 's_control_points' in opt_results:
+            print(f"\nFinal control trajectory (s - savings rate):")
+            for t, s_val in opt_results['s_control_points']:
+                print(f"  t={t:6.1f} yr: s={s_val:.6f}")
     elif not is_iterative and len(opt_params.control_times) == 1:
         print(f"Optimal constant allocation: f₀ = {opt_results['optimal_values'][0]:.6f}")
         print(f"Optimal objective value: {opt_results['optimal_objective']:.6e}")
@@ -633,9 +638,15 @@ def main():
             else:
                 print(f"  {label:30s}: objective = {data['objective']:.6e} ({pct_diff:+.2f}% from optimal)")
     else:
-        print(f"Optimal control trajectory:")
+        print(f"Optimal control trajectory (f - abatement fraction):")
         for t, f_val in opt_results['control_points']:
             print(f"  t={t:6.1f} yr: f={f_val:.6f}")
+
+        if 's_control_points' in opt_results:
+            print(f"\nOptimal control trajectory (s - savings rate):")
+            for t, s_val in opt_results['s_control_points']:
+                print(f"  t={t:6.1f} yr: s={s_val:.6f}")
+
         print(f"\nOptimal objective value: {opt_results['optimal_objective']:.6e}")
 
     print(f"\nAll results saved to: {output_paths['output_dir']}")
