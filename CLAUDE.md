@@ -24,6 +24,8 @@ This project prioritizes elegant, fail-fast code that surfaces errors quickly ra
 ### Code Organization
 - All imports at the top of the file - no imports inside functions or scattered throughout the code
 
+### Protected Directories
+- Never modify files in `./barrage_nordhaus_2023/` - this directory contains reference materials that must remain unchanged
 
 ### Naming Conventions
 - Consistent naming - use the same variable/field names throughout the codebase when referring to the same concept

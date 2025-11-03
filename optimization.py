@@ -37,7 +37,7 @@ def calculate_utility_weighted_times(n_points, config):
     -----
     Algorithm:
     1. Compute average TFP growth rate: k_A = ln(A(t_end)/A(t_start)) / (t_end - t_start)
-    2. Compute effective consumption discount rate: r_c = ρ + η·k_A·(1-α)
+    2. Compute effective Consumption discount rate: r_c = ρ + η·k_A·(1-α)
     3. Generate times: t(k) = -(1/r_c)·ln(1 - (k/N)·(1 - exp(-r_c·t_end)))
        for k = 0, 1, ..., N where N = n_points - 1
 

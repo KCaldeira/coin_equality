@@ -50,8 +50,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     dict
         Dictionary containing:
         - Tendencies: 'dK_dt', 'dEcum_dt', 'dGini_dt', 'Gini_step_change'
-        - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y, delta_c,
-          mu, Lambda, abatecost, y_eff, G_eff, U, E
+        - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y, redistribution,
+          mu, Lambda, AbateCost, y_eff, G_eff, U, E
 
     Notes
     -----
@@ -64,11 +64,11 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     6. y from Y_damaged, L, s (Eq 1.4)
     7. Δc from y, ΔL (Eq 4.3)
     8. E_pot from σ, Y_gross (Eq 2.1)
-    9. abatecost from f, Δc, L (Eq 1.5)
-    10. μ from abatecost, θ₁, θ₂, E_pot (Eq 1.6)
-    11. Λ from abatecost, Y_damaged (Eq 1.7)
+    9. AbateCost from f, Δc, L (Eq 1.5)
+    10. μ from AbateCost, θ₁, θ₂, E_pot (Eq 1.6)
+    11. Λ from AbateCost, Y_damaged (Eq 1.7)
     12. Y_net from Y_damaged, Λ (Eq 1.8)
-    13. y_eff from y, abatecost, L (Eq 1.9)
+    13. y_eff from y, AbateCost, L (Eq 1.9)
     14. G_eff from f, ΔL, G_climate (Eq 4.4, applied to climate-damaged distribution)
     15. U from y_eff, G_eff, η (Eq 3.5)
     16. E from σ, μ, Y_gross (Eq 2.3)
@@ -120,6 +120,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     # Income-dependent climate damage
     if y_gross > 0:
     # Returns both aggregate damage fraction and post-damage Gini
+    # Uses params: psi1, psi2, y_damage_halfsat, fract_gdp
         Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
           delta_T, Gini, y_gross, params
       )
@@ -131,42 +132,48 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     Gini_climate = np.clip(Gini_climate, EPSILON, 1.0 - EPSILON)
 
     # Eq 1.3: Production after climate damage
-    Y_damaged = (1 - Omega) * Y_gross
+    Climate_Damage =  Omega * Y_gross  # Total dollar value of climate damage
+    Y_damaged = Y_gross - Climate_Damage
 
     # Eq 1.4: Mean per-capita income (after climate damage, before abatement)
-    y = (1 - s) * Y_damaged / L
+    Savings = s * Y_damaged  # Investment before depreciation
+
+    # Lambda, fraction of GDP allocated to abatement
+    Lambda = f * fract_gdp
+
+    # Eq 1.5: Abatement cost (what society allocates to abatement)
+    AbateCost = Lambda * Y_damaged
+
+    # Redistribution amount
+    Redistribution = (1 - f) * fract_gdp * Y_damaged
+
+    # Consumption is the remaining income after savings and abatement costs
+    Consumption = Y_damaged - Savings - AbateCost
+
+    # Eq 1.8: Net production after abatement costs
+    Y_net =  Y_damaged - AbateCost
+
+    # Per-capita income after climate damage and before abatement costs
+    y = (Consumption + AbateCost) / L
+
+    # Eq 1.9: Effective per-capita income after climate damage and abatement costs
+    y_eff = Consumption / L
 
     # Eq 4.3: Per-capita amount redistributed
-    delta_c = y * fract_gdp
+    redistribution = Redistribution / L
 
     # Eq 2.1: Potential emissions (unabated)
     Epot = sigma * Y_gross
 
-    # Eq 1.5: Abatement cost (what society allocates to abatement)
-    abatecost = f * delta_c * L
-
     # Eq 1.6: Abatement fraction
     # Note that if the calculated mu exceeds mu_max, and it is cropped to mu_max,
     # then it is just money wasted and the optimizer should do better.
-    if Epot > 0 and abatecost > 0:
-        mu = min(mu_max, (abatecost * theta2 / (Epot * theta1)) ** (1 / theta2))
+    if Epot > 0 and AbateCost > 0:
+        mu = min(mu_max, (AbateCost * theta2 / (Epot * theta1)) ** (1 / theta2))
     else:
         mu = 0.0
 
-    # Eq 1.7: Abatement cost fraction
-    if Y_damaged > 0 and abatecost > 0:
-        Lambda = abatecost / Y_damaged
-    else:
-        Lambda = 0.0
-
-    # Eq 1.8: Net production after abatement costs
-    Y_net = (1 - Lambda) * Y_damaged
-
-    # Eq 1.9: Effective per-capita income
-    y_eff = y - abatecost / L
-
-    # Eq 4.4: Effective Gini index
-    # Redistribution operates on the climate-damaged distribution
+    # Eq 4.4:0ibution operates on the climate-damaged distribution
     if fract_gdp < 1.0: # do normal redistribution calculation
         G_eff, _ = calculate_Gini_effective_redistribute_abate(f, fract_gdp, Gini_climate)
     else: # fract_gdp >= 1, no redistribution
@@ -201,11 +208,9 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     if store_detailed_output:
         # Additional calculated variables for detailed output only
         marginal_abatement_cost = theta1 * mu ** (theta2 - 1)  # Social cost of carbon
-        total_climate_damage = Y_gross * Omega  # Total dollar value of climate damage
-        gross_investment = s * Y_damaged  # Investment before depreciation
-        consumption = y * L  # Total consumption
+        Consumption = y * L  # Total Consumption
         discounted_utility = U * np.exp(-rho * t)  # Discounted utility
-        abatement_cost_fraction = f * delta_c  # Abatement cost as fraction of y
+        abatement_cost_fraction = f * redistribution  # Abatement cost as fraction of y
 
         # Return full diagnostics for CSV/PDF output
         results.update({
@@ -220,18 +225,18 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             'Y_damaged': Y_damaged,
             'Y_net': Y_net,
             'y': y,
-            'delta_c': delta_c,
+            'redistribution': redistribution,
             'mu': mu,
             'Lambda': Lambda,
-            'abatecost': abatecost,
+            'AbateCost': AbateCost,
             'marginal_abatement_cost': marginal_abatement_cost,
             'y_eff': y_eff,
             'G_eff': G_eff,
             'U': U,
             'E': E,
-            'total_climate_damage': total_climate_damage,
-            'gross_investment': gross_investment,
-            'consumption': consumption,
+            'Climate_Damage': Climate_Damage,
+            'Savings': Savings,
+            'Consumption': Consumption,
             'discounted_utility': discounted_utility,
             'abatement_cost_fraction': abatement_cost_fraction,
             's': s,  # Savings rate (currently constant, may become time-dependent)
@@ -275,7 +280,7 @@ def integrate_model(config, store_detailed_output=True):
         - 'Gini': array of Gini index values
         - 'A', 'sigma', 'theta1', 'f': time-dependent inputs
         - All derived variables: Y_gross, delta_T, Omega, Gini_climate, Y_damaged, Y_net,
-          y, delta_c, mu, Lambda, abatecost, marginal_abatement_cost, y_eff, G_eff, E
+          y, redistribution, mu, Lambda, AbateCost, marginal_abatement_cost, y_eff, G_eff, E
         - 'dK_dt', 'dEcum_dt', 'dGini_dt', 'Gini_step_change': tendencies
 
     Notes
@@ -363,10 +368,10 @@ def integrate_model(config, store_detailed_output=True):
             'Y_damaged': np.zeros(n_steps),
             'Y_net': np.zeros(n_steps),
             'y': np.zeros(n_steps),
-            'delta_c': np.zeros(n_steps),
+            'redistribution': np.zeros(n_steps),
             'mu': np.zeros(n_steps),
             'Lambda': np.zeros(n_steps),
-            'abatecost': np.zeros(n_steps),
+            'AbateCost': np.zeros(n_steps),
             'marginal_abatement_cost': np.zeros(n_steps),
             'y_eff': np.zeros(n_steps),
             'G_eff': np.zeros(n_steps),
@@ -375,9 +380,9 @@ def integrate_model(config, store_detailed_output=True):
             'dEcum_dt': np.zeros(n_steps),
             'dGini_dt': np.zeros(n_steps),
             'Gini_step_change': np.zeros(n_steps),
-            'total_climate_damage': np.zeros(n_steps),
-            'gross_investment': np.zeros(n_steps),
-            'consumption': np.zeros(n_steps),
+            'Climate_Damage': np.zeros(n_steps),
+            'Savings': np.zeros(n_steps),
+            'Consumption': np.zeros(n_steps),
             'discounted_utility': np.zeros(n_steps),
             'abatement_cost_fraction': np.zeros(n_steps),
             's': np.zeros(n_steps),
@@ -425,10 +430,10 @@ def integrate_model(config, store_detailed_output=True):
             results['Y_damaged'][i] = outputs['Y_damaged']
             results['Y_net'][i] = outputs['Y_net']
             results['y'][i] = outputs['y']
-            results['delta_c'][i] = outputs['delta_c']
+            results['redistribution'][i] = outputs['redistribution']
             results['mu'][i] = outputs['mu']
             results['Lambda'][i] = outputs['Lambda']
-            results['abatecost'][i] = outputs['abatecost']
+            results['AbateCost'][i] = outputs['AbateCost']
             results['marginal_abatement_cost'][i] = outputs['marginal_abatement_cost']
             results['y_eff'][i] = outputs['y_eff']
             results['G_eff'][i] = outputs['G_eff']
@@ -437,9 +442,9 @@ def integrate_model(config, store_detailed_output=True):
             results['dEcum_dt'][i] = outputs['dEcum_dt']
             results['dGini_dt'][i] = outputs['dGini_dt']
             results['Gini_step_change'][i] = outputs['Gini_step_change']
-            results['total_climate_damage'][i] = outputs['total_climate_damage']
-            results['gross_investment'][i] = outputs['gross_investment']
-            results['consumption'][i] = outputs['consumption']
+            results['Climate_Damage'][i] = outputs['Climate_Damage']
+            results['Savings'][i] = outputs['Savings']
+            results['Consumption'][i] = outputs['Consumption']
             results['discounted_utility'][i] = outputs['discounted_utility']
             results['abatement_cost_fraction'][i] = outputs['abatement_cost_fraction']
             results['s'][i] = outputs['s']

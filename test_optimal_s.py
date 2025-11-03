@@ -17,7 +17,7 @@ def test_optimal_s_economic_sensibility():
     - Savings rate typically 15-35% in growth models
     - Early periods: higher s when returns to capital are high
     - Later periods: lower s as economy approaches steady state
-    - Higher s should increase capital accumulation and long-term consumption
+    - Higher s should increase capital accumulation and long-term Consumption
     """
 
     print("=" * 70)
@@ -108,7 +108,7 @@ def test_optimal_s_economic_sensibility():
     increasing_s_obj = results[4]['objective']
 
     # Check 1: Higher s should generally lead to different outcomes
-    # (not necessarily always higher utility due to consumption-investment tradeoff)
+    # (not necessarily always higher utility due to Consumption-investment tradeoff)
     diff_high_low = abs(high_s_obj - low_s_obj) / baseline_obj
     check1 = diff_high_low > 0.001  # At least 0.1% difference
     checks_passed.append(check1)
