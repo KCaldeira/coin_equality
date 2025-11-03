@@ -342,7 +342,6 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'discounted_utility',  # Discounted utility per capita
         # Dimensionless variables
         'Omega',  # Climate damage as fraction of gross output
-        'abatement_cost_fraction',  # Abatement cost as fraction of after-damage income
         'Lambda',  # Abatement cost as fraction of damaged output
         'Gini_climate',  # Gini index after climate damage before redistribution
         'G_eff',  # Gini index after redistribution
@@ -373,7 +372,6 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'Omega': ('Climate damage as fraction of gross output', 'dimensionless'),
         'Climate_Damage': ('Total climate damage', '$/yr'),
         'Y_damaged': ('Output after climate damage before abatement', '$/yr'),
-        'abatement_cost_fraction': ('Abatement cost as fraction of after-damage income', 'dimensionless'),
         'AbateCost': ('Total abatement expenditure', '$/yr'),
         'Y_net': ('Output net of climate damage and abatement cost', '$/yr'),
         'E': ('CO2 emissions', 'tCO2/yr'),

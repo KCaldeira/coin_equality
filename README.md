@@ -1041,7 +1041,7 @@ The results dictionary contains arrays for:
 - **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`, `s`
 - **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_eff`
 - **Climate variables**: `delta_T`, `Omega`, `E`, `Climate_Damage`
-- **Abatement variables**: `mu`, `Lambda`, `AbateCost`, `redistribution`, `abatement_cost_fraction`, `marginal_abatement_cost`
+- **Abatement variables**: `mu`, `Lambda`, `AbateCost`, `redistribution`, `marginal_abatement_cost`
 - **Investment/Consumption**: `Savings`, `Consumption`
 - **Inequality/utility**: `G_eff`, `Gini_climate`, `U`, `discounted_utility`
 - **Tendencies**: `dK_dt`, `dEcum_dt`, `dGini_dt`, `Gini_step_change`

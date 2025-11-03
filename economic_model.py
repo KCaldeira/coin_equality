@@ -144,14 +144,14 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     # Eq 1.5: Abatement cost (what society allocates to abatement)
     AbateCost = Lambda * Y_damaged
 
+    # Eq 1.8: Net production after abatement costs
+    Y_net =  Y_damaged - AbateCost
+
     # Redistribution amount
     Redistribution = (1 - f) * fract_gdp * Y_damaged
 
     # Consumption is the remaining income after savings and abatement costs
     Consumption = Y_damaged - Savings - AbateCost
-
-    # Eq 1.8: Net production after abatement costs
-    Y_net =  Y_damaged - AbateCost
 
     # Per-capita income after climate damage and before abatement costs
     y = (Consumption + AbateCost) / L
@@ -163,6 +163,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     redistribution = Redistribution / L
 
     # Eq 2.1: Potential emissions (unabated)
+    # Note that this implies that you have emissions even for potential output lost to climate damage
     Epot = sigma * Y_gross
 
     # Eq 1.6: Abatement fraction
@@ -210,7 +211,6 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         marginal_abatement_cost = theta1 * mu ** (theta2 - 1)  # Social cost of carbon
         Consumption = y * L  # Total Consumption
         discounted_utility = U * np.exp(-rho * t)  # Discounted utility
-        abatement_cost_fraction = f * redistribution  # Abatement cost as fraction of y
 
         # Return full diagnostics for CSV/PDF output
         results.update({
@@ -238,7 +238,6 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             'Savings': Savings,
             'Consumption': Consumption,
             'discounted_utility': discounted_utility,
-            'abatement_cost_fraction': abatement_cost_fraction,
             's': s,  # Savings rate (currently constant, may become time-dependent)
         })
     
@@ -384,7 +383,6 @@ def integrate_model(config, store_detailed_output=True):
             'Savings': np.zeros(n_steps),
             'Consumption': np.zeros(n_steps),
             'discounted_utility': np.zeros(n_steps),
-            'abatement_cost_fraction': np.zeros(n_steps),
             's': np.zeros(n_steps),
         })
 
@@ -446,7 +444,6 @@ def integrate_model(config, store_detailed_output=True):
             results['Savings'][i] = outputs['Savings']
             results['Consumption'][i] = outputs['Consumption']
             results['discounted_utility'][i] = outputs['discounted_utility']
-            results['abatement_cost_fraction'][i] = outputs['abatement_cost_fraction']
             results['s'][i] = outputs['s']
 
         # Euler step: update state for next iteration (skip on last step)
