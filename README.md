@@ -2,6 +2,52 @@
 
 A simple-as-possible stylized representation of the tradeoff between investment in income redistribution versus investment in emissions abatement.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Model Structure](#model-structure)
+  - [Objective Function](#objective-function)
+  - [Calculation Order](#calculation-order)
+  - [Core Components](#core-components)
+- [Key Parameters](#key-parameters)
+  - [Scalar Parameters (Time-Invariant)](#scalar-parameters-time-invariant)
+  - [Time-Dependent Functions](#time-dependent-functions)
+  - [Control Variables](#control-variables)
+  - [Integration Parameters](#integration-parameters)
+  - [Initial Conditions (Computed Automatically)](#initial-conditions-computed-automatically)
+- [Model Features](#model-features)
+  - [Simplifying Assumptions](#simplifying-assumptions)
+  - [Key Insights](#key-insights)
+- [Implementation: Key Functions](#implementation-key-functions)
+- [Parameter Organization](#parameter-organization)
+  - [Configuration File Structure](#configuration-file-structure)
+  - [Initial Conditions](#initial-conditions)
+  - [Example Configuration](#example-configuration)
+  - [Loading Configuration](#loading-configuration)
+- [Unit Testing: Validating Analytical Solutions](#unit-testing-validating-analytical-solutions)
+  - [Unit Test for Equation (1.2): Climate Damage](#unit-test-for-equation-12-climate-damage)
+  - [Testing the Forward Model](#testing-the-forward-model)
+  - [Testing the Optimization with Parameter Overrides](#testing-the-optimization-with-parameter-overrides)
+- [Time Integration](#time-integration)
+  - [Integration Function](#integration-function)
+  - [Implementation Notes](#implementation-notes)
+  - [Output Variables](#output-variables)
+- [Output and Visualization](#output-and-visualization)
+  - [Saving Results](#saving-results)
+  - [Output Files](#output-files)
+  - [Example Workflow](#example-workflow)
+- [Optimization Configuration](#optimization-configuration)
+  - [Direct Multi-Point Optimization](#direct-multi-point-optimization)
+  - [Iterative Refinement Optimization](#iterative-refinement-optimization)
+  - [Optimization Stopping Criteria](#optimization-stopping-criteria)
+  - [Dual Optimization (f and s)](#dual-optimization-f-and-s)
+- [Next Steps](#next-steps)
+- [Dual Optimization of Savings Rate and Abatement Allocation](#dual-optimization-of-savings-rate-and-abatement-allocation)
+- [Project Structure](#project-structure)
+- [References](#references)
+- [License](#license)
+- [Authors](#authors)
+
 ## Overview
 
 This project develops a highly stylized model of an economy with income inequality, where a specified fraction of gross production is allocated to social good. The central question is how to optimally allocate resources between two competing objectives:
@@ -1269,116 +1315,33 @@ This runs the model with f=0.5 and s declining linearly from 0.30 to 0.20, witho
 
 The following tasks are prioritized to prepare the model for production use and publication:
 
-### 1. Align Model Components with DICE-2023 (Barrage & Nordhaus 2024)
+### 1. Debug Model for Income Redistribution Cases
 
-Update key model components to more closely follow the formulations in Barrage and Nordhaus (2024):
+Verify and debug the model to ensure it is working correctly for income redistribution scenarios:
+- Test model behavior across range of inequality levels (Gini coefficients)
+- Validate income redistribution mechanics and effective Gini calculations
+- Check that climate damage with income-dependent effects produces physically reasonable results
+- Verify that optimization converges to sensible policies for redistribution vs. abatement tradeoff
+- Document any issues discovered and ensure all calculations are correct
 
-**Climate damage function:**
-- ✓ Complete: Now uses DICE-2023 formulation: `ω_max(ΔT) = psi1 · ΔT + psi2 · ΔT²` [Barrage & Nordhaus 2023]
+### 2. Explore Model Sensitivities
 
-**Carbon intensity (σ):**
-- Current: Simple exponential decay
-- Target: DICE-2023 carbon intensity trajectory with technological progress
+Systematically explore how model results depend on key parameters and assumptions:
+- Parameter sensitivity analysis (discount rate, risk aversion, damage functions, etc.)
+- Sensitivity to initial conditions (initial capital, cumulative emissions, inequality)
+- Sensitivity to time-dependent function specifications (TFP growth, population, carbon intensity)
+- Document parameter ranges that produce realistic and stable model behavior
+- Identify which parameters most strongly influence optimal policies
 
-**Backstop price (θ₁):**
-- Current: Simple exponential decline in marginal abatement cost
-- Target: DICE-2023 backstop price formulation with cost reductions
+### 3. Design and Execute Production Simulations
 
-**Total factor productivity (A):**
-- Current: Simple exponential growth
-- Target: DICE-2023 TFP trajectory with calibrated growth rates
-
-This alignment will ensure our extensions (income distribution, redistribution mechanisms) are built on a well-established baseline that matches current IAM best practices.
-
-### 2. Enhanced Redistribution Mode (f_gdp >= 1) - Advanced Features
-
-**Status**: ✓ Basic implementation complete. Redistribution is disabled and uniform damage approximation is used when `f_gdp >= 1`.
-
-**Current Implementation**:
-- Redistribution turned off: `G_eff = Gini_climate` (no redistribution effect)
-- Uniform damage: `Omega = omega_max`, `Gini_climate = Gini_current`
-- Optimizer naturally selects `f << 1` due to utility constraints
-- Allows studying pure abatement policy without redistribution
-
-**Future Advanced Features** (optional enhancements for more sophisticated treatment):
-
-If desired to model actual structural redistribution with non-Pareto distributions:
-
-1. **Implement non-uniform climate damage with non-Pareto distributions**:
-   - Replace uniform damage approximation with income-dependent calculation
-   - Determine appropriate functional form for income distribution when departing from Pareto
-   - Either extend analytical solutions (hypergeometric functions) or implement numerical integration
-   - Validate that damage vulnerability profile remains physically reasonable
-
-2. **Model actual structural redistribution**:
-   - Define how `f_gdp >= 1` maps to distribution shape changes
-   - Implement redistribution mechanics beyond Pareto family in `income_distribution.py`
-   - Update `economic_model.py` to calculate modified distribution parameters
-   - Ensure continuous transition at `f_gdp = 1` boundary
-
-3. **Testing and validation**:
-   - Unit tests for boundary behavior at `f_gdp = 1`
-   - Asymptotic tests as `f_gdp` increases
-   - Comparison against analytical solutions where available
-
-**Key Design Questions**:
-- What functional form for income distribution when departing from Pareto?
-- How should climate damage depend on income in non-Pareto distributions?
-- What are physically reasonable upper bounds on `f_gdp`?
-- Is the added complexity justified for modeling purposes?
-
-**Note**: Current implementation (redistribution disabled, uniform damage) may be sufficient for most use cases. These enhancements are optional and should only be pursued if needed for specific research questions.
-
-### 3. Update Methods Section of Paper
-
-Revise and update the Methods section of the paper to ensure it accurately reflects the current implementation as documented in this README and the model code. The paper should provide a clear, consistent description of all model equations, parameter definitions, and computational approaches used in the codebase.
-
-### 4. Comprehensive Code Validation
-
-Perform a detailed verification of model calculations by manually tracing through one complete time step of the integration:
-- Use the output `results.csv` file to verify intermediate calculations
-- Check that all equations are implemented correctly and consistently with documentation
-- Validate state variable updates, tendency calculations, and functional relationships
-- Ensure numerical values propagate correctly through the calculation order
-- Document any discrepancies or unexpected behaviors
-
-This step-by-step verification will provide confidence in the correctness of the implementation.
-
-### 5. Mathematica Verification of Model Equations
-
-Use Wolfram Mathematica to independently re-derive and verify all model equations:
-
-**Analytical derivations to verify:**
-- Pareto-Lorenz income distribution and Gini coefficient relationships
-- Mean utility calculation with income distribution (Eq. 3.5)
-- Income redistribution mechanics and effective Gini formulation (Eq. 4.4)
-- Climate damage with income-dependent effects and distributional impacts
-- Abatement cost functions and emission relationships
-- All closed-form solutions and integrals
-
-**Numerical verification:**
-- Compare Mathematica symbolic solutions with Python numerical implementations
-- Verify hypergeometric function evaluations in climate damage calculations
-- Check integration of utility across income distribution
-- Validate PCHIP interpolation behavior at boundaries
-
-**Benefits:**
-- Independent verification ensures mathematical correctness
-- Symbolic computation catches algebraic errors that may not appear in numerical tests
-- Provides publication-ready analytical expressions
-- Validates assumptions in closed-form approximations
-- Ensures consistency between documentation and implementation
-
-This verification step provides confidence that the model mathematics is sound before using it for policy analysis.
-
-### 6. Production Code Readiness
-
-Establish confidence that the model is ready for production use:
-- Confirming all calculations are correct and well-tested
-- Ensuring optimization routines reliably find optimal solutions
-- Documenting any known limitations or edge cases
-- Creating comprehensive test cases that verify expected model behavior
-- Establishing this codebase as a reliable tool for research and analysis
+Design and run the final simulation suite for publication:
+- Define baseline and alternative scenarios to be presented in the paper
+- Create production configuration files for each scenario
+- Run optimizations to determine optimal policies
+- Generate publication-quality figures and tables
+- Document key results and policy insights
+- Ensure reproducibility of all results
 
 ## Dual Optimization of Savings Rate and Abatement Allocation
 
