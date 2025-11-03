@@ -616,6 +616,10 @@ class UtilityOptimizer:
 
         # Combine f and s initial guesses
         x0 = np.concatenate([np.array(f_initial_guess), np.array(s_initial_guess)])
+
+        # Ensure x0 is within bounds (clip to bounds to handle floating point precision issues)
+        x0 = np.clip(x0, lower_bounds, upper_bounds)
+
         optimal_x = opt.optimize(x0)
         optimal_f_val = opt.last_optimum_value()
         termination_code = opt.last_optimize_result()
