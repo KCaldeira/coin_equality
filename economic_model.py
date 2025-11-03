@@ -118,49 +118,72 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         y_gross = 0.0
 
     # Income-dependent climate damage
+    # Iteratively solve for y_eff since climate damage depends on effective income
     if y_gross > 0:
-    # Returns both aggregate damage fraction and post-damage Gini
-    # Uses params: psi1, psi2, y_damage_halfsat, fract_gdp
-        Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
-          delta_T, Gini, y_gross, params
-      )
+        y_eff = y_gross  # Initial value
+        n_iterations = 0
+        converged = False
+
+        while n_iterations < MAX_INITIAL_CAPITAL_ITERATIONS and not converged:
+            y_eff_prev = y_eff
+            n_iterations += 1
+
+            # Calculate climate damage using current income estimate
+            # Uses params: psi1, psi2, y_damage_halfsat, fract_gdp
+            Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
+                delta_T, Gini, y_eff_prev, params
+            )
+
+            # Clamp Gini_climate to valid bounds
+            Gini_climate = np.clip(Gini_climate, EPSILON, 1.0 - EPSILON)
+
+            # Eq 1.3: Production after climate damage
+            Climate_Damage = Omega * Y_gross
+            Y_damaged = Y_gross - Climate_Damage
+
+            # Eq 1.4: Mean per-capita income (after climate damage, before abatement)
+            Savings = s * Y_damaged
+
+            # Lambda, fraction of GDP allocated to abatement
+            Lambda = f * fract_gdp
+
+            # Eq 1.5: Abatement cost (what society allocates to abatement)
+            AbateCost = Lambda * Y_damaged
+
+            # Eq 1.8: Net production after abatement costs
+            Y_net = Y_damaged - AbateCost
+
+            # Redistribution amount
+            Redistribution = (1 - f) * fract_gdp * Y_damaged
+
+            # Consumption is the remaining income after savings and abatement costs
+            Consumption = Y_damaged - Savings - AbateCost
+
+            # Per-capita income after climate damage and before abatement costs
+            y = (Consumption + AbateCost) / L
+
+            # Eq 1.9: Effective per-capita income after climate damage and abatement costs
+            y_eff = Consumption / L
+
+            # Check convergence
+            converged = np.abs(y_eff - y_eff_prev) < EPSILON
+
+        # Eq 4.3: Per-capita amount redistributed
+        redistribution = Redistribution / L
     else:
         Omega = 0.0
         Gini_climate = Gini
-
-    # Clamp Gini_climate to valid bounds before using in subsequent calculations
-    Gini_climate = np.clip(Gini_climate, EPSILON, 1.0 - EPSILON)
-
-    # Eq 1.3: Production after climate damage
-    Climate_Damage =  Omega * Y_gross  # Total dollar value of climate damage
-    Y_damaged = Y_gross - Climate_Damage
-
-    # Eq 1.4: Mean per-capita income (after climate damage, before abatement)
-    Savings = s * Y_damaged  # Investment before depreciation
-
-    # Lambda, fraction of GDP allocated to abatement
-    Lambda = f * fract_gdp
-
-    # Eq 1.5: Abatement cost (what society allocates to abatement)
-    AbateCost = Lambda * Y_damaged
-
-    # Eq 1.8: Net production after abatement costs
-    Y_net =  Y_damaged - AbateCost
-
-    # Redistribution amount
-    Redistribution = (1 - f) * fract_gdp * Y_damaged
-
-    # Consumption is the remaining income after savings and abatement costs
-    Consumption = Y_damaged - Savings - AbateCost
-
-    # Per-capita income after climate damage and before abatement costs
-    y = (Consumption + AbateCost) / L
-
-    # Eq 1.9: Effective per-capita income after climate damage and abatement costs
-    y_eff = Consumption / L
-
-    # Eq 4.3: Per-capita amount redistributed
-    redistribution = Redistribution / L
+        Climate_Damage = 0.0
+        Y_damaged = 0.0
+        Savings = 0.0
+        Lambda = 0.0
+        AbateCost = 0.0
+        Y_net = 0.0
+        Redistribution = 0.0
+        Consumption = 0.0
+        y = 0.0
+        y_eff = 0.0
+        redistribution = 0.0
 
     # Eq 2.1: Potential emissions (unabated)
     # Note that this implies that you have emissions even for potential output lost to climate damage
