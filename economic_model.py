@@ -184,6 +184,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         y = 0.0
         y_eff = 0.0
         redistribution = 0.0
+        n_iterations = 0
 
     # Eq 2.1: Potential emissions (unabated)
     # Note that this implies that you have emissions even for potential output lost to climate damage
@@ -262,6 +263,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             'Consumption': Consumption,
             'discounted_utility': discounted_utility,
             's': s,  # Savings rate (currently constant, may become time-dependent)
+            'n_iterations': n_iterations,  # Number of iterations for climate damage convergence
         })
     
         # Return minimal variables needed for optimization
