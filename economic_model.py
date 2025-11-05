@@ -124,7 +124,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         omega_max = params['psi1'] * delta_T + params['psi2'] * delta_T**2
         y_half = params['y_damage_halfsat']
         omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
-        y_eff = y_gross * (1.0 - omega_approx) * (1.0 - s)
+        lambda_approx = f * fract_gdp
+        y_eff = y_gross * (1.0 - omega_approx) * (1-lambda_approx) * (1.0 - s)
 
         n_iterations = 0
         converged = False
