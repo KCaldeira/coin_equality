@@ -86,71 +86,22 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
 
     # Convert Gini → Pareto parameter
     a = a_from_G(Gini_current)
+    lorenz_exponent = 1.0 - 1.0 / a
 
     # Dimensionless parameter for regressivity
-    b = (a * y_half) / ((a - 1.0) * y_mean)
+    b =  y_half / (y_mean * lorenz_exponent)
 
     # === Aggregate damage (Ω) ===
     # Closed form: Ω = ω_max * (y_half / y_mean) * ₂F₁(1, a, a+1, -b)
-    Omega = omega_max * (y_half / y_mean) * float(hyp2f1(1, a, a + 1, -b))
+    H1 = float(hyp2f1(1.0, a, a + 1.0, -b))  # Mean damage factor
+    H2 = float(hyp2f1(1.0, 2.0 * a, 2.0 * a + 1.0, -b))  # Inequality adjustment
+
+    omega_max_scaled = omega_max * (y_half / y_mean)
+    Omega = omega_max_scaled * H1
 
     # === Post-damage Gini (G_climate) ===
-    Gini_climate = calculate_effect_of_climate_damage_on_gini_index(
-        Gini_current, y_half, y_mean, omega_max
-    )
+    Gini_climate = (Gini_current + omega_max_scaled * (H2 - H1)) / (1.0 - omega_max_scaled * H1)
+    
 
     return float(Omega), float(Gini_climate)
 
-
-def calculate_effect_of_climate_damage_on_gini_index(Gini_initial, y_half, y_mean, omega_max):
-    """
-    Compute post-damage Gini index analytically.
-
-    Damage function:
-        ω(y) = ω_max * (1 - y / (y_half + y))
-             = ω_max * y_half / (y_half + y)
-
-    Parameters
-    ----------
-    Gini_initial : float
-        Pre-damage Gini index (0 < G < 1)
-    y_half : float
-        Half-saturation income ($)
-    y_mean : float
-        Mean income before damage ($)
-    omega_max : float
-        Maximum damage fraction (0 ≤ ω ≤ 1)
-
-    Returns
-    -------
-    G_new : float
-        Post-damage Gini index.
-    """
-    if Gini_initial <= 0 or Gini_initial >= 1:
-        raise ValueError("Gini_initial must be in range (0, 1).")
-    if y_mean <= 0 or y_half < 0:
-        raise ValueError("Require y_mean > 0 and y_half ≥ 0.")
-
-    # Convert Gini to Pareto parameter
-    a = a_from_G(Gini_initial)
-
-    # Baseline Gini
-    G0 = Gini_initial
-
-    # Dimensionless parameter controlling regressivity
-    b = (a * y_half) / ((a - 1.0) * y_mean)
-
-    # Hypergeometric terms
-    Phi = float(hyp2f1(1.0, a - 1.0, a, -b))             # Mean damage factor
-    H   = float(hyp2f1(1.0, 2.0 * a - 1.0, 2.0 * a, -b)) # Inequality adjustment
-
-    omega_mean = omega_max * Phi
-    denom = 1.0 - omega_mean
-
-    if denom <= 0:
-        # Degenerate case (complete collapse)
-        return float(G0)
-
-    # Closed-form post-damage Gini
-    G_new = 1.0 - (1.0 - G0) * (1.0 - omega_max * H) / denom
-    return float(G_new)

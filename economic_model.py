@@ -120,7 +120,12 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     # Income-dependent climate damage
     # Iteratively solve for y_eff since climate damage depends on effective income
     if y_gross > 0:
-        y_eff = y_gross  # Initial value
+        # Better initial guess: approximate damage before iterating
+        omega_max = params['psi1'] * delta_T + params['psi2'] * delta_T**2
+        y_half = params['y_damage_halfsat']
+        omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
+        y_eff = y_gross * (1.0 - omega_approx) * (1.0 - s)
+
         n_iterations = 0
         converged = False
 
@@ -163,7 +168,10 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             y = (Consumption + AbateCost) / L
 
             # Eq 1.9: Effective per-capita income after climate damage and abatement costs
-            y_eff = Consumption / L
+            # Use relaxation to blend old and new estimates for faster, more stable convergence
+            RELAXATION_FACTOR = 0.5
+            y_eff_new = Consumption / L
+            y_eff = RELAXATION_FACTOR * y_eff_new + (1.0 - RELAXATION_FACTOR) * y_eff_prev
 
             # Check convergence
             converged = np.abs(y_eff - y_eff_prev) < EPSILON
