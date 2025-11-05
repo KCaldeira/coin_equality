@@ -417,6 +417,7 @@ def integrate_model(config, store_detailed_output=True):
             'Consumption': np.zeros(n_steps),
             'discounted_utility': np.zeros(n_steps),
             's': np.zeros(n_steps),
+            'n_iterations': np.zeros(n_steps, dtype=int),
         })
 
     # Always store time, state variables, and objective function variables
@@ -478,6 +479,7 @@ def integrate_model(config, store_detailed_output=True):
             results['Consumption'][i] = outputs['Consumption']
             results['discounted_utility'][i] = outputs['discounted_utility']
             results['s'][i] = outputs['s']
+            results['n_iterations'][i] = outputs['n_iterations']
 
         # Euler step: update state for next iteration (skip on last step)
         if i < n_steps - 1:
