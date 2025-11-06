@@ -9,7 +9,7 @@ import numpy as np
 from income_distribution import calculate_Gini_effective_redistribute_abate
 from parameters import evaluate_params_at_time
 from climate_damage_distribution import calculate_climate_damage_and_gini_effect
-from constants import EPSILON, NEG_BIGNUM, MAX_INITIAL_CAPITAL_ITERATIONS
+from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_INITIAL_CAPITAL_ITERATIONS
 
 
 def calculate_tendencies(state, params, store_detailed_output=True):
@@ -177,8 +177,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             y_eff_new = Consumption / L
             y_eff = RELAXATION_FACTOR * y_eff_new + (1.0 - RELAXATION_FACTOR) * y_eff_prev
 
-            # Check convergence
-            converged = np.abs(y_eff - y_eff_prev) < EPSILON
+            # Check convergence using LOOSE_EPSILON for practical precision
+            converged = np.abs(y_eff - y_eff_prev) < LOOSE_EPSILON
 
         # Eq 4.3: Per-capita amount redistributed
         redistribution = Redistribution / L

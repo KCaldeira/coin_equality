@@ -18,6 +18,13 @@ NEG_BIGNUM = -1e30
 # - Root finding bracket offsets
 EPSILON = 1e-12
 
+# Looser epsilon for iterative convergence and optimization tolerances
+# Used for:
+# - Convergence criterion in y_eff iterative solver
+# - Default value for xtol_abs in optimization (control parameter convergence)
+# Provides practical precision (1e-8 absolute) without requiring machine precision
+LOOSE_EPSILON = 1e-8
+
 # Large value for detecting effectively infinite parameters
 # Used for:
 # - Checking if y_damage_halfsat is so large that damage is effectively uniform

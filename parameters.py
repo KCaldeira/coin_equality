@@ -15,6 +15,7 @@ and the run name (used for output directory naming).
 import json
 import numpy as np
 from dataclasses import dataclass
+from constants import LOOSE_EPSILON
 
 
 # =============================================================================
@@ -428,6 +429,7 @@ class OptimizationParameters:
     xtol_abs : float, optional
         Absolute tolerance on parameter changes.
         Stops when |Δx| < xtol_abs for all parameters.
+        Default: LOOSE_EPSILON (1e-8), which is appropriate for control parameters in [0,1].
         If None, uses NLopt default (0.0 = disabled).
     n_points_final_f : int, optional
         Target number of f control points in final iteration (only used in iterative mode).
@@ -469,7 +471,7 @@ class OptimizationParameters:
     ftol_rel: float = None
     ftol_abs: float = None
     xtol_rel: float = None
-    xtol_abs: float = None
+    xtol_abs: float = LOOSE_EPSILON
     n_points_final_f: int = None
     n_points_initial_f: int = 2
     initial_guess_s: object = None  # list or float, enables dual optimization if present
