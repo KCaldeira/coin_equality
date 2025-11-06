@@ -15,6 +15,7 @@ and the run name (used for output directory naming).
 import json
 import numpy as np
 from dataclasses import dataclass
+from constants import LOOSE_EPSILON
 
 
 # =============================================================================
@@ -428,13 +429,19 @@ class OptimizationParameters:
     xtol_abs : float, optional
         Absolute tolerance on parameter changes.
         Stops when |Δx| < xtol_abs for all parameters.
+        Default: LOOSE_EPSILON (1e-10), which is appropriate for control parameters in [0,1].
         If None, uses NLopt default (0.0 = disabled).
     n_points_final_f : int, optional
         Target number of f control points in final iteration (only used in iterative mode).
-        If specified, refinement_base is calculated as: (n_points_final_f - 1)^(1/(n_iterations - 1))
+        If specified, refinement_base is calculated as: ((n_points_final_f - 1) / (n_points_initial_f - 1))^(1/(n_iterations - 1))
         If None, uses refinement_base = 2.0 (default behavior: 2, 3, 5, 9, 17, ...)
         Example: n_points_final_f=17 with 5 iterations gives base ≈ 2.0
         Example: n_points_final_f=10 with 4 iterations gives base ≈ 2.08
+    n_points_initial_f : int, optional
+        Number of f control points in first iteration (only used in iterative mode).
+        Default: 2
+        Used with n_points_final_f to determine refinement_base.
+        Example: n_points_initial_f=3, n_points_final_f=10, n_iterations=4 gives base ≈ 1.65
     initial_guess_s : list of float OR float, optional
         Enables dual optimization of both f and s when present.
         Direct mode (list): Initial s values at each control time.
@@ -444,8 +451,12 @@ class OptimizationParameters:
             Must satisfy 0 ≤ s ≤ 1.
     n_points_final_s : int, optional
         Target number of s control points in final iteration (iterative mode only).
-        If None, uses same refinement base as f (derived from n_points_final_f).
+        If None, uses same refinement base as f (derived from n_points_final_f and n_points_initial_f).
         Can differ from n_points_final_f to allow different temporal resolution for s.
+    n_points_initial_s : int, optional
+        Number of s control points in first iteration (only used in iterative mode).
+        Default: 2
+        Used with n_points_final_s to determine refinement_base for s.
     bounds_f : list of [float, float], optional
         Bounds for f values as [min, max]. Default: [0.0, 1.0]
         Example: [0.0, 0.8] to limit maximum abatement allocation to 80%
@@ -460,10 +471,12 @@ class OptimizationParameters:
     ftol_rel: float = None
     ftol_abs: float = None
     xtol_rel: float = None
-    xtol_abs: float = None
+    xtol_abs: float = LOOSE_EPSILON
     n_points_final_f: int = None
+    n_points_initial_f: int = 2
     initial_guess_s: object = None  # list or float, enables dual optimization if present
     n_points_final_s: int = None
+    n_points_initial_s: int = 2
     bounds_f: list = None  # [min, max] for f, defaults to [0.0, 1.0]
     bounds_s: list = None  # [min, max] for s, defaults to [0.0, 1.0]
 

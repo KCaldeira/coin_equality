@@ -85,11 +85,11 @@ For the differential equation solver, variables are calculated in this order:
 6. **y** from Y_damaged, L, s (Eq 1.4: mean per-capita income after climate damage)
 7. **c_redist** from y, f_gdp (Eq 4.3: per-capita amount redistributable)
 8. **E_pot** from σ, Y_gross (Eq 2.1: potential emissions)
-9. **abatecost** from f, c_redist, L (Eq 1.5: abatement expenditure)
-10. **μ** from abatecost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated, capped at μ_max)
-11. **Λ** from abatecost, Y_damaged (Eq 1.7: abatement cost fraction)
+9. **AbateCost** from f, c_redist, L (Eq 1.5: abatement expenditure)
+10. **μ** from AbateCost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated, capped at μ_max)
+11. **Λ** from AbateCost, Y_damaged (Eq 1.7: abatement cost fraction)
 12. **Y_net** from Y_damaged, Λ (Eq 1.8: production after abatement costs)
-13. **y_eff** from y, abatecost, L (Eq 1.9: effective per-capita income)
+13. **y_eff** from y, AbateCost, L (Eq 1.9: effective per-capita income)
 14. **G_eff** from f, f_gdp, G_climate (Eq 4.4: effective Gini after redistribution/abatement; when f_gdp >= 1, G_eff = G_climate with no redistribution effect)
 15. **U** from y_eff, G_eff, η (Eq 3.5: mean utility)
 16. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
@@ -170,7 +170,7 @@ y(t) = (1 - s) · Y_damaged(t) / L(t)
 
 **Eq. (1.5) - Abatement Cost:**
 ```
-abatecost(t) = f · c_redist(t) · L(t)
+AbateCost(t) = f · c_redist(t) · L(t)
 ```
 This is the total amount society allocates to emissions abatement, where:
 - `f` = fraction of redistributable resources allocated to abatement (0 ≤ f ≤ 1)
@@ -179,7 +179,7 @@ This is the total amount society allocates to emissions abatement, where:
 
 **Eq. (1.6) - Abatement Fraction:**
 ```
-μ(t) = min(μ_max, [abatecost(t) · θ₂ / (E_pot(t) · θ₁(t))]^(1/θ₂))
+μ(t) = min(μ_max, [AbateCost(t) · θ₂ / (E_pot(t) · θ₁(t))]^(1/θ₂))
 ```
 The fraction of potential emissions that are abated, where:
 - `E_pot(t) = σ(t) · Y_gross(t)` = potential (unabated) emissions
@@ -193,7 +193,7 @@ This formulation differs from Nordhaus in that reducing carbon intensity σ(t) r
 
 **Eq. (1.7) - Abatement Cost Fraction:**
 ```
-Λ(t) = abatecost(t) / Y_damaged(t)
+Λ(t) = AbateCost(t) / Y_damaged(t)
 ```
 This represents the fraction of damaged production allocated to emissions abatement.
 
@@ -205,7 +205,7 @@ Production after both climate damage and abatement costs.
 
 **Eq. (1.9) - Effective Per-Capita Income:**
 ```
-y_eff(t) = y(t) - abatecost(t) / L(t)
+y_eff(t) = y(t) - AbateCost(t) / L(t)
 ```
 This is the per-capita income after subtracting abatement costs, used for utility calculations.
 
@@ -342,18 +342,18 @@ When `f_gdp >= 1`, the model disables redistribution and enables pure abatement 
    - Falls back to simple uniform damage rather than attempting income-dependent calculation
 
 3. **Abatement Budget Mechanics**:
-   - Available budget: `delta_c = y * delta_L` (Line 136 of `economic_model.py`)
-   - With `delta_L >= 1`, this creates `delta_c >= y` (budget at least equals full per-capita income)
-   - Abatement expenditure: `abatecost = f * delta_c * L` (Line 142)
-   - Effective income: `y_eff = y - abatecost/L = y - f * delta_c`
+   - Available budget: `redistribution = y * delta_L` (Line 136 of `economic_model.py`)
+   - With `delta_L >= 1`, this creates `redistribution >= y` (budget at least equals full per-capita income)
+   - Abatement expenditure: `AbateCost = f * redistribution * L` (Line 142)
+   - Effective income: `y_eff = y - AbateCost/L = y - f * redistribution`
 
 4. **Optimizer Behavior**:
    - The optimizer chooses `f` to maximize utility over time
    - **Naturally selects `f << 1`** because:
-     - Large `f` would make `y_eff = y - f * delta_c` very small or negative
-     - This would result in terrible current utility (consumption crash)
-     - Optimizer balances current consumption vs. future climate benefits
-   - **Equivalence**: Optimization of `f` becomes equivalent to optimizing the abatement/consumption tradeoff
+     - Large `f` would make `y_eff = y - f * redistribution` very small or negative
+     - This would result in terrible current utility (Consumption crash)
+     - Optimizer balances current Consumption vs. future climate benefits
+   - **Equivalence**: Optimization of `f` becomes equivalent to optimizing the abatement/Consumption tradeoff
    - No redistribution component in utility calculation (since `G_eff = Gini_climate`)
 
 5. **Physical Interpretation**:
@@ -493,11 +493,11 @@ The model supports two control variables that can be optimized:
 
 **f(t) - Abatement Allocation:** Determines the allocation between emissions abatement and income redistribution (0 = all to redistribution, 1 = all to abatement). Always specified via `control_function` in the configuration.
 
-**s(t) - Savings Rate:** Determines the fraction of net output allocated to investment vs. consumption. Can be specified in two ways:
+**s(t) - Savings Rate:** Determines the fraction of net output allocated to investment vs. Consumption. Can be specified in two ways:
 - **Fixed/Prescribed s(t):** Defined in `time_functions['s']` using any time function type (constant, piecewise_linear, etc.)
 - **Optimized s(t):** Defined in `s_control_function` to enable dual optimization of both f(t) and s(t)
 
-When both `control_function` and `s_control_function` are present, the model operates in **dual optimization mode**, allowing simultaneous optimization of the abatement-redistribution tradeoff and the consumption-investment tradeoff.
+When both `control_function` and `s_control_function` are present, the model operates in **dual optimization mode**, allowing simultaneous optimization of the abatement-redistribution tradeoff and the Consumption-investment tradeoff.
 
 ### Integration Parameters
 
@@ -1040,9 +1040,9 @@ The results dictionary contains arrays for:
 - **State variables**: `K`, `Ecum`, `Gini`
 - **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`, `s`
 - **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_eff`
-- **Climate variables**: `delta_T`, `Omega`, `E`, `total_climate_damage`
-- **Abatement variables**: `mu`, `Lambda`, `abatecost`, `delta_c`, `abatement_cost_fraction`, `marginal_abatement_cost`
-- **Investment/consumption**: `gross_investment`, `consumption`
+- **Climate variables**: `delta_T`, `Omega`, `E`, `Climate_Damage`
+- **Abatement variables**: `mu`, `Lambda`, `AbateCost`, `redistribution`, `marginal_abatement_cost`
+- **Investment/Consumption**: `Savings`, `Consumption`
 - **Inequality/utility**: `G_eff`, `Gini_climate`, `U`, `discounted_utility`
 - **Tendencies**: `dK_dt`, `dEcum_dt`, `dGini_dt`, `Gini_step_change`
 
@@ -1171,13 +1171,13 @@ Instead of spacing control points equally in time, points are distributed to pro
 
 The control point times are calculated based on:
 1. **Average TFP growth rate**: `k_A = ln(A(t_end)/A(t_start)) / (t_end - t_start)`
-2. **Effective consumption discount rate**: `r_c_effective = ρ + η · k_A · (1 - α)`
+2. **Effective Consumption discount rate**: `r_c_effective = ρ + η · k_A · (1 - α)`
    - `ρ`: pure rate of time preference
    - `η`: coefficient of relative risk aversion
    - `α`: capital share of income
 3. **Weighting discount rate**: `r_c = (r_c_effective + ρ) / 2`
    - Uses the mean of the pure rate of time preference and the effective discount rate
-   - Provides a balance between pure time preference and consumption-adjusted discounting
+   - Provides a balance between pure time preference and Consumption-adjusted discounting
 
 For iteration with N+1 control points (k = 0, 1, ..., N):
 ```
@@ -1351,7 +1351,7 @@ The model now supports simultaneous optimization of both:
 1. **f(t)** - allocation fraction between abatement and redistribution
 2. **s(t)** - savings rate (fraction of net output invested)
 
-This capability allows the model to optimize the tradeoff between present consumption and future consumption (via savings/investment) while simultaneously optimizing the allocation of resources between climate mitigation and inequality reduction.
+This capability allows the model to optimize the tradeoff between present Consumption and future Consumption (via savings/investment) while simultaneously optimizing the allocation of resources between climate mitigation and inequality reduction.
 
 **Implementation Status:** ✅ Infrastructure complete (Phases 1-5 done)
 - Dual control functions operational
@@ -1552,7 +1552,7 @@ The implementation will parallel the existing optimization structure for f(t), c
 ### Expected Benefits
 
 - **More realistic optimization**: Savings rate is a key economic policy variable that should be optimized alongside other controls
-- **Richer dynamics**: Time-varying s(t) allows model to balance present vs. future consumption optimally
+- **Richer dynamics**: Time-varying s(t) allows model to balance present vs. future Consumption optimally
 - **Methodological advancement**: Demonstrates framework extensibility to multi-dimensional control problems
 
 ## Project Structure

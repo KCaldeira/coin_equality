@@ -37,7 +37,7 @@ def calculate_utility_weighted_times(n_points, config):
     -----
     Algorithm:
     1. Compute average TFP growth rate: k_A = ln(A(t_end)/A(t_start)) / (t_end - t_start)
-    2. Compute effective consumption discount rate: r_c = ρ + η·k_A·(1-α)
+    2. Compute effective Consumption discount rate: r_c = ρ + η·k_A·(1-α)
     3. Generate times: t(k) = -(1/r_c)·ln(1 - (k/N)·(1 - exp(-r_c·t_end)))
        for k = 0, 1, ..., N where N = n_points - 1
 
@@ -664,8 +664,10 @@ class UtilityOptimizer:
                                           ftol_rel=None, ftol_abs=None,
                                           xtol_rel=None, xtol_abs=None,
                                           n_points_final=None,
+                                          n_points_initial=2,
                                           initial_guess_s_scalar=None,
-                                          n_points_final_s=None):
+                                          n_points_final_s=None,
+                                          n_points_initial_s=2):
         """
         Optimize using iterative refinement with progressively finer control grids.
 
@@ -695,9 +697,20 @@ class UtilityOptimizer:
         xtol_abs : float, optional
             Absolute tolerance on parameter changes
         n_points_final : int, optional
-            Target number of control points in final iteration.
-            If specified, base = (n_points_final - 1)^(1/(n_iterations - 1))
+            Target number of f control points in final iteration.
+            If specified, base = ((n_points_final - 1) / (n_points_initial - 1))^(1/(n_iterations - 1))
             If None, uses base = 2.0 (default: 2, 3, 5, 9, 17, ...)
+        n_points_initial : int, optional
+            Number of f control points in first iteration. Default: 2
+            Used with n_points_final to determine refinement base.
+        initial_guess_s_scalar : float, optional
+            Initial s value for all control points in first iteration (enables dual optimization)
+        n_points_final_s : int, optional
+            Target number of s control points in final iteration.
+            If None, uses same refinement base as f.
+        n_points_initial_s : int, optional
+            Number of s control points in first iteration. Default: 2
+            Used with n_points_final_s to determine refinement base for s.
 
         Returns
         -------
@@ -716,7 +729,11 @@ class UtilityOptimizer:
 
         Notes
         -----
-        Iteration schedule (default base=2.0):
+        Iteration schedule (default base=2.0, n_points_initial=2):
+        - Iteration 1: n_points_initial control points
+        - Iteration k: round(1 + (n_points_initial - 1) * base^(k-1)) control points
+
+        With n_points_initial=2 (default):
         - Iteration 1: 2 control points at [t_start, t_end]
         - Iteration 2: 3 control points
         - Iteration k: round(1 + base^(k-1)) control points
@@ -734,7 +751,7 @@ class UtilityOptimizer:
             if n_iterations <= 1:
                 refinement_base_f = 2.0
             else:
-                refinement_base_f = (n_points_final - 1) ** (1.0 / (n_iterations - 1))
+                refinement_base_f = ((n_points_final - 1) / (n_points_initial - 1)) ** (1.0 / (n_iterations - 1))
         else:
             refinement_base_f = 2.0
 
@@ -744,7 +761,7 @@ class UtilityOptimizer:
                 if n_iterations <= 1:
                     refinement_base_s = 2.0
                 else:
-                    refinement_base_s = (n_points_final_s - 1) ** (1.0 / (n_iterations - 1))
+                    refinement_base_s = ((n_points_final_s - 1) / (n_points_initial_s - 1)) ** (1.0 / (n_iterations - 1))
             else:
                 refinement_base_s = refinement_base_f  # Use same base as f if not specified
 
@@ -763,7 +780,7 @@ class UtilityOptimizer:
 
         for iteration in range(1, n_iterations + 1):
             # Calculate f control points
-            n_points_f = round(1 + refinement_base_f**(iteration - 1))
+            n_points_f = round(1 + (n_points_initial - 1) * refinement_base_f**(iteration - 1))
             f_control_times = calculate_utility_weighted_times(n_points_f, self.base_config)
 
             if iteration == 1:
@@ -777,7 +794,7 @@ class UtilityOptimizer:
 
             # Calculate s control points (if optimizing both f and s)
             if optimize_f_and_s:
-                n_points_s = round(1 + refinement_base_s**(iteration - 1))
+                n_points_s = round(1 + (n_points_initial_s - 1) * refinement_base_s**(iteration - 1))
                 s_control_times = calculate_utility_weighted_times(n_points_s, self.base_config)
 
                 if iteration == 1:
