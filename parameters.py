@@ -429,7 +429,7 @@ class OptimizationParameters:
     xtol_abs : float, optional
         Absolute tolerance on parameter changes.
         Stops when |Δx| < xtol_abs for all parameters.
-        Default: LOOSE_EPSILON (1e-8), which is appropriate for control parameters in [0,1].
+        Default: LOOSE_EPSILON (1e-10), which is appropriate for control parameters in [0,1].
         If None, uses NLopt default (0.0 = disabled).
     n_points_final_f : int, optional
         Target number of f control points in final iteration (only used in iterative mode).
