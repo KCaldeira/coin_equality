@@ -44,6 +44,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         - 'Gini_restore': Rate of restoration to Gini_initial (yr^-1)
         - 'fract_gdp': Fraction of GDP available for redistribution and abatement
         - 'f': Fraction allocated to abatement vs redistribution
+    store_detailed_output : bool, optional
+        Whether to compute and return all intermediate variables. Default: True
 
     Returns
     -------
@@ -120,7 +122,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     # Income-dependent climate damage
     # Iteratively solve for y_eff since climate damage depends on effective income
     if y_gross > 0:
-        # Better initial guess: approximate damage before iterating
+        # Initial guess: analytical approximation
         omega_max = params['psi1'] * delta_T + params['psi2'] * delta_T**2
         y_half = params['y_damage_halfsat']
         omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
@@ -170,7 +172,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
             # Eq 1.9: Effective per-capita income after climate damage and abatement costs
             # Use relaxation to blend old and new estimates for faster, more stable convergence
-            RELAXATION_FACTOR = 0.5
+            # RELAXATION_FACTOR = 1.0 gives fastest convergence (6 iterations vs 42 with 0.5)
+            RELAXATION_FACTOR = 1.0
             y_eff_new = Consumption / L
             y_eff = RELAXATION_FACTOR * y_eff_new + (1.0 - RELAXATION_FACTOR) * y_eff_prev
 
