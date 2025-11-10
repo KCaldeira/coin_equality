@@ -32,6 +32,7 @@ References: Analytical solutions derived with assistance from ChatGPT (2025).
 from income_distribution import a_from_G
 from scipy.special import hyp2f1
 from constants import INVERSE_EPSILON, EPSILON
+import numpy as np
 
 
 def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, params):
@@ -102,7 +103,11 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
 
     # === Post-damage Gini (G_climate) ===
     Gini_climate = (Gini_current + omega_max_scaled * (H2 - H1)) / (1.0 - omega_max_scaled * H1)
-    
+    if np.isnan(Gini_climate) or Gini_climate < 0.0:
+        print("Warning: Gini_climate computation produced invalid value. Setting to 0.0.")
+        print(f"  Inputs: delta_T={delta_T}, Gini_current={Gini_current}, y_mean={y_mean}, params={params}")
+        print(f"  Computed: Omega={Omega}, Gini_climate (raw)={Gini_climate}")
+        Gini_climate = 0.0
 
     return float(Omega), float(Gini_climate)
 

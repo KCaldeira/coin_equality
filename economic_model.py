@@ -112,6 +112,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
     # Eq 2.2: Temperature change from cumulative emissions
     delta_T = k_climate * Ecum
+    # maximum climate damage at epsilon income level
+    omega_max = params['psi1'] * delta_T + params['psi2'] * delta_T**2
 
     # Mean per-capita gross income (before climate damage)
     if L > 0:
@@ -121,9 +123,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
     # Income-dependent climate damage
     # Iteratively solve for y_eff since climate damage depends on effective income
-    if y_gross > 0:
+    if y_gross > 0 and omega_max < 1.0:
         # Initial guess: analytical approximation
-        omega_max = params['psi1'] * delta_T + params['psi2'] * delta_T**2
         y_half = params['y_damage_halfsat']
         omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
         lambda_approx = f * fract_gdp
@@ -162,7 +163,18 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             Y_net = Y_damaged - AbateCost
 
             # Redistribution amount
-            Redistribution = (1 - f) * fract_gdp * Y_damaged
+            if fract_gdp < 1.0: # do normal redistribution calculation
+            # you can't redistribute more than is needed to produce a zero Gini index
+                redist_max_fraction = ((2 * Gini_climate) / (1 + Gini_climate)) *                  \
+                            ((1 - Gini_climate) / (1 + Gini_climate))**((1-Gini_climate)/ (2*Gini_climate))
+                fmin_redist = 1.0 - redist_max_fraction / fract_gdp if fract_gdp > 0 else 0.0
+                Redistribution = (1 - max(f,fmin_redist)) * fract_gdp * Y_damaged
+
+                # Eq 4.4:0ibution operates on the climate-damaged distribution
+                G_eff, _ = calculate_Gini_effective_redistribute_abate(max(f,fmin_redist), fract_gdp, Gini_climate)
+            else: # fract_gdp >= 1, no redistribution
+                G_eff = Gini_climate
+                Redistribution = 0.0
 
             # Consumption is the remaining income after savings and abatement costs
             Consumption = Y_damaged - Savings - AbateCost
@@ -182,6 +194,42 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
         # Eq 4.3: Per-capita amount redistributed
         redistribution = Redistribution / L
+
+        # Eq 2.1: Potential emissions (unabated)
+        # Note that this implies that you have emissions even for potential output lost to climate damage
+        Epot = sigma * Y_gross
+
+        # Eq 1.6: Abatement fraction
+        # Note that if the calculated mu exceeds mu_max, and it is cropped to mu_max,
+        # then it is just money wasted and the optimizer should do better.
+        if Epot > 0 and AbateCost > 0:
+            mu = min(mu_max, (AbateCost * theta2 / (Epot * theta1)) ** (1 / theta2))
+        else:
+            mu = 0.0
+
+        # Eq 3.5: Mean utility
+        if y_eff > 0 and 0 <= G_eff <= 1.0:
+            if np.abs(eta - 1.0) < EPSILON:
+                U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
+            else:
+                term1 = (y_eff ** (1 - eta)) / (1 - eta)
+                numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
+                denominator = 1 + G_eff * (2 * eta - 1)
+                term2 = (numerator / denominator) ** (1 / (1 - eta))
+                U = term1 * term2
+        else:
+            U = NEG_BIGNUM
+
+        # Eq 2.3: Actual emissions (after abatement)
+        E = sigma * (1 - mu) * Y_gross
+
+        # Eq 1.10: Capital tendency
+        dK_dt = s * Y_net - delta * K
+
+        # Gini dynamics
+        dGini_dt = -Gini_restore * (Gini - Gini_initial)
+        Gini_step_change = Gini_fract * (G_eff - Gini)
+
     else:
         Omega = 0.0
         Gini_climate = Gini
@@ -197,48 +245,13 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         y_eff = 0.0
         redistribution = 0.0
         n_iterations = 0
-
-    # Eq 2.1: Potential emissions (unabated)
-    # Note that this implies that you have emissions even for potential output lost to climate damage
-    Epot = sigma * Y_gross
-
-    # Eq 1.6: Abatement fraction
-    # Note that if the calculated mu exceeds mu_max, and it is cropped to mu_max,
-    # then it is just money wasted and the optimizer should do better.
-    if Epot > 0 and AbateCost > 0:
-        mu = min(mu_max, (AbateCost * theta2 / (Epot * theta1)) ** (1 / theta2))
-    else:
-        mu = 0.0
-
-    # Eq 4.4:0ibution operates on the climate-damaged distribution
-    if fract_gdp < 1.0: # do normal redistribution calculation
-        G_eff, _ = calculate_Gini_effective_redistribute_abate(f, fract_gdp, Gini_climate)
-    else: # fract_gdp >= 1, no redistribution
-        G_eff = Gini_climate
-
-    # Eq 3.5: Mean utility
-    if y_eff > 0 and 0 <= G_eff <= 1.0:
-        if np.abs(eta - 1.0) < EPSILON:
-            U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
-        else:
-            term1 = (y_eff ** (1 - eta)) / (1 - eta)
-            numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
-            denominator = 1 + G_eff * (2 * eta - 1)
-            term2 = (numerator / denominator) ** (1 / (1 - eta))
-            U = term1 * term2
-    else:
+        G_eff = Gini
         U = NEG_BIGNUM
-
-    # Eq 2.3: Actual emissions (after abatement)
-    E = sigma * (1 - mu) * Y_gross
-
-    # Eq 1.10: Capital tendency
-    dK_dt = s * Y_net - delta * K
-
-    # Gini dynamics
-    dGini_dt = -Gini_restore * (Gini - Gini_initial)
-    Gini_step_change = Gini_fract * (G_eff - Gini)
-
+        E = 0.0
+        dK_dt = -delta * K
+        dGini_dt = -Gini_restore * (Gini - Gini_initial)
+        Gini_step_change = Gini_fract * (G_eff - Gini)
+        
     # Prepare output
     results = {}
 

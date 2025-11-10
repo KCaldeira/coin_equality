@@ -44,7 +44,7 @@ def G2_from_deltaL(deltaL, Gini_initial):
     Caps at G2=0 if deltaL exceeds the Pareto-family maximum.
     """
     if not (0 < Gini_initial < 1):
-        raise ValueError("Gini_initial must be in (0,1).")
+        raise ValueError("Gini_initial must be in (0,1). Invalid value: {}".format(Gini_initial))
 
     if abs(deltaL) < EPSILON:
         return Gini_initial, 0.0
