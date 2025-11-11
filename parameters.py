@@ -465,8 +465,8 @@ class OptimizationParameters:
         Example: [0.2, 0.3] to constrain savings rate between 20% and 30%
     """
     max_evaluations: int
-    control_times: object  # list or int
-    initial_guess_f: object  # list or float
+    control_times: object = None  # list or int (only for control point mode, ignored in basis function mode)
+    initial_guess_f: object = None  # list or float (scalar for basis function mode)
     algorithm: str = None
     ftol_rel: float = None
     ftol_abs: float = None
@@ -479,6 +479,14 @@ class OptimizationParameters:
     n_points_initial_s: int = 2
     bounds_f: list = None  # [min, max] for f, defaults to [0.0, 1.0]
     bounds_s: list = None  # [min, max] for s, defaults to [0.0, 1.0]
+    use_basis_functions: bool = False  # If True, use basis function optimization
+    n_basis_final_f: int = None  # Number of f basis functions in final iteration
+    n_basis_final_s: int = None  # Number of s basis functions in final iteration
+    n_basis_initial_f: int = None  # Number of f basis functions in first iteration
+    n_basis_initial_s: int = None  # Number of s basis functions in first iteration
+    basis_type: str = None  # Type of basis functions: 'chebyshev', 'legendre', or 'power'
+    n_basis_iterations: int = None  # Number of refinement iterations for basis functions
+    basis_eps: float = 1e-10  # Epsilon for coefficient bounds in basis function mode
 
     def is_iterative_refinement(self):
         """
@@ -515,6 +523,18 @@ class OptimizationParameters:
             False if iterative refinement mode (control_times is int)
         """
         return isinstance(self.control_times, (list, np.ndarray))
+
+    def uses_basis_functions(self):
+        """
+        Check if this configuration uses basis function optimization.
+
+        Returns
+        -------
+        bool
+            True if basis function mode is enabled,
+            False if using control point mode
+        """
+        return self.use_basis_functions
 
 
 @dataclass

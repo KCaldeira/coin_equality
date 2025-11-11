@@ -881,3 +881,367 @@ class UtilityOptimizer:
             result['refinement_base_s'] = refinement_base_s
 
         return result
+
+    def optimize_with_basis_functions(self, n_basis_final_f, n_basis_final_s,
+                                     initial_f, initial_s,
+                                     max_evaluations,
+                                     f_min, f_max,
+                                     s_min, s_max,
+                                     basis_type,
+                                     n_iterations,
+                                     n_basis_initial_f,
+                                     n_basis_initial_s,
+                                     algorithm=None,
+                                     ftol_rel=None, ftol_abs=None,
+                                     xtol_rel=None, xtol_abs=None,
+                                     eps=1e-10):
+        """
+        Optimize using basis function representation with iterative refinement.
+
+        Represents f(t) and s(t) as linear combinations of basis functions:
+            f(t) = f_min + (f_max - f_min) * sigmoid(Σ c_i^f * φ_i(τ))
+        where φ_i are basis functions (Chebyshev, Legendre, etc.) and τ is
+        normalized time ∈ [-1, 1].
+
+        Supports iterative refinement by progressively adding higher-order basis
+        functions across iterations. Unlike control point refinement (which adds
+        spatial resolution), this adds frequency components while preserving
+        lower-order coefficients.
+
+        Parameters
+        ----------
+        n_basis_final_f : int
+            Number of basis functions for f in final iteration
+        n_basis_final_s : int
+            Number of basis functions for s in final iteration
+        initial_f : float
+            Initial constant value for f(t)
+        initial_s : float
+            Initial constant value for s(t)
+        max_evaluations : int
+            Maximum objective function evaluations PER ITERATION
+        f_min : float
+            Minimum bound for f
+        f_max : float
+            Maximum bound for f
+        s_min : float
+            Minimum bound for s
+        s_max : float
+            Maximum bound for s
+        basis_type : str
+            Type of basis functions: 'chebyshev', 'legendre', or 'power'
+        n_iterations : int
+            Number of refinement iterations
+        n_basis_initial_f : int
+            Number of f basis functions in first iteration
+        n_basis_initial_s : int
+            Number of s basis functions in first iteration
+        algorithm : str, optional
+            NLopt algorithm name. If None, defaults to 'LN_SBPLX'.
+        ftol_rel, ftol_abs, xtol_rel, xtol_abs : float, optional
+            NLopt tolerance parameters
+        eps : float, optional
+            Small value to keep sigmoid-transformed values away from boundaries.
+            Default: 1e-10
+
+        Returns
+        -------
+        dict
+            Optimization results containing:
+            - 'optimal_coefficients': optimal coefficient values from final iteration
+            - 'optimal_f_coefficients': f coefficients only
+            - 'optimal_s_coefficients': s coefficients only
+            - 'optimal_objective': maximum utility achieved
+            - 'n_evaluations': total evaluations across all iterations
+            - 'status': optimization status string
+            - 'algorithm': algorithm name used
+            - 'n_iterations': number of iterations performed
+            - 'iteration_history': list of results from each iteration
+            - 'f_basis_control': BasisControlFunction object for f
+            - 's_basis_control': BasisControlFunction object for s
+            - 'refinement_base_f': refinement base used for f
+            - 'refinement_base_s': refinement base used for s
+        """
+        from basis_control import BasisControlFunction, basis_control_function_factory
+
+        # Extract time span
+        t_start = self.base_config.integration_params.t_start
+        t_end = self.base_config.integration_params.t_end
+
+        # Set default algorithm
+        if algorithm is None:
+            algorithm = 'LN_SBPLX'
+
+        # Use max(fract_gdp, EPSILON) to avoid division by zero
+        fract_gdp = max(self.base_config.scalar_params.fract_gdp, EPSILON)
+
+        # Calculate refinement bases
+        if n_iterations > 1:
+            refinement_base_f = (n_basis_final_f / n_basis_initial_f) ** (1.0 / (n_iterations - 1))
+            refinement_base_s = (n_basis_final_s / n_basis_initial_s) ** (1.0 / (n_iterations - 1))
+        else:
+            refinement_base_f = 1.0
+            refinement_base_s = 1.0
+
+        print(f"\n{'='*80}")
+        print(f"  BASIS FUNCTION OPTIMIZATION ({n_iterations} ITERATION{'S' if n_iterations > 1 else ''})")
+        print(f"{'='*80}\n")
+
+        print(f"Configuration: {self.base_config.run_name}")
+        print(f"Time span: {t_start} to {t_end} years")
+        print(f"Basis type: {basis_type}")
+        print(f"")
+
+        if n_iterations > 1:
+            print(f"Iterative refinement mode:")
+            print(f"  Number of iterations: {n_iterations}")
+            print(f"  Initial f basis functions: {n_basis_initial_f}")
+            print(f"  Final f basis functions: {n_basis_final_f}")
+            print(f"  Refinement base (f): {refinement_base_f:.4f}")
+            print(f"  Initial s basis functions: {n_basis_initial_s}")
+            print(f"  Final s basis functions: {n_basis_final_s}")
+            print(f"  Refinement base (s): {refinement_base_s:.4f}")
+        else:
+            print(f"Single iteration mode:")
+            print(f"  Number of f basis functions: {n_basis_final_f}")
+            print(f"  Number of s basis functions: {n_basis_final_s}")
+
+        print(f"")
+        print(f"f bounds: [{f_min}, {f_max}]")
+        print(f"s bounds: [{s_min}, {s_max}]")
+        print(f"Initial values: f={initial_f}, s={initial_s}")
+        print(f"Epsilon: {eps:.2e}")
+        print(f"")
+        print(f"Max evaluations: {max_evaluations} per iteration")
+        print(f"Algorithm: {algorithm}")
+        if xtol_abs is not None:
+            print(f"xtol_abs: {xtol_abs:.2e}")
+        print(f"\n")
+
+        iteration_history = []
+        total_evaluations = 0
+
+        # Store previous coefficients for warm-starting
+        prev_f_coeffs = None
+        prev_s_coeffs = None
+
+        for iteration in range(1, n_iterations + 1):
+            # Calculate current number of basis functions
+            n_current_f = round(n_basis_initial_f * refinement_base_f**(iteration - 1))
+            n_current_s = round(n_basis_initial_s * refinement_base_s**(iteration - 1))
+
+            print(f"{'='*80}")
+            print(f"  ITERATION {iteration}/{n_iterations}")
+            print(f"")
+            print(f"  f (abatement fraction):")
+            print(f"    Basis functions: {n_current_f}")
+            print(f"  s (savings rate):")
+            print(f"    Basis functions: {n_current_s}")
+            print(f"  Total decision variables: {n_current_f + n_current_s}")
+            print(f"{'='*80}\n")
+
+            # Create basis control function objects
+            f_control = BasisControlFunction(
+                t_start, t_end, n_current_f,
+                value_min=f_min, value_max=f_max,
+                basis_type=basis_type,
+                eps=eps
+            )
+            s_control = BasisControlFunction(
+                t_start, t_end, n_current_s,
+                value_min=s_min, value_max=s_max,
+                basis_type=basis_type,
+                eps=eps
+            )
+
+            # Initialize or warm-start coefficients
+            if iteration == 1:
+                # First iteration: constant function initialization
+                f_coeffs_init = f_control.create_initial_guess(initial_f)
+                s_coeffs_init = s_control.create_initial_guess(initial_s)
+                initial_coeffs = np.concatenate([f_coeffs_init, s_coeffs_init])
+
+                print(f"Initial coefficients (n={len(initial_coeffs)}):")
+                print(f"  f: {f_coeffs_init}")
+                print(f"  s: {s_coeffs_init}")
+                print(f"")
+            else:
+                # Warm-start: pad previous coefficients with zeros
+                padded_f = np.zeros(n_current_f)
+                padded_f[:len(prev_f_coeffs)] = prev_f_coeffs
+
+                padded_s = np.zeros(n_current_s)
+                padded_s[:len(prev_s_coeffs)] = prev_s_coeffs
+
+                initial_coeffs = np.concatenate([padded_f, padded_s])
+
+                print(f"Warm-starting from previous iteration:")
+                print(f"  Previous: {len(prev_f_coeffs)} f + {len(prev_s_coeffs)} s basis functions")
+                print(f"  Current:  {n_current_f} f + {n_current_s} s basis functions")
+                print(f"  New coefficients initialized to 0.0")
+                print(f"")
+                print(f"Initial coefficients (n={len(initial_coeffs)}):")
+                print(f"  f: {padded_f}")
+                print(f"  s: {padded_s}")
+                print(f"")
+
+            # Reset evaluation counter for this iteration
+            self.n_evaluations = 0
+            self.best_objective = -np.inf
+
+            # Create control function factory
+            control_func = basis_control_function_factory(f_control, s_control)
+
+            # Define objective function for this iteration
+            def objective_function(coefficients, grad):
+                """
+                Objective function for NLopt.
+
+                Performs complete forward integration of economic model over time,
+                then computes discounted utility integral.
+                """
+                # Create control function with these coefficients
+                def time_control(t):
+                    return control_func(t, coefficients)
+
+                # Create model configuration with this control
+                opt_config = ModelConfiguration(
+                    run_name=self.base_config.run_name,
+                    scalar_params=self.base_config.scalar_params,
+                    time_functions=self.base_config.time_functions,
+                    integration_params=self.base_config.integration_params,
+                    optimization_params=self.base_config.optimization_params,
+                    initial_state=self.base_config.initial_state,
+                    control_function=time_control
+                )
+
+                # INTEGRATE MODEL: Forward time evolution from t_start to t_end
+                results = integrate_model(opt_config, store_detailed_output=False)
+
+                # Compute objective from time-integrated results
+                rho = self.base_config.scalar_params.rho
+                t = results['t']
+                U = results['U']
+                L = results['L']
+
+                discount_factors = np.exp(-rho * t)
+                integrand = discount_factors * U * L
+                obj = np.trapezoid(integrand, t)
+
+                # Update tracking
+                self.n_evaluations += 1
+                if obj > self.best_objective:
+                    self.best_objective = obj
+
+                # Return NEGATIVE because NLopt minimizes
+                return -obj
+
+            # Set up NLopt optimizer
+            n_vars = n_current_f + n_current_s
+            nlopt_algorithm = getattr(nlopt, algorithm)
+            opt = nlopt.opt(nlopt_algorithm, n_vars)
+
+            # Set objective to maximize
+            opt.set_max_objective(objective_function)
+            opt.set_maxeval(max_evaluations)
+
+            # Get coefficient bounds from basis control functions
+            f_lower, f_upper = f_control.get_coefficient_bounds()
+            s_lower, s_upper = s_control.get_coefficient_bounds()
+
+            lower_bounds = np.concatenate([f_lower, s_lower])
+            upper_bounds = np.concatenate([f_upper, s_upper])
+
+            opt.set_lower_bounds(lower_bounds)
+            opt.set_upper_bounds(upper_bounds)
+
+            print(f"Coefficient bounds: [{lower_bounds[0]:.4f}, {upper_bounds[0]:.4f}]")
+            print(f"")
+
+            # Set tolerances if provided
+            if ftol_rel is not None:
+                opt.set_ftol_rel(ftol_rel)
+            if ftol_abs is not None:
+                opt.set_ftol_abs(ftol_abs)
+            if xtol_rel is not None:
+                opt.set_xtol_rel(xtol_rel)
+            if xtol_abs is not None:
+                opt.set_xtol_abs(xtol_abs)
+
+            # Run optimization
+            try:
+                optimal_coeffs = opt.optimize(initial_coeffs)
+                optimal_obj = opt.last_optimum_value()
+                termination_code = opt.last_optimize_result()
+
+                termination_names = {
+                    1: 'SUCCESS',
+                    2: 'STOPVAL_REACHED',
+                    3: 'FTOL_REACHED',
+                    4: 'XTOL_REACHED',
+                    5: 'MAXEVAL_REACHED',
+                    6: 'MAXTIME_REACHED',
+                    -1: 'FAILURE',
+                    -2: 'INVALID_ARGS',
+                    -3: 'OUT_OF_MEMORY',
+                    -4: 'ROUNDOFF_LIMITED',
+                    -5: 'FORCED_STOP'
+                }
+                termination_name = termination_names.get(termination_code, f'UNKNOWN_{termination_code}')
+
+            except Exception as e:
+                print(f"\nIteration {iteration} failed: {e}")
+                termination_name = 'FAILED'
+                optimal_coeffs = initial_coeffs
+                optimal_obj = None
+                termination_code = -1
+
+            # Split coefficients
+            optimal_f_coeffs = optimal_coeffs[:n_current_f]
+            optimal_s_coeffs = optimal_coeffs[n_current_f:]
+
+            # Store iteration results
+            iteration_result = {
+                'optimal_coefficients': optimal_coeffs,
+                'optimal_f_coefficients': optimal_f_coeffs,
+                'optimal_s_coefficients': optimal_s_coeffs,
+                'optimal_objective': optimal_obj,
+                'n_basis_f': n_current_f,
+                'n_basis_s': n_current_s,
+                'n_evaluations': self.n_evaluations,
+                'iteration': iteration,
+                'termination_code': termination_code,
+                'termination_name': termination_name
+            }
+            iteration_history.append(iteration_result)
+            total_evaluations += self.n_evaluations
+
+            print(f"\nIteration {iteration} complete:")
+            print(f"  Objective: {optimal_obj:.6e}" if optimal_obj else "  Objective: N/A")
+            print(f"  Evaluations: {self.n_evaluations}")
+            print(f"  Status: {termination_name}")
+
+            # Store for warm-starting next iteration
+            prev_f_coeffs = optimal_f_coeffs
+            prev_s_coeffs = optimal_s_coeffs
+
+        # Extract final results
+        final_result = iteration_history[-1]
+
+        result = {
+            'optimal_coefficients': final_result['optimal_coefficients'],
+            'optimal_f_coefficients': final_result['optimal_f_coefficients'],
+            'optimal_s_coefficients': final_result['optimal_s_coefficients'],
+            'optimal_objective': final_result['optimal_objective'],
+            'n_evaluations': total_evaluations,
+            'status': 'success',
+            'algorithm': algorithm,
+            'n_iterations': n_iterations,
+            'iteration_history': iteration_history,
+            'f_basis_control': f_control,
+            's_basis_control': s_control,
+            'refinement_base_f': refinement_base_f,
+            'refinement_base_s': refinement_base_s
+        }
+
+        return result

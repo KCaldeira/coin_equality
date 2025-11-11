@@ -1,0 +1,82 @@
+{
+  "run_name": "basis-function-test",
+  "description": "Test basis function optimization with Chebyshev polynomials",
+  "scalar_parameters": {
+    "alpha": 0.3,
+    "delta": 0.1,
+    "psi1": 0,
+    "psi2": 0.006934,
+    "y_damage_halfsat": 10000.0,
+    "k_climate": 5e-13,
+    "eta": 0.95,
+    "rho": 0.01,
+    "Gini_initial": 0.67,
+    "Gini_fract": 0.0,
+    "Gini_restore": 0.0,
+    "fract_gdp": 0.02,
+    "theta2": 2.6,
+    "mu_max": 1.2,
+    "Ecum_initial": 2494300000000.0,
+    "K_initial": 295000000000000.0
+  },
+  "time_functions": {
+    "A": {
+      "type": "gompertz_growth",
+      "initial_value": 739.619,
+      "final_value": 4906815.811,
+      "adjustment_coefficient": -0.0015
+    },
+    "L": {
+      "type": "gompertz_growth",
+      "initial_value": 7752000000.0,
+      "final_value": 10825000000.0,
+      "adjustment_coefficient": -0.03133
+    },
+    "sigma": {
+      "type": "gompertz_growth",
+      "initial_value": 0.000291355,
+      "final_value": 4.4681e-05,
+      "adjustment_coefficient": -0.008164
+    },
+    "theta1": {
+      "type": "double_exponential_growth",
+      "initial_value": 695.177385,
+      "growth_rate_1": -0.023,
+      "growth_rate_2": -0.00065,
+      "fract_1": 0.310452
+    }
+  },
+  "integration_parameters": {
+    "t_start": 0.0,
+    "t_end": 400,
+    "dt": 1.0,
+    "rtol": 1e-06,
+    "atol": 1e-09,
+    "plot_short_horizon": 100.0
+  },
+  "optimization_parameters": {
+    "_description": "BASIS FUNCTION MODE: using Chebyshev polynomials with iterative refinement",
+    "max_evaluations": 2000,
+    "initial_guess_f": 0.5,
+    "initial_guess_s": 0.28,
+    "bounds_f": [0.0, 1.0],
+    "bounds_s": [0.0, 1.0],
+    "algorithm": "LN_SBPLX",
+    "xtol_abs": 1e-10,
+    "use_basis_functions": true,
+    "n_basis_iterations": 2,
+    "_n_basis_iterations": "Number of refinement iterations (progressively adds higher-order basis functions)",
+    "n_basis_final_f": 15,
+    "_n_basis_final_f": "Number of f basis functions in final iteration",
+    "n_basis_final_s": 15,
+    "_n_basis_final_s": "Number of s basis functions in final iteration",
+    "n_basis_initial_f": 5,
+    "_n_basis_initial_f": "Number of f basis functions in first iteration",
+    "n_basis_initial_s": 5,
+    "_n_basis_initial_s": "Number of s basis functions in first iteration",
+    "basis_type": "chebyshev",
+    "_basis_type": "Type of basis functions: chebyshev, legendre, or power",
+    "basis_eps": 1e-10,
+    "_basis_eps": "Epsilon for coefficient bounds (keeps sigmoid away from 0 and 1)"
+  }
+}
