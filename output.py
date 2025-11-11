@@ -178,17 +178,31 @@ def write_optimization_summary(opt_results, sensitivity_results, output_dir, fil
 
         writer.writerow(['Parameter', 'Value'])
 
-        # Check if this is dual optimization (has s values)
-        is_dual = 's_optimal_values' in opt_results and opt_results['s_optimal_values'] is not None
+        # Check if this is basis function optimization or control point optimization
+        is_basis_function = 'optimal_coefficients' in opt_results
 
-        # Write optimal f values
-        for i, val in enumerate(opt_results['optimal_values']):
-            writer.writerow([f'Optimal f value at control point {i}', f"{val:.6f}"])
+        if is_basis_function:
+            # Basis function optimization - write coefficients
+            f_coeffs = opt_results['optimal_f_coefficients']
+            s_coeffs = opt_results['optimal_s_coefficients']
 
-        # Write optimal s values if dual optimization
-        if is_dual:
-            for i, val in enumerate(opt_results['s_optimal_values']):
-                writer.writerow([f'Optimal s value at control point {i}', f"{val:.6f}"])
+            for i, val in enumerate(f_coeffs):
+                writer.writerow([f'Optimal f coefficient {i}', f"{val:.12f}"])
+
+            for i, val in enumerate(s_coeffs):
+                writer.writerow([f'Optimal s coefficient {i}', f"{val:.12f}"])
+        else:
+            # Control point optimization - write control values
+            is_dual = 's_optimal_values' in opt_results and opt_results['s_optimal_values'] is not None
+
+            # Write optimal f values
+            for i, val in enumerate(opt_results['optimal_values']):
+                writer.writerow([f'Optimal f value at control point {i}', f"{val:.6f}"])
+
+            # Write optimal s values if dual optimization
+            if is_dual:
+                for i, val in enumerate(opt_results['s_optimal_values']):
+                    writer.writerow([f'Optimal s value at control point {i}', f"{val:.6f}"])
 
         writer.writerow(['Optimal objective', f"{opt_results['optimal_objective']:.12e}"])
         writer.writerow(['Function evaluations', opt_results['n_evaluations']])

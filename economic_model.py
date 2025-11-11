@@ -248,6 +248,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         G_eff = Gini
         U = NEG_BIGNUM
         E = 0.0
+        mu = 0.0
         dK_dt = -delta * K
         dGini_dt = -Gini_restore * (Gini - Gini_initial)
         Gini_step_change = Gini_fract * (G_eff - Gini)

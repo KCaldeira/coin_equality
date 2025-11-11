@@ -1008,6 +1008,8 @@ class UtilityOptimizer:
 
         print(f"")
         print(f"f bounds: [{f_min}, {f_max}]")
+        import sys
+        sys.stdout.flush()
         print(f"s bounds: [{s_min}, {s_max}]")
         print(f"Initial values: f={initial_f}, s={initial_s}")
         print(f"Epsilon: {eps:.2e}")
@@ -1017,6 +1019,7 @@ class UtilityOptimizer:
         if xtol_abs is not None:
             print(f"xtol_abs: {xtol_abs:.2e}")
         print(f"\n")
+        sys.stdout.flush()
 
         iteration_history = []
         total_evaluations = 0
@@ -1031,6 +1034,7 @@ class UtilityOptimizer:
             n_current_s = round(n_basis_initial_s * refinement_base_s**(iteration - 1))
 
             print(f"{'='*80}")
+            sys.stdout.flush()
             print(f"  ITERATION {iteration}/{n_iterations}")
             print(f"")
             print(f"  f (abatement fraction):")
@@ -1039,6 +1043,7 @@ class UtilityOptimizer:
             print(f"    Basis functions: {n_current_s}")
             print(f"  Total decision variables: {n_current_f + n_current_s}")
             print(f"{'='*80}\n")
+            sys.stdout.flush()
 
             # Create basis control function objects
             f_control = BasisControlFunction(
@@ -1100,6 +1105,10 @@ class UtilityOptimizer:
                 Performs complete forward integration of economic model over time,
                 then computes discounted utility integral.
                 """
+                if (self.n_evaluations + 1) % 100 == 0:
+                    print(f"Eval {self.n_evaluations + 1}: coeffs = {coefficients[:5]}... {coefficients[-5:]}")
+                    sys.stdout.flush()
+
                 # Create control function with these coefficients
                 def time_control(t):
                     return control_func(t, coefficients)
@@ -1221,12 +1230,32 @@ class UtilityOptimizer:
             print(f"  Evaluations: {self.n_evaluations}")
             print(f"  Status: {termination_name}")
 
+            # Print control values at Chebyshev nodes
+            print(f"\n  Control values at Chebyshev nodes:")
+            n_nodes = max(n_current_f, n_current_s)
+            for k in range(n_nodes):
+                # Chebyshev nodes in [-1, 1]
+                x_k = np.cos((k + 0.5) * np.pi / n_nodes)
+                # Convert to physical time [t_start, t_end]
+                t_k = t_start + (x_k + 1) * (t_end - t_start) / 2
+                # Evaluate control functions at this time
+                f_val = f_control.evaluate(t_k, optimal_f_coeffs)
+                s_val = s_control.evaluate(t_k, optimal_s_coeffs)
+                print(f"    t={t_k:6.1f} yr:  f={f_val:.6f}  s={s_val:.6f}")
+
             # Store for warm-starting next iteration
             prev_f_coeffs = optimal_f_coeffs
             prev_s_coeffs = optimal_s_coeffs
 
         # Extract final results
         final_result = iteration_history[-1]
+
+        # Create control function from final coefficients
+        final_coefficients = final_result['optimal_coefficients']
+        final_control_func_factory = basis_control_function_factory(f_control, s_control)
+
+        def final_control_function(t):
+            return final_control_func_factory(t, final_coefficients)
 
         result = {
             'optimal_coefficients': final_result['optimal_coefficients'],
@@ -1241,7 +1270,8 @@ class UtilityOptimizer:
             'f_basis_control': f_control,
             's_basis_control': s_control,
             'refinement_base_f': refinement_base_f,
-            'refinement_base_s': refinement_base_s
+            'refinement_base_s': refinement_base_s,
+            'control_function': final_control_function
         }
 
         return result

@@ -148,29 +148,44 @@ Common overrides:
 
 def print_header(text):
     """Print formatted section header."""
+    import sys
     print(f"\n{'=' * 80}")
     print(f"  {text}")
     print(f"{'=' * 80}\n")
+    sys.stdout.flush()
 
 
 def print_optimization_results(opt_results, n_control_points):
     """Print formatted optimization results."""
-    # Check if s was also optimized
-    has_s_optimization = 's_control_points' in opt_results and opt_results['s_control_points'] is not None
+    # Check if this is basis function optimization or control point optimization
+    is_basis_function = 'optimal_coefficients' in opt_results
 
-    if n_control_points == 1:
-        print(f"Optimal f₀:             {opt_results['optimal_values'][0]:.6f}")
-        if has_s_optimization:
-            print(f"Optimal s₀:             {opt_results['s_optimal_values'][0]:.6f}")
+    if is_basis_function:
+        # Basis function optimization - print coefficients
+        f_coeffs = opt_results['optimal_f_coefficients']
+        s_coeffs = opt_results['optimal_s_coefficients']
+
+        print(f"Optimal f coefficients (n={len(f_coeffs)}):")
+        print(f"  {f_coeffs}")
+        print(f"\nOptimal s coefficients (n={len(s_coeffs)}):")
+        print(f"  {s_coeffs}")
     else:
-        print(f"Optimal f control values:")
-        for t, f_val in opt_results['control_points']:
-            print(f"  t={t:6.1f} yr: f={f_val:.6f}")
+        # Control point optimization
+        has_s_optimization = 's_control_points' in opt_results and opt_results['s_control_points'] is not None
 
-        if has_s_optimization:
-            print(f"\nOptimal s control values:")
-            for t, s_val in opt_results['s_control_points']:
-                print(f"  t={t:6.1f} yr: s={s_val:.6f}")
+        if n_control_points == 1:
+            print(f"Optimal f₀:             {opt_results['optimal_values'][0]:.6f}")
+            if has_s_optimization:
+                print(f"Optimal s₀:             {opt_results['s_optimal_values'][0]:.6f}")
+        else:
+            print(f"Optimal f control values:")
+            for t, f_val in opt_results['control_points']:
+                print(f"  t={t:6.1f} yr: f={f_val:.6f}")
+
+            if has_s_optimization:
+                print(f"\nOptimal s control values:")
+                for t, s_val in opt_results['s_control_points']:
+                    print(f"  t={t:6.1f} yr: s={s_val:.6f}")
 
     print(f"\nOptimal objective:      {opt_results['optimal_objective']:.6e}")
     print(f"Function evaluations:   {opt_results['n_evaluations']}")
