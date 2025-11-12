@@ -512,7 +512,8 @@ def main():
             n_points_initial=opt_params.n_points_initial_f,
             initial_guess_s_scalar=opt_params.initial_guess_s,
             n_points_final_s=opt_params.n_points_final_s,
-            n_points_initial_s=opt_params.n_points_initial_s
+            n_points_initial_s=opt_params.n_points_initial_s,
+            optimize_time_points=opt_params.optimize_time_points
         )
         n_final_control_points = len(opt_results['control_points'])
     else:

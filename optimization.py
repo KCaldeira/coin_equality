@@ -659,6 +659,235 @@ class UtilityOptimizer:
             'algorithm': algorithm
         }
 
+    def optimize_time_adjustment(self, initial_f_control_points, initial_s_control_points,
+                                max_evaluations, algorithm, ftol_rel, ftol_abs,
+                                xtol_rel, xtol_abs):
+        """
+        Optimize the timing of control points while keeping control values fixed.
+
+        After standard iterative refinement completes, this method adjusts the temporal
+        spacing of control points to maximize the objective function. The control values
+        (f and optionally s) remain fixed at their optimized values, but their timing
+        is adjusted to improve the objective.
+
+        Parameters
+        ----------
+        initial_f_control_points : list of tuples
+            List of (time, f_value) tuples from previous optimization.
+            First and last points remain fixed at t_start and t_end.
+        initial_s_control_points : list of tuples or None
+            List of (time, s_value) tuples from previous optimization.
+            If None, only f times are optimized (single-variable mode).
+            If provided, both f and s times are optimized independently.
+        max_evaluations : int
+            Maximum number of objective function evaluations
+        algorithm : str
+            NLopt algorithm name (e.g., 'LN_SBPLX')
+        ftol_rel : float or None
+            Relative tolerance on objective function
+        ftol_abs : float or None
+            Absolute tolerance on objective function
+        xtol_rel : float or None
+            Relative tolerance on parameters
+        xtol_abs : float or None
+            Absolute tolerance on parameters
+
+        Returns
+        -------
+        dict
+            Optimization results containing:
+            - 'optimal_values': optimal f values (unchanged from input)
+            - 'optimal_objective': maximum utility achieved with adjusted times
+            - 'n_evaluations': number of objective evaluations used
+            - 'control_points': list of (adjusted_time, f_value) tuples
+            - 's_control_points': list of (adjusted_time, s_value) tuples (if s provided)
+            - 'status': optimization status string
+            - 'termination_code': NLopt termination code
+            - 'termination_name': human-readable termination reason
+            - 'algorithm': algorithm name used
+
+        Notes
+        -----
+        Parameterization for each interior point n (where n = 1 to N-2):
+            t_new[n] = ctrl[n-1] * (t[n+1] - t[n-1]) + t[n-1]
+
+        where ctrl[n-1] ∈ [0, 1]:
+            - ctrl = 0: point moves to left neighbor
+            - ctrl = 1: point moves to right neighbor
+            - ctrl = (t[n] - t[n-1]) / (t[n+1] - t[n-1]): stays at current position
+
+        For dual optimization (f and s):
+            - Total parameters: (N_f - 2) + (N_s - 2)
+            - f and s times adjusted independently
+            - Different numbers of control points supported
+        """
+        self.n_evaluations = 0
+        self.best_objective = -np.inf
+
+        f_times = np.array([pt[0] for pt in initial_f_control_points])
+        f_values = np.array([pt[1] for pt in initial_f_control_points])
+        n_f = len(f_times)
+        n_f_interior = n_f - 2
+
+        optimize_both = initial_s_control_points is not None
+
+        if optimize_both:
+            s_times = np.array([pt[0] for pt in initial_s_control_points])
+            s_values = np.array([pt[1] for pt in initial_s_control_points])
+            n_s = len(s_times)
+            n_s_interior = n_s - 2
+        else:
+            s_times = None
+            s_values = None
+            n_s_interior = 0
+
+        n_params = n_f_interior + n_s_interior
+
+        if n_params == 0:
+            result = {
+                'optimal_values': f_values,
+                'optimal_objective': self.calculate_objective(
+                    f_values, f_times,
+                    s_values if optimize_both else None,
+                    s_times if optimize_both else None
+                ),
+                'n_evaluations': self.n_evaluations,
+                'control_points': initial_f_control_points,
+                'status': 'skipped',
+                'termination_code': None,
+                'termination_name': 'NO_INTERIOR_POINTS',
+                'algorithm': algorithm
+            }
+            if optimize_both:
+                result['s_optimal_values'] = s_values
+                result['s_control_points'] = initial_s_control_points
+            return result
+
+        ctrl_initial = np.zeros(n_params)
+
+        for i in range(n_f_interior):
+            n = i + 1
+            t_left = f_times[n - 1]
+            t_curr = f_times[n]
+            t_right = f_times[n + 1]
+            ctrl_initial[i] = (t_curr - t_left) / (t_right - t_left)
+
+        if optimize_both:
+            for i in range(n_s_interior):
+                n = i + 1
+                t_left = s_times[n - 1]
+                t_curr = s_times[n]
+                t_right = s_times[n + 1]
+                ctrl_initial[n_f_interior + i] = (t_curr - t_left) / (t_right - t_left)
+
+        def reconstruct_times_and_evaluate(ctrl):
+            f_times_new = np.zeros(n_f)
+            f_times_new[0] = f_times[0]
+            f_times_new[-1] = f_times[-1]
+
+            for i in range(n_f_interior):
+                n = i + 1
+                t_left = f_times[n - 1]
+                t_right = f_times[n + 1]
+                f_times_new[n] = ctrl[i] * (t_right - t_left) + t_left
+
+            if optimize_both:
+                s_times_new = np.zeros(n_s)
+                s_times_new[0] = s_times[0]
+                s_times_new[-1] = s_times[-1]
+
+                for i in range(n_s_interior):
+                    n = i + 1
+                    t_left = s_times[n - 1]
+                    t_right = s_times[n + 1]
+                    s_times_new[n] = ctrl[n_f_interior + i] * (t_right - t_left) + t_left
+            else:
+                s_times_new = None
+
+            return self.calculate_objective(
+                f_values, f_times_new,
+                s_values if optimize_both else None,
+                s_times_new if optimize_both else None
+            )
+
+        def objective_wrapper(x, grad):
+            return reconstruct_times_and_evaluate(x)
+
+        nlopt_algorithm = getattr(nlopt, algorithm)
+        opt = nlopt.opt(nlopt_algorithm, n_params)
+        opt.set_lower_bounds(np.zeros(n_params))
+        opt.set_upper_bounds(np.ones(n_params))
+        opt.set_max_objective(objective_wrapper)
+        opt.set_maxeval(max_evaluations)
+
+        if ftol_rel is not None:
+            opt.set_ftol_rel(ftol_rel)
+        if ftol_abs is not None:
+            opt.set_ftol_abs(ftol_abs)
+        if xtol_rel is not None:
+            opt.set_xtol_rel(xtol_rel)
+        if xtol_abs is not None:
+            opt.set_xtol_abs(xtol_abs)
+
+        optimal_ctrl = opt.optimize(ctrl_initial)
+        optimal_objective = opt.last_optimum_value()
+        termination_code = opt.last_optimize_result()
+
+        termination_names = {
+            1: 'SUCCESS',
+            2: 'STOPVAL_REACHED',
+            3: 'FTOL_REACHED',
+            4: 'XTOL_REACHED',
+            5: 'MAXEVAL_REACHED',
+            6: 'MAXTIME_REACHED',
+            -1: 'FAILURE',
+            -2: 'INVALID_ARGS',
+            -3: 'OUT_OF_MEMORY',
+            -4: 'ROUNDOFF_LIMITED',
+            -5: 'FORCED_STOP'
+        }
+        termination_name = termination_names.get(termination_code, f'UNKNOWN_{termination_code}')
+
+        f_times_final = np.zeros(n_f)
+        f_times_final[0] = f_times[0]
+        f_times_final[-1] = f_times[-1]
+
+        for i in range(n_f_interior):
+            n = i + 1
+            t_left = f_times[n - 1]
+            t_right = f_times[n + 1]
+            f_times_final[n] = optimal_ctrl[i] * (t_right - t_left) + t_left
+
+        f_control_points_final = list(zip(f_times_final, f_values))
+
+        result = {
+            'optimal_values': f_values,
+            'optimal_objective': optimal_objective,
+            'n_evaluations': self.n_evaluations,
+            'control_points': f_control_points_final,
+            'status': 'success',
+            'termination_code': termination_code,
+            'termination_name': termination_name,
+            'algorithm': algorithm
+        }
+
+        if optimize_both:
+            s_times_final = np.zeros(n_s)
+            s_times_final[0] = s_times[0]
+            s_times_final[-1] = s_times[-1]
+
+            for i in range(n_s_interior):
+                n = i + 1
+                t_left = s_times[n - 1]
+                t_right = s_times[n + 1]
+                s_times_final[n] = optimal_ctrl[n_f_interior + i] * (t_right - t_left) + t_left
+
+            s_control_points_final = list(zip(s_times_final, s_values))
+            result['s_optimal_values'] = s_values
+            result['s_control_points'] = s_control_points_final
+
+        return result
+
     def optimize_with_iterative_refinement(self, n_iterations, initial_guess_scalar,
                                           max_evaluations, algorithm=None,
                                           ftol_rel=None, ftol_abs=None,
@@ -667,7 +896,8 @@ class UtilityOptimizer:
                                           n_points_initial=2,
                                           initial_guess_s_scalar=None,
                                           n_points_final_s=None,
-                                          n_points_initial_s=2):
+                                          n_points_initial_s=2,
+                                          optimize_time_points=False):
         """
         Optimize using iterative refinement with progressively finer control grids.
 
@@ -711,6 +941,10 @@ class UtilityOptimizer:
         n_points_initial_s : int, optional
             Number of s control points in first iteration. Default: 2
             Used with n_points_final_s to determine refinement base for s.
+        optimize_time_points : bool, optional
+            If True, runs time adjustment optimization after standard iterations complete.
+            Adjusts temporal spacing of control points while keeping values fixed.
+            Default: False (disabled for backward compatibility)
 
         Returns
         -------
@@ -860,6 +1094,34 @@ class UtilityOptimizer:
             print(f"  Status: {opt_result['termination_name']}")
 
         final_result = iteration_history[-1]
+
+        if optimize_time_points:
+            n_points_f = len(final_result['control_points'])
+            print(f"\n{'=' * 80}")
+            print(f"  TIME ADJUSTMENT OPTIMIZATION")
+            print(f"  Optimizing temporal placement of {n_points_f} control points")
+            print(f"  Keeping control values fixed")
+            print(f"{'=' * 80}\n")
+
+            time_opt_result = self.optimize_time_adjustment(
+                final_result['control_points'],
+                final_result.get('s_control_points', None),
+                max_evaluations,
+                algorithm if algorithm is not None else 'LN_SBPLX',
+                ftol_rel,
+                ftol_abs,
+                xtol_rel,
+                xtol_abs
+            )
+
+            final_result = time_opt_result
+            iteration_history.append(time_opt_result)
+            total_evaluations += time_opt_result['n_evaluations']
+
+            print(f"\nTime adjustment complete:")
+            print(f"  Objective: {time_opt_result['optimal_objective']:.6e}")
+            print(f"  Evaluations: {time_opt_result['n_evaluations']}")
+            print(f"  Status: {time_opt_result['termination_name']}")
 
         result = {
             'optimal_values': final_result['optimal_values'],

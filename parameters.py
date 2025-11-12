@@ -463,6 +463,11 @@ class OptimizationParameters:
     bounds_s : list of [float, float], optional
         Bounds for s values as [min, max]. Default: [0.0, 1.0]
         Example: [0.2, 0.3] to constrain savings rate between 20% and 30%
+    optimize_time_points : bool, optional
+        Enable time adjustment optimization phase after standard iterations.
+        When True, adjusts temporal spacing of control points while keeping values fixed.
+        This allows optimizer to concentrate control points where changes matter most.
+        Only applies to iterative refinement mode. Default: False (disabled)
     """
     max_evaluations: int
     control_times: object  # list or int
@@ -479,6 +484,7 @@ class OptimizationParameters:
     n_points_initial_s: int = 2
     bounds_f: list = None  # [min, max] for f, defaults to [0.0, 1.0]
     bounds_s: list = None  # [min, max] for s, defaults to [0.0, 1.0]
+    optimize_time_points: bool = False
 
     def is_iterative_refinement(self):
         """
