@@ -114,6 +114,17 @@ def interpolate_to_new_grid(old_times, old_values, new_times):
     old_values = np.asarray(old_values)
     new_times = np.asarray(new_times)
 
+    # Ensure strictly increasing times
+    sort_indices = np.argsort(old_times)
+    old_times = old_times[sort_indices]
+    old_values = old_values[sort_indices]
+
+    # Remove duplicate times by keeping only unique times (within tolerance)
+    eps = 1e-10
+    unique_mask = np.concatenate([[True], np.diff(old_times) > eps])
+    old_times = old_times[unique_mask]
+    old_values = old_values[unique_mask]
+
     if len(old_times) == 1:
         return np.full_like(new_times, old_values[0], dtype=float)
 
@@ -178,9 +189,21 @@ def evaluate_control_function(control_points, t):
     times = np.array([pt[0] for pt in control_points])
     values = np.array([pt[1] for pt in control_points])
 
+    # Ensure strictly increasing times (handles numerical precision issues)
+    sort_indices = np.argsort(times)
+    times = times[sort_indices]
+    values = values[sort_indices]
+
+    # Remove duplicate times by keeping only unique times (within tolerance)
+    # When times are duplicated, keep the first value
+    eps = 1e-10
+    unique_mask = np.concatenate([[True], np.diff(times) > eps])
+    times = times[unique_mask]
+    values = values[unique_mask]
+
     t_array = np.atleast_1d(t)
 
-    if len(control_points) == 1:
+    if len(times) == 1:
         result = np.full_like(t_array, values[0], dtype=float)
     else:
         interpolator = PchipInterpolator(times, values, extrapolate=False)
@@ -1113,6 +1136,11 @@ class UtilityOptimizer:
                 xtol_rel,
                 xtol_abs
             )
+
+            time_opt_result['iteration'] = n_iterations + 1
+            time_opt_result['n_control_points'] = len(time_opt_result['control_points'])
+            if 's_control_points' in time_opt_result and time_opt_result['s_control_points'] is not None:
+                time_opt_result['n_s_control_points'] = len(time_opt_result['s_control_points'])
 
             final_result = time_opt_result
             iteration_history.append(time_opt_result)

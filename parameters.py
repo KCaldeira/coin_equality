@@ -824,6 +824,7 @@ def load_configuration(config_path):
         # Use initial_guess_s as default constant s function
         initial_s = optimization_params.initial_guess_s if optimization_params.initial_guess_s is not None else 0.24
         s_time_function = lambda t: initial_s if isinstance(initial_s, float) else initial_s[0]
+        time_functions['s'] = s_time_function
 
     control_function = create_f_and_s_control_from_single(f_control, s_time_function)
 
