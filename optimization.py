@@ -1142,6 +1142,13 @@ class UtilityOptimizer:
             if 's_control_points' in time_opt_result and time_opt_result['s_control_points'] is not None:
                 time_opt_result['n_s_control_points'] = len(time_opt_result['s_control_points'])
 
+            # Add time-adjusted grids to the control grids lists
+            f_times_adjusted = np.array([pt[0] for pt in time_opt_result['control_points']])
+            iteration_f_control_grids.append(f_times_adjusted)
+            if optimize_f_and_s and iteration_s_control_grids is not None:
+                s_times_adjusted = np.array([pt[0] for pt in time_opt_result['s_control_points']])
+                iteration_s_control_grids.append(s_times_adjusted)
+
             final_result = time_opt_result
             iteration_history.append(time_opt_result)
             total_evaluations += time_opt_result['n_evaluations']
