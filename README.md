@@ -1200,13 +1200,16 @@ The optimizer performs a sequence of optimizations with progressively finer cont
 
 **Control point spacing - Chebyshev nodes:**
 
-Control points are distributed using a power-transformed Chebyshev node distribution. This provides flexible concentration of points toward early or late periods through a single tunable parameter (`chebyshev_scaling_power`).
+Control points are distributed using a power-transformed Chebyshev node distribution. This provides flexible concentration of points toward early or late periods through a single tunable parameter (`chebyshev_scaling_power`). A minimum spacing constraint ensures control points are never closer together than the integration time step.
 
 For N control points (k = 0, 1, ..., N-1):
 ```
 u[k] = (1 - cos(k * π / (N-1))) / 2    # Normalized to [0, 1]
 u_scaled[k] = u[k]^scaling_power       # Power transformation
 t[k] = t_start + (t_end - t_start) * u_scaled[k]
+
+# Enforce minimum spacing constraint
+t[k] = clip(t[k], t_start + k*dt, t_end - (N-1-k)*dt)
 ```
 
 **Properties:**
@@ -1215,6 +1218,8 @@ t[k] = t_start + (t_end - t_start) * u_scaled[k]
 - `scaling_power < 1.0`: concentrates points near t_end (late years)
 - `scaling_power = 1.0`: standard transformed Chebyshev spacing
 - Default `scaling_power = 1.5` concentrates points early where discounting makes decisions most impactful
+- Minimum spacing: consecutive points are at least `dt` apart (integration time step)
+- Prevents numerical issues from control points too close together
 
 **Example:** With t_end=400 and scaling_power=1.5, half of the control points occur before year 141, providing more temporal resolution in the critical early period.
 

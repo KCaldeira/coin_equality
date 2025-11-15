@@ -13,12 +13,13 @@ from parameters import ModelConfiguration
 from constants import EPSILON
 
 
-def calculate_chebyshev_times(n_points, t_start, t_end, scaling_power):
+def calculate_chebyshev_times(n_points, t_start, t_end, scaling_power, dt):
     """
     Calculate control point times using transformed Chebyshev nodes.
 
     Distributes control points using a power-transformed Chebyshev distribution,
-    allowing flexible concentration of points toward early or late times.
+    allowing flexible concentration of points toward early or late times. Enforces
+    minimum spacing constraint to prevent points from being closer than dt.
 
     Parameters
     ----------
@@ -33,11 +34,15 @@ def calculate_chebyshev_times(n_points, t_start, t_end, scaling_power):
         - scaling_power > 1: concentrates points near t_start
         - scaling_power < 1: concentrates points near t_end
         - scaling_power = 1: standard transformed Chebyshev distribution
+    dt : float
+        Minimum spacing between control points (years)
+        Control points will be at least dt apart
 
     Returns
     -------
     ndarray
         Control times from t_start to t_end, with boundaries exactly at endpoints
+        and minimum spacing dt between consecutive points
 
     Notes
     -----
@@ -46,18 +51,24 @@ def calculate_chebyshev_times(n_points, t_start, t_end, scaling_power):
        for k = 0, 1, ..., N-1
     2. Apply power transformation: u_scaled[k] = u[k]^scaling_power
     3. Map to time interval: t[k] = t_start + (t_end - t_start) * u_scaled[k]
+    4. Enforce minimum spacing: t[k] = clip(t[k], t_start + k*dt, t_end - (N-1-k)*dt)
 
-    This ensures t[0] = t_start and t[N-1] = t_end exactly, with smooth
-    distribution of interior points.
+    The minimum spacing constraint ensures:
+    - Point k is at least k*dt from t_start
+    - Point k is at least (N-1-k)*dt from t_end
+    - Consecutive points are at least dt apart
+
+    This prevents numerical issues from having control points closer together
+    than the integration time step.
 
     Examples
     --------
     Standard Chebyshev-like spacing (scaling_power=1.0):
-    >>> times = calculate_chebyshev_times(5, 0, 100, 1.0)
+    >>> times = calculate_chebyshev_times(5, 0, 100, 1.0, 1.0)
 
     Concentrate points in early period (scaling_power=1.5):
-    >>> times = calculate_chebyshev_times(20, 0, 400, 1.5)
-    # Half of points will be in first ~141 years
+    >>> times = calculate_chebyshev_times(20, 0, 400, 1.5, 1.0)
+    # Half of points will be in first ~141 years, with minimum 1-year spacing
     """
     N = n_points
     k_values = np.arange(N)
@@ -70,6 +81,12 @@ def calculate_chebyshev_times(n_points, t_start, t_end, scaling_power):
 
     # Map to [t_start, t_end]
     times = t_start + (t_end - t_start) * u_scaled
+
+    # Enforce minimum spacing constraint
+    # Point k must be at least k*dt from t_start and (N-1-k)*dt from t_end
+    lower_bounds = t_start + k_values * dt
+    upper_bounds = t_end - (N - 1 - k_values) * dt
+    times = np.clip(times, lower_bounds, upper_bounds)
 
     # Ensure exact endpoints (handle floating point precision)
     times[0] = t_start
@@ -1018,7 +1035,9 @@ class UtilityOptimizer:
             else:
                 refinement_base_s = refinement_base_f  # Use same base as f if not specified
 
+        chebyshev_scaling = self.base_config.optimization_params.chebyshev_scaling_power
         print(f"\nIterative refinement: {n_iterations} iterations, base_f = {refinement_base_f:.4f}")
+        print(f"Chebyshev scaling power: {chebyshev_scaling:.2f}")
         if n_points_final is not None:
             print(f"Target final f points: {n_points_final}")
         if optimize_f_and_s:
@@ -1038,7 +1057,8 @@ class UtilityOptimizer:
                 n_points_f,
                 self.base_config.integration_params.t_start,
                 self.base_config.integration_params.t_end,
-                self.base_config.optimization_params.chebyshev_scaling_power
+                self.base_config.optimization_params.chebyshev_scaling_power,
+                self.base_config.integration_params.dt
             )
 
             if iteration == 1:
@@ -1057,7 +1077,8 @@ class UtilityOptimizer:
                     n_points_s,
                     self.base_config.integration_params.t_start,
                     self.base_config.integration_params.t_end,
-                    self.base_config.optimization_params.chebyshev_scaling_power
+                    self.base_config.optimization_params.chebyshev_scaling_power,
+                    self.base_config.integration_params.dt
                 )
 
                 if iteration == 1:
