@@ -83,8 +83,10 @@
     "_description": "ITERATIVE REFINEMENT with TIME ADJUSTMENT enabled",
     "max_evaluations": 5000,
     "_max_evaluations": "Maximum evaluations per iteration (including time adjustment phase)",
-    "control_times": 2,
-    "_control_times": "2 refinement iterations",
+    "optimization_iterations": 2,
+    "_optimization_iterations": "2 refinement iterations",
+    "chebyshev_scaling_power": 1.5,
+    "_chebyshev_scaling_power": "Power for Chebyshev node transformation (>1 concentrates points near start, <1 near end, =1 standard). Default 1.5 concentrates points in early years.",
     "initial_guess_f": 0.5,
     "_initial_guess_f": "Initial f value",
     "bounds_f": [

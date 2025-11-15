@@ -13,69 +13,65 @@ from parameters import ModelConfiguration
 from constants import EPSILON
 
 
-def calculate_utility_weighted_times(n_points, config):
+def calculate_chebyshev_times(n_points, t_start, t_end, scaling_power):
     """
-    Calculate control point times weighted by contribution to discounted utility.
+    Calculate control point times using transformed Chebyshev nodes.
 
-    Distributes control points to provide approximately equal contributions to
-    the time-discounted aggregate utility integral. Concentrates points in early
-    periods where discounting makes decisions more impactful.
+    Distributes control points using a power-transformed Chebyshev distribution,
+    allowing flexible concentration of points toward early or late times.
 
     Parameters
     ----------
     n_points : int
         Number of control points to generate (must be >= 2)
-    config : ModelConfiguration
-        Model configuration containing time span, TFP function, and parameters
+    t_start : float
+        Start time (years)
+    t_end : float
+        End time (years)
+    scaling_power : float
+        Exponent for power transformation (must be > 0)
+        - scaling_power > 1: concentrates points near t_start
+        - scaling_power < 1: concentrates points near t_end
+        - scaling_power = 1: standard transformed Chebyshev distribution
 
     Returns
     -------
     ndarray
-        Control times from t_start to t_end, weighted by utility contribution
+        Control times from t_start to t_end, with boundaries exactly at endpoints
 
     Notes
     -----
     Algorithm:
-    1. Compute average TFP growth rate: k_A = ln(A(t_end)/A(t_start)) / (t_end - t_start)
-    2. Compute effective Consumption discount rate: r_c = ρ + η·k_A·(1-α)
-    3. Generate times: t(k) = -(1/r_c)·ln(1 - (k/N)·(1 - exp(-r_c·t_end)))
-       for k = 0, 1, ..., N where N = n_points - 1
+    1. Generate normalized Chebyshev-like nodes: u[k] = (1 - cos(k*π/(N-1))) / 2
+       for k = 0, 1, ..., N-1
+    2. Apply power transformation: u_scaled[k] = u[k]^scaling_power
+    3. Map to time interval: t[k] = t_start + (t_end - t_start) * u_scaled[k]
 
-    This ensures each interval contributes roughly equally to the discounted
-    objective function, with more resolution where it matters most.
+    This ensures t[0] = t_start and t[N-1] = t_end exactly, with smooth
+    distribution of interior points.
+
+    Examples
+    --------
+    Standard Chebyshev-like spacing (scaling_power=1.0):
+    >>> times = calculate_chebyshev_times(5, 0, 100, 1.0)
+
+    Concentrate points in early period (scaling_power=1.5):
+    >>> times = calculate_chebyshev_times(20, 0, 400, 1.5)
+    # Half of points will be in first ~141 years
     """
-    t_start = config.integration_params.t_start
-    t_end = config.integration_params.t_end
+    N = n_points
+    k_values = np.arange(N)
 
-    A_func = config.time_functions['A']
-    A_start = A_func(t_start)
-    A_end = A_func(t_end)
+    # Transformed Chebyshev nodes mapped to [0, 1]
+    u = (1 - np.cos(k_values * np.pi / (N - 1))) / 2
 
-    rho = config.scalar_params.rho
-    eta = config.scalar_params.eta
-    alpha = config.scalar_params.alpha
+    # Apply power transformation
+    u_scaled = u ** scaling_power
 
-    if t_end <= t_start:
-        raise ValueError(f"t_end ({t_end}) must be greater than t_start ({t_start})")
+    # Map to [t_start, t_end]
+    times = t_start + (t_end - t_start) * u_scaled
 
-    if A_end <= 0 or A_start <= 0:
-        raise ValueError(f"TFP must be positive: A(t_start)={A_start}, A(t_end)={A_end}")
-
-    k_A = np.log(A_end / A_start) / (t_end - t_start)
-    r_c = rho + eta * k_A * (1 - alpha)
-
-    # use the mean of discount rate and pure rate of time preference
-    # no theoretical justification
-    r_c = (r_c + rho)/2.0
-
-    N = n_points - 1
-    k_values = np.arange(n_points)
-
-    if abs(r_c) < EPSILON:
-        times = t_start + (k_values / N) * (t_end - t_start)
-    else:
-        times = -(1.0 / r_c) * np.log(1.0 - (k_values / N) * (1.0 - np.exp(-r_c * t_end)))
-
+    # Ensure exact endpoints (handle floating point precision)
     times[0] = t_start
     times[-1] = t_end
 
@@ -1038,7 +1034,12 @@ class UtilityOptimizer:
         for iteration in range(1, n_iterations + 1):
             # Calculate f control points
             n_points_f = round(1 + (n_points_initial - 1) * refinement_base_f**(iteration - 1))
-            f_control_times = calculate_utility_weighted_times(n_points_f, self.base_config)
+            f_control_times = calculate_chebyshev_times(
+                n_points_f,
+                self.base_config.integration_params.t_start,
+                self.base_config.integration_params.t_end,
+                self.base_config.optimization_params.chebyshev_scaling_power
+            )
 
             if iteration == 1:
                 f_initial_guess = np.full(n_points_f, initial_guess_scalar)
@@ -1052,7 +1053,12 @@ class UtilityOptimizer:
             # Calculate s control points (if optimizing both f and s)
             if optimize_f_and_s:
                 n_points_s = round(1 + (n_points_initial_s - 1) * refinement_base_s**(iteration - 1))
-                s_control_times = calculate_utility_weighted_times(n_points_s, self.base_config)
+                s_control_times = calculate_chebyshev_times(
+                    n_points_s,
+                    self.base_config.integration_params.t_start,
+                    self.base_config.integration_params.t_end,
+                    self.base_config.optimization_params.chebyshev_scaling_power
+                )
 
                 if iteration == 1:
                     s_initial_guess = np.full(n_points_s, initial_guess_s_scalar)

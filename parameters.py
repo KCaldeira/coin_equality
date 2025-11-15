@@ -379,31 +379,24 @@ class OptimizationParameters:
     """
     Parameters controlling optimization.
 
-    Supports two modes:
-    1. Direct multi-point optimization (control_times is list, initial_guess_f is list)
-    2. Iterative refinement optimization (control_times is int, initial_guess_f is float)
+    Uses iterative refinement optimization with progressively refined control grids.
 
     Supports dual optimization when initial_guess_s is specified.
 
     Attributes
     ----------
     max_evaluations : int
-        Maximum number of objective function evaluations (per iteration for iterative mode)
-    control_times : list of float OR int
-        Direct mode (list): Times (years) where control points are placed.
-            For single-point: [0]
-            For multi-point: e.g., [0, 25, 50, 75, 100]
-        Iterative refinement mode (int): Number of refinement iterations.
-            Iteration 1: 2 control points (t_start, t_end)
-            Iteration 2: 3 control points
-            Iteration k: 2^k + 1 control points
-        Note: Both f and s use the same control_times in dual optimization mode.
-    initial_guess_f : list of float OR float
-        Direct mode (list): Initial f values at each control time.
-            Must have same length as control_times.
-            Each value must satisfy 0 ≤ f ≤ 1.
-        Iterative refinement mode (float): Single initial f value for first iteration.
-            Must satisfy 0 ≤ f ≤ 1.
+        Maximum number of objective function evaluations per iteration
+    optimization_iterations : int
+        Number of refinement iterations.
+        Iteration 1: n_points_initial control points at t_start and t_end
+        Iteration k: progressively more control points based on refinement_base
+        Example: With n_points_initial=2 and refinement_base=2.0:
+            Iteration 1: 2 points, Iteration 2: 3 points, Iteration 3: 5 points, etc.
+        Note: Both f and s use the same number of optimization_iterations in dual optimization mode.
+    initial_guess_f : float
+        Initial f value for all control points in first iteration.
+        Must satisfy 0 ≤ f ≤ 1.
     algorithm : str, optional
         NLopt algorithm to use. If None, defaults to 'LN_SBPLX'.
         Options include:
@@ -442,13 +435,10 @@ class OptimizationParameters:
         Default: 2
         Used with n_points_final_f to determine refinement_base.
         Example: n_points_initial_f=3, n_points_final_f=10, n_iterations=4 gives base ≈ 1.65
-    initial_guess_s : list of float OR float, optional
+    initial_guess_s : float, optional
         Enables dual optimization of both f and s when present.
-        Direct mode (list): Initial s values at each control time.
-            Must have same length as control_times.
-            Each value must satisfy 0 ≤ s ≤ 1.
-        Iterative refinement mode (float): Single initial s value for first iteration.
-            Must satisfy 0 ≤ s ≤ 1.
+        Initial s value for all control points in first iteration.
+        Must satisfy 0 ≤ s ≤ 1.
     n_points_final_s : int, optional
         Target number of s control points in final iteration (iterative mode only).
         If None, uses same refinement base as f (derived from n_points_final_f and n_points_initial_f).
@@ -468,9 +458,19 @@ class OptimizationParameters:
         When True, adjusts temporal spacing of control points while keeping values fixed.
         This allows optimizer to concentrate control points where changes matter most.
         Only applies to iterative refinement mode. Default: False (disabled)
+    chebyshev_scaling_power : float, optional
+        Power exponent for Chebyshev node transformation (must be > 0).
+        Controls the concentration of control points in time.
+        - Values > 1.0: concentrate points near t_start (early concentration)
+        - Values < 1.0: concentrate points near t_end (late concentration)
+        - Value = 1.0: standard transformed Chebyshev spacing
+        Default: 1.5 (concentrates points in early period where discounting
+        makes decisions most impactful)
+        Example: With t_end=400 and scaling_power=1.5, half the points
+        occur before year 141.
     """
     max_evaluations: int
-    control_times: object  # list or int
+    optimization_iterations: int
     initial_guess_f: object  # list or float
     algorithm: str = None
     ftol_rel: float = None
@@ -485,6 +485,7 @@ class OptimizationParameters:
     bounds_f: list = None  # [min, max] for f, defaults to [0.0, 1.0]
     bounds_s: list = None  # [min, max] for s, defaults to [0.0, 1.0]
     optimize_time_points: bool = False
+    chebyshev_scaling_power: float = 1.5
 
     def is_iterative_refinement(self):
         """
@@ -493,10 +494,9 @@ class OptimizationParameters:
         Returns
         -------
         bool
-            True if iterative refinement mode (control_times is int),
-            False if direct mode (control_times is list)
+            Always returns True (direct mode has been removed)
         """
-        return isinstance(self.control_times, int)
+        return isinstance(self.optimization_iterations, int)
 
     def is_dual_optimization(self):
         """
@@ -509,18 +509,6 @@ class OptimizationParameters:
             False if only optimizing f (s is fixed from time_functions)
         """
         return self.initial_guess_s is not None
-
-    def is_direct_mode(self):
-        """
-        Check if this configuration uses direct multi-point mode.
-
-        Returns
-        -------
-        bool
-            True if direct mode (control_times is list),
-            False if iterative refinement mode (control_times is int)
-        """
-        return isinstance(self.control_times, (list, np.ndarray))
 
 
 @dataclass

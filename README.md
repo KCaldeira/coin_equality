@@ -1151,32 +1151,7 @@ See the **Testing the Forward Model** section above for detailed instructions on
 
 ## Optimization Configuration
 
-The JSON configuration supports both direct multi-point optimization and iterative refinement optimization through the `optimization_parameters` section.
-
-### Direct Multi-Point Optimization
-
-Specify control times and initial guesses explicitly:
-
-```json
-"optimization_parameters": {
-  "max_evaluations": 10000,
-  "control_times": [0, 25, 50, 75, 100],
-  "initial_guess": [0.5, 0.5, 0.5, 0.5, 0.5]
-}
-```
-
-**Configuration rules:**
-- `control_times`: Array of times (years) where control points are placed
-  - Must be in ascending order
-  - For single-point optimization: `[0]`
-  - For multi-point: any number of times, e.g., `[0, 25, 50, 75, 100]`
-- `initial_guess`: Array of initial f values, one per control time
-  - Must have same length as `control_times`
-  - Each value must satisfy 0 ≤ f ≤ 1
-  - For single-point: `[0.5]` (or read from `control_function.value`)
-- `max_evaluations`: Maximum objective function evaluations per optimization
-  - Single-point: ~1000 typically sufficient
-  - Multi-point: scale with problem size (e.g., 10000 for 5 points)
+The JSON configuration uses iterative refinement optimization through the `optimization_parameters` section.
 
 ### Iterative Refinement Optimization
 
@@ -1185,22 +1160,30 @@ Specify the number of refinement iterations to progressively add control points:
 ```json
 "optimization_parameters": {
   "max_evaluations": 5000,
-  "control_times": 4,
-  "initial_guess": 0.5
+  "optimization_iterations": 4,
+  "initial_guess_f": 0.5,
+  "chebyshev_scaling_power": 1.5
 }
 ```
 
 **Configuration rules for iterative refinement:**
-- `control_times`: Scalar integer specifying number of refinement iterations
+- `optimization_iterations`: Integer specifying number of refinement iterations
   - Must be ≥ 1
-- `initial_guess`: Scalar value for initial f at all control points in first iteration
+- `initial_guess_f`: Scalar value for initial f at all control points in first iteration
   - Must satisfy 0 ≤ f ≤ 1
 - `max_evaluations`: Maximum objective function evaluations per iteration
-- `n_points_final`: Target number of control points in final iteration (optional)
-  - If specified, the refinement base is calculated as: `base = (n_points_final - 1)^(1/(n_iterations - 1))`
+- `chebyshev_scaling_power`: Power exponent for Chebyshev node transformation (optional, default 1.5)
+  - Controls concentration of control points in time
+  - Values > 1.0: concentrate points near t_start (early years)
+  - Values < 1.0: concentrate points near t_end (late years)
+  - Value = 1.0: standard transformed Chebyshev spacing
+  - Default 1.5 concentrates points early where discounting makes decisions most impactful
+  - Example: With t_end=400 and scaling_power=1.5, half the points occur before year 141
+- `n_points_final_f`: Target number of control points in final iteration (optional)
+  - If specified, the refinement base is calculated as: `base = (n_points_final_f - 1)^(1/(n_iterations - 1))`
   - If omitted, uses default `base = 2.0`
   - Non-integer bases prevent exact alignment with previous grids
-  - Example: `n_points_final = 10` with 4 iterations gives base ≈ 2.08 → 2, 3, 5, 10 points
+  - Example: `n_points_final_f = 10` with 4 iterations gives base ≈ 2.08 → 2, 3, 5, 10 points
   - Example: default base = 2.0 with 5 iterations gives 2, 3, 5, 9, 17 points
 - `xtol_abs`: Absolute tolerance on control parameters (optional, default from NLopt)
   - Recommended: `1e-10` (stops when all |Δf| < 1e-10)
@@ -1215,26 +1198,25 @@ Specify the number of refinement iterations to progressively add control points:
 
 The optimizer performs a sequence of optimizations with progressively finer control point grids. Each iteration uses the solution from the previous iteration to initialize the new optimization via PCHIP (Piecewise Cubic Hermite Interpolating Polynomial) interpolation.
 
-**Control point spacing - Utility-weighted distribution:**
+**Control point spacing - Chebyshev nodes:**
 
-Instead of spacing control points equally in time, points are distributed to provide approximately equal contributions to the time-discounted aggregate utility integral. This concentrates control points where they matter most for the objective function.
+Control points are distributed using a power-transformed Chebyshev node distribution. This provides flexible concentration of points toward early or late periods through a single tunable parameter (`chebyshev_scaling_power`).
 
-The control point times are calculated based on:
-1. **Average TFP growth rate**: `k_A = ln(A(t_end)/A(t_start)) / (t_end - t_start)`
-2. **Effective Consumption discount rate**: `r_c_effective = ρ + η · k_A · (1 - α)`
-   - `ρ`: pure rate of time preference
-   - `η`: coefficient of relative risk aversion
-   - `α`: capital share of income
-3. **Weighting discount rate**: `r_c = (r_c_effective + ρ) / 2`
-   - Uses the mean of the pure rate of time preference and the effective discount rate
-   - Provides a balance between pure time preference and Consumption-adjusted discounting
-
-For iteration with N+1 control points (k = 0, 1, ..., N):
+For N control points (k = 0, 1, ..., N-1):
 ```
-t(k) = -(1/r_c) · ln(1 - (k/N) · (1 - exp(-r_c · t_end)))
+u[k] = (1 - cos(k * π / (N-1))) / 2    # Normalized to [0, 1]
+u_scaled[k] = u[k]^scaling_power       # Power transformation
+t[k] = t_start + (t_end - t_start) * u_scaled[k]
 ```
 
-This formula ensures that each interval between control points contributes approximately equally to the discounted objective, with more points concentrated in early periods where discounting matters most. The averaging of discount rates provides a pragmatic middle ground between pure time preference and growth-adjusted discounting.
+**Properties:**
+- `t[0] = t_start` and `t[N-1] = t_end` exactly (endpoints are fixed)
+- `scaling_power > 1.0`: concentrates points near t_start (early years)
+- `scaling_power < 1.0`: concentrates points near t_end (late years)
+- `scaling_power = 1.0`: standard transformed Chebyshev spacing
+- Default `scaling_power = 1.5` concentrates points early where discounting makes decisions most impactful
+
+**Example:** With t_end=400 and scaling_power=1.5, half of the control points occur before year 141, providing more temporal resolution in the critical early period.
 
 **Iteration schedule:**
 
@@ -1256,7 +1238,7 @@ This formula ensures that each interval between control points contributes appro
 - Progressively captures finer temporal structure in optimal policy
 - Each iteration "warm starts" from previous solution
 - Avoids poor local minima that can occur with many control points from cold start
-- Utility-weighted spacing focuses computational effort where it matters most
+- Chebyshev-based spacing provides flexible control point concentration through `chebyshev_scaling_power`
 - PCHIP interpolation preserves monotonicity and shape characteristics of previous solution
 
 ### Optimization Stopping Criteria
@@ -1294,10 +1276,9 @@ The model supports simultaneous optimization of both the abatement allocation fr
   },
   "optimization_parameters": {
     "max_evaluations": 1000,
-    "control_times": [0],
-    "initial_guess": [0.5],
-    "s_control_times": [0],
-    "s_initial_guess": [0.24],
+    "optimization_iterations": 2,
+    "initial_guess_f": 0.5,
+    "initial_guess_s": 0.24,
     "algorithm": "LN_SBPLX",
     "xtol_abs": 1e-10
   }
@@ -1310,27 +1291,28 @@ The model supports simultaneous optimization of both the abatement allocation fr
 - When `s_control_function` is present, optimization will jointly optimize both f and s
 - Both variables use the same NLopt algorithm and stopping criteria
 
-#### Multi-Point Dual Optimization
+#### Dual Optimization with Different Temporal Resolution
 
-f(t) and s(t) can have **independent numbers of control points**:
+f(t) and s(t) can have **independent numbers of control points** through iterative refinement:
 
 ```json
 "optimization_parameters": {
   "max_evaluations": 10000,
-  "control_times": [0, 100, 200, 400],      // 4 points for f
-  "initial_guess": [0.5, 0.4, 0.5, 0.6],
-  "s_control_times": [0, 200, 400],         // 3 points for s
-  "s_initial_guess": [0.24, 0.26, 0.22],
+  "optimization_iterations": 4,
+  "initial_guess_f": 0.5,
+  "initial_guess_s": 0.24,
+  "n_points_final_f": 16,        // f gets 16 points in final iteration
+  "n_points_final_s": 8,         // s gets 8 points in final iteration
   "algorithm": "LN_SBPLX",
   "xtol_abs": 1e-10
 }
 ```
 
 **Key features:**
-- **Independent control times:** f and s can have different temporal resolution
-- **Independent initial guesses:** Different starting points for each variable
-- **Interpolation:** Both variables use PCHIP interpolation between control points
-- **Total dimension:** n_f + n_s (e.g., 4 + 3 = 7 dimensions in example above)
+- **Independent temporal resolution:** f and s can have different numbers of control points
+- **Independent refinement schedules:** Use `n_points_final_f` and `n_points_final_s` to control resolution
+- **Interpolation:** Both variables use PCHIP interpolation between control points during refinement
+- **Total dimension:** n_f + n_s (e.g., 16 + 8 = 24 dimensions in final iteration above)
 
 #### Backward Compatibility
 
@@ -1506,8 +1488,8 @@ The implementation will parallel the existing optimization structure for f(t), c
    - Clean precedence: s_control_function > time_functions['s']
 
 2. **Extended OptimizationParameters dataclass** ✅
-   - Added `s_control_times`: int or list, parallel to `control_times` for f
-   - Added `s_initial_guess`: float or list, parallel to `initial_guess` for f
+   - Dual optimization uses same `optimization_iterations` for both f and s
+   - Added `initial_guess_s`: float, parallel to `initial_guess_f` for f
    - Added `s_n_points_final`: int, for iterative refinement of s
    - Added `is_dual_optimization()` method to check if optimizing both f and s
    - All fields optional with None default (backward compatible)
