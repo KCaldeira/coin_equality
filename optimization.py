@@ -7,10 +7,37 @@ and optimization using NLopt to maximize discounted aggregate utility.
 
 import numpy as np
 import nlopt
+import time
 from scipy.interpolate import PchipInterpolator
 from economic_model import integrate_model
 from parameters import ModelConfiguration
 from constants import EPSILON
+
+
+def requires_gradient(algorithm_name):
+    """
+    Check if NLopt algorithm requires gradient computation.
+
+    Parameters
+    ----------
+    algorithm_name : str
+        NLopt algorithm name (e.g., 'LD_SLSQP', 'LN_SBPLX')
+
+    Returns
+    -------
+    bool
+        True if algorithm requires gradients (LD_* or GD_* algorithms)
+        False for derivative-free algorithms (LN_*, GN_*)
+
+    Notes
+    -----
+    NLopt algorithm naming convention:
+    - LD_* : Local, Derivative-based (requires gradients)
+    - LN_* : Local, No derivatives
+    - GN_* : Global, No derivatives
+    - GD_* : Global, Derivative-based (rare, not commonly used)
+    """
+    return algorithm_name.startswith('LD_') or algorithm_name.startswith('GD_')
 
 
 def calculate_chebyshev_times(n_points, t_start, t_end, scaling_power, dt):
@@ -492,7 +519,35 @@ class UtilityOptimizer:
         control_times = np.array(control_times)
 
         def objective_wrapper(x, grad):
-            return self.calculate_objective(x, control_times)
+            """Objective function wrapper with numerical gradient computation."""
+            obj_value = self.calculate_objective(x, control_times)
+
+            # Check if objective value is valid
+            if not np.isfinite(obj_value):
+                print(f"WARNING: Invalid objective value: {obj_value}")
+                print(f"  x: {x}")
+                return -1e30  # Return large negative value for invalid objective
+
+            # Compute gradient if requested (grad.size > 0 for gradient-based algorithms)
+            if grad.size > 0:
+                from constants import LOOSER_EPSILON, OBJECTIVE_SCALE
+                eps = LOOSER_EPSILON
+                for i in range(len(x)):
+                    x_pert = x.copy()
+                    x_pert[i] += eps
+                    obj_pert = self.calculate_objective(x_pert, control_times)
+                    grad[i] = (obj_pert - obj_value) / eps
+
+                    # Check for NaN or Inf in gradient
+                    if not np.isfinite(grad[i]):
+                        grad[i] = 0.0
+
+                # Scale gradient
+                grad[:] = grad * OBJECTIVE_SCALE
+
+            # Return scaled objective
+            from constants import OBJECTIVE_SCALE
+            return obj_value * OBJECTIVE_SCALE
 
         # Get bounds from config, default to [0.0, 1.0]
         bounds_f = self.base_config.optimization_params.bounds_f if self.base_config.optimization_params.bounds_f is not None else [0.0, 1.0]
@@ -620,11 +675,61 @@ class UtilityOptimizer:
         s_control_times = np.array(s_control_times)
 
         def objective_wrapper(x, grad):
+            """Dual optimization objective wrapper with gradient computation."""
             # Split combined vector into f and s components
             f_values = x[:n_f_points]
             s_values = x[n_f_points:]
-            return self.calculate_objective(f_values, f_control_times,
-                                           s_values, s_control_times)
+
+            obj_value = self.calculate_objective(f_values, f_control_times,
+                                                 s_values, s_control_times)
+
+            # Check if objective value is valid
+            if not np.isfinite(obj_value):
+                print(f"WARNING: Invalid objective value: {obj_value}")
+                print(f"  f_values: {f_values}")
+                print(f"  s_values: {s_values}")
+                return -1e30  # Return large negative value for invalid objective
+
+            # Compute gradient if requested (grad.size > 0 for gradient-based algorithms)
+            if grad.size > 0:
+                from constants import LOOSER_EPSILON, OBJECTIVE_SCALE
+                eps = LOOSER_EPSILON
+                for i in range(len(x)):
+                    x_pert = x.copy()
+                    # Use smaller perturbation if we're near the upper bound
+                    if i < n_f_points:  # f component
+                        if x_pert[i] + eps > bounds_f[1]:
+                            x_pert[i] -= eps  # Use backward difference instead
+                            obj_pert = self.calculate_objective(x_pert[:n_f_points], f_control_times,
+                                                                x_pert[n_f_points:], s_control_times)
+                            grad[i] = (obj_value - obj_pert) / eps
+                        else:
+                            x_pert[i] += eps
+                            obj_pert = self.calculate_objective(x_pert[:n_f_points], f_control_times,
+                                                                x_pert[n_f_points:], s_control_times)
+                            grad[i] = (obj_pert - obj_value) / eps
+                    else:  # s component
+                        if x_pert[i] + eps > bounds_s[1]:
+                            x_pert[i] -= eps  # Use backward difference instead
+                            obj_pert = self.calculate_objective(x_pert[:n_f_points], f_control_times,
+                                                                x_pert[n_f_points:], s_control_times)
+                            grad[i] = (obj_value - obj_pert) / eps
+                        else:
+                            x_pert[i] += eps
+                            obj_pert = self.calculate_objective(x_pert[:n_f_points], f_control_times,
+                                                                x_pert[n_f_points:], s_control_times)
+                            grad[i] = (obj_pert - obj_value) / eps
+
+                    # Check for NaN or Inf in gradient
+                    if not np.isfinite(grad[i]):
+                        grad[i] = 0.0
+
+                # Scale gradient
+                grad[:] = grad * OBJECTIVE_SCALE
+
+            # Return scaled objective
+            from constants import OBJECTIVE_SCALE
+            return obj_value * OBJECTIVE_SCALE
 
         # Get bounds from config, default to [0.0, 1.0]
         bounds_f = self.base_config.optimization_params.bounds_f if self.base_config.optimization_params.bounds_f is not None else [0.0, 1.0]
@@ -847,7 +952,35 @@ class UtilityOptimizer:
             )
 
         def objective_wrapper(x, grad):
-            return reconstruct_times_and_evaluate(x)
+            """Time adjustment objective wrapper with gradient computation."""
+            obj_value = reconstruct_times_and_evaluate(x)
+
+            # Check if objective value is valid
+            if not np.isfinite(obj_value):
+                print(f"WARNING: Invalid objective value: {obj_value}")
+                print(f"  x: {x}")
+                return -1e30  # Return large negative value for invalid objective
+
+            # Compute gradient if requested (grad.size > 0 for gradient-based algorithms)
+            if grad.size > 0:
+                from constants import LOOSER_EPSILON, OBJECTIVE_SCALE
+                eps = LOOSER_EPSILON
+                for i in range(len(x)):
+                    x_pert = x.copy()
+                    x_pert[i] += eps
+                    obj_pert = reconstruct_times_and_evaluate(x_pert)
+                    grad[i] = (obj_pert - obj_value) / eps
+
+                    # Check for NaN or Inf in gradient
+                    if not np.isfinite(grad[i]):
+                        grad[i] = 0.0
+
+                # Scale gradient
+                grad[:] = grad * OBJECTIVE_SCALE
+
+            # Return scaled objective
+            from constants import OBJECTIVE_SCALE
+            return obj_value * OBJECTIVE_SCALE
 
         nlopt_algorithm = getattr(nlopt, algorithm)
         opt = nlopt.opt(nlopt_algorithm, n_params)
@@ -1051,6 +1184,9 @@ class UtilityOptimizer:
         total_evaluations = 0
 
         for iteration in range(1, n_iterations + 1):
+            # Get algorithm for this iteration
+            iteration_algorithm = self.base_config.optimization_params.get_algorithm_for_iteration(iteration)
+
             # Calculate f control points
             n_points_f = round(1 + (n_points_initial - 1) * refinement_base_f**(iteration - 1))
             f_control_times = calculate_chebyshev_times(
@@ -1093,6 +1229,10 @@ class UtilityOptimizer:
             # Print iteration info
             print(f"\n{'=' * 80}")
             print(f"  ITERATION {iteration}/{n_iterations}")
+            print(f"  Algorithm: {iteration_algorithm}")
+            if requires_gradient(iteration_algorithm):
+                print(f"    (gradient-based, using numerical derivatives)")
+
             print(f"\n  f (abatement fraction) - OPTIMIZED:")
             print(f"    Control points: {n_points_f}")
             print(f"    Time points: {f_control_times}")
@@ -1105,7 +1245,9 @@ class UtilityOptimizer:
                 print(f"    Initial values: {s_initial_guess}")
             print(f"{'=' * 80}\n")
 
-            # Run optimization
+            # Run optimization with timing
+            iteration_start_time = time.time()
+
             if optimize_f_and_s:
                 opt_result = self.optimize_control_points_f_and_s(
                     f_control_times,
@@ -1113,7 +1255,7 @@ class UtilityOptimizer:
                     s_control_times,
                     s_initial_guess,
                     max_evaluations,
-                    algorithm=algorithm,
+                    algorithm=iteration_algorithm,
                     ftol_rel=ftol_rel,
                     ftol_abs=ftol_abs,
                     xtol_rel=xtol_rel,
@@ -1124,24 +1266,35 @@ class UtilityOptimizer:
                     f_control_times,
                     f_initial_guess,
                     max_evaluations,
-                    algorithm=algorithm,
+                    algorithm=iteration_algorithm,
                     ftol_rel=ftol_rel,
                     ftol_abs=ftol_abs,
                     xtol_rel=xtol_rel,
                     xtol_abs=xtol_abs
                 )
 
+            iteration_elapsed_time = time.time() - iteration_start_time
+
             opt_result['iteration'] = iteration
             opt_result['n_control_points'] = n_points_f
+            opt_result['elapsed_time'] = iteration_elapsed_time
             if optimize_f_and_s:
                 opt_result['n_s_control_points'] = n_points_s
             iteration_history.append(opt_result)
             total_evaluations += opt_result['n_evaluations']
 
+            # Unscale objective for display (it was scaled by OBJECTIVE_SCALE in the wrapper)
+            from constants import OBJECTIVE_SCALE
+            unscaled_objective = opt_result['optimal_objective'] / OBJECTIVE_SCALE
+
             print(f"\nIteration {iteration} complete:")
-            print(f"  Objective: {opt_result['optimal_objective']:.6e}")
+            print(f"  Objective value: {unscaled_objective:.12e}")
             print(f"  Evaluations: {opt_result['n_evaluations']}")
+            print(f"  Elapsed time: {iteration_elapsed_time:.2f} seconds")
             print(f"  Status: {opt_result['termination_name']}")
+            print(f"\n  Optimized f values: {opt_result['optimal_values']}")
+            if optimize_f_and_s:
+                print(f"  Optimized s values: {opt_result['s_optimal_values']}")
 
         final_result = iteration_history[-1]
 
@@ -1152,6 +1305,8 @@ class UtilityOptimizer:
             print(f"  Optimizing temporal placement of {n_points_f} control points")
             print(f"  Keeping control values fixed")
             print(f"{'=' * 80}\n")
+
+            time_opt_start_time = time.time()
 
             time_opt_result = self.optimize_time_adjustment(
                 final_result['control_points'],
@@ -1164,8 +1319,11 @@ class UtilityOptimizer:
                 xtol_abs
             )
 
+            time_opt_elapsed_time = time.time() - time_opt_start_time
+
             time_opt_result['iteration'] = n_iterations + 1
             time_opt_result['n_control_points'] = len(time_opt_result['control_points'])
+            time_opt_result['elapsed_time'] = time_opt_elapsed_time
             if 's_control_points' in time_opt_result and time_opt_result['s_control_points'] is not None:
                 time_opt_result['n_s_control_points'] = len(time_opt_result['s_control_points'])
 
@@ -1180,10 +1338,22 @@ class UtilityOptimizer:
             iteration_history.append(time_opt_result)
             total_evaluations += time_opt_result['n_evaluations']
 
+            # Unscale objective for display
+            from constants import OBJECTIVE_SCALE
+            unscaled_objective = time_opt_result['optimal_objective'] / OBJECTIVE_SCALE
+
             print(f"\nTime adjustment complete:")
-            print(f"  Objective: {time_opt_result['optimal_objective']:.6e}")
+            print(f"  Objective value: {unscaled_objective:.12e}")
             print(f"  Evaluations: {time_opt_result['n_evaluations']}")
+            print(f"  Elapsed time: {time_opt_elapsed_time:.2f} seconds")
             print(f"  Status: {time_opt_result['termination_name']}")
+            print(f"\n  Optimized control points (time, f_value):")
+            for pt in time_opt_result['control_points']:
+                print(f"    {pt}")
+            if 's_control_points' in time_opt_result and time_opt_result['s_control_points'] is not None:
+                print(f"\n  Optimized s control points (time, s_value):")
+                for pt in time_opt_result['s_control_points']:
+                    print(f"    {pt}")
 
         result = {
             'optimal_values': final_result['optimal_values'],

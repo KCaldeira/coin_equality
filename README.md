@@ -1256,6 +1256,77 @@ The optimization accepts optional NLopt stopping criteria parameters:
 
 **Recommended practice:** Use `xtol_abs = 1e-10` as the sole stopping criterion. Since the control variable f is bounded in [0,1], absolute tolerance is more meaningful than relative tolerance, and there's no reason to want different accuracy near 0 versus near 1. The objective function can have large absolute values, making `ftol_rel` trigger prematurely even when significant improvements remain possible.
 
+### Gradient-Based Optimization
+
+The optimizer supports both derivative-free and gradient-based algorithms. Gradient-based algorithms (LD_*) use numerical gradient computation via finite differences for improved convergence on smooth objectives.
+
+#### Algorithm Selection
+
+**Single algorithm for all iterations:**
+```json
+"algorithm": "LN_SBPLX"
+```
+
+**Per-iteration algorithm list (progressive refinement):**
+```json
+"optimization_iterations": 3,
+"algorithm": ["GN_ISRES", "LN_SBPLX", "LD_SLSQP"]
+```
+
+The algorithm list length must exactly match `optimization_iterations`. This enables progressive refinement strategies where early iterations explore broadly and later iterations refine with gradient information.
+
+#### Algorithm Categories
+
+**LN_\* (Local, No derivatives):** LN_SBPLX, LN_BOBYQA, LN_COBYLA, LN_NELDERMEAD
+- Fast, robust for noisy objectives
+- No gradient computation overhead
+- Recommended for early iterations and general use
+
+**LD_\* (Local, Derivative-based):** LD_SLSQP, LD_MMA, LD_LBFGS, LD_CCSAQ
+- Uses numerical gradients via finite differences
+- Requires N+1 objective evaluations per gradient (N = number of parameters)
+- Better convergence for smooth objectives
+- Recommended for final polishing after derivative-free convergence
+
+**GN_\* (Global, No derivatives):** GN_ISRES, GN_DIRECT_L
+- Explores parameter space broadly
+- Good for avoiding local minima
+- Slower convergence
+- Recommended for first iteration when starting from poor initial guess
+
+#### Progressive Refinement Strategy
+
+Start with global exploration, refine locally, finish with gradient-based polishing:
+
+```json
+"optimization_iterations": 4,
+"algorithm": ["GN_ISRES", "LN_SBPLX", "LN_SBPLX", "LD_SLSQP"]
+```
+
+This strategy:
+1. **Iteration 1 (GN_ISRES):** Explores parameter space to avoid local minima
+2. **Iterations 2-3 (LN_SBPLX):** Refines solution with efficient derivative-free method
+3. **Iteration 4 (LD_SLSQP):** Polishes with gradient-based method for high precision
+
+#### Gradient Computation
+
+Gradient-based algorithms compute gradients numerically using forward finite differences:
+
+```
+∂f/∂x[i] ≈ (f(x + ε·e[i]) - f(x)) / ε
+```
+
+where ε = 1e-10 (LOOSE_EPSILON) and e[i] is the i-th unit vector.
+
+**Cost:** N+1 objective evaluations per gradient, where N is the total number of control parameters (n_f_points + n_s_points in dual mode).
+
+**When to use gradient-based algorithms:**
+- ✅ Final polishing after derivative-free convergence
+- ✅ Smooth, well-behaved objective functions
+- ✅ When high precision is needed
+- ❌ Early iterations (use GN_ISRES or LN_SBPLX instead)
+- ❌ Noisy or discontinuous objectives
+
 ### Dual Optimization (f and s)
 
 The model supports simultaneous optimization of both the abatement allocation fraction f(t) and the savings rate s(t). This is enabled by adding an `s_control_function` alongside the standard `control_function`.

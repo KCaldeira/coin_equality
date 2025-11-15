@@ -25,6 +25,20 @@ EPSILON = 1e-12
 # Provides practical precision (1e-10 absolute) without requiring machine precision
 LOOSE_EPSILON = 1e-10
 
+# Even looser epsilon for numerical gradient computation via finite differences
+# Used for:
+# - Perturbation size in gradient-based optimization (LD_* algorithms)
+# - Numerical differentiation via forward differences
+# Larger than LOOSE_EPSILON for better numerical stability in finite difference approximations
+LOOSER_EPSILON = 1e-6
+
+# Objective function scaling factor for numerical stability in gradient-based optimization
+# Used for:
+# - Scaling objective values from ~1.5e13 to ~1.5 for better numerical conditioning
+# - Applied consistently to both objective values and gradients in all optimization wrappers
+# - Improves stability of gradient-based algorithms (LD_SLSQP, LD_LBFGS, etc.)
+OBJECTIVE_SCALE = 1e-13
+
 # Large value for detecting effectively infinite parameters
 # Used for:
 # - Checking if y_damage_halfsat is so large that damage is effectively uniform

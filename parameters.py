@@ -397,15 +397,26 @@ class OptimizationParameters:
     initial_guess_f : float
         Initial f value for all control points in first iteration.
         Must satisfy 0 ≤ f ≤ 1.
-    algorithm : str, optional
+    algorithm : str or list of str, optional
         NLopt algorithm to use. If None, defaults to 'LN_SBPLX'.
-        Options include:
-        - 'LN_SBPLX': Local derivative-free Subplex (default, robust for noisy objectives)
-        - 'LN_BOBYQA': Local derivative-free (good for smooth problems)
-        - 'GN_ISRES': Global stochastic (good for multi-modal problems)
-        - 'GN_DIRECT_L': Global deterministic (good for Lipschitz-continuous)
-        - 'LN_COBYLA': Local derivative-free (handles nonlinear constraints)
-        - 'LN_NELDERMEAD': Local derivative-free (Nelder-Mead simplex)
+
+        Can be specified as:
+        - Single string: same algorithm for all iterations (e.g., 'LN_SBPLX')
+        - List of strings: different algorithm per iteration, length must equal optimization_iterations
+          Example: ["GN_ISRES", "LN_SBPLX", "LD_SLSQP"] for progressive refinement
+
+        Algorithm categories:
+        - 'LN_*': Local, derivative-free (LN_SBPLX, LN_BOBYQA, LN_COBYLA, LN_NELDERMEAD)
+          Fast, robust for noisy objectives. No gradient computation overhead.
+        - 'LD_*': Local, derivative-based (LD_SLSQP, LD_MMA, LD_LBFGS, LD_CCSAQ)
+          Uses numerical gradients (N+1 evaluations per gradient). Better convergence for smooth objectives.
+          Recommended for final polishing after derivative-free convergence.
+        - 'GN_*': Global, derivative-free (GN_ISRES, GN_DIRECT_L)
+          Explores parameter space broadly. Good for avoiding local minima.
+
+        Progressive refinement strategy:
+        ["GN_ISRES", "LN_SBPLX", "LD_SLSQP"] = global exploration → local refinement → gradient polish
+
         See NLopt documentation for full list.
     ftol_rel : float, optional
         Relative tolerance on objective function changes.
@@ -472,7 +483,7 @@ class OptimizationParameters:
     max_evaluations: int
     optimization_iterations: int
     initial_guess_f: object  # list or float
-    algorithm: str = None
+    algorithm: object = None  # str or list[str]
     ftol_rel: float = None
     ftol_abs: float = None
     xtol_rel: float = None
@@ -509,6 +520,45 @@ class OptimizationParameters:
             False if only optimizing f (s is fixed from time_functions)
         """
         return self.initial_guess_s is not None
+
+    def get_algorithm_for_iteration(self, iteration):
+        """
+        Get the algorithm to use for a specific iteration.
+
+        Parameters
+        ----------
+        iteration : int
+            Iteration number (1-based)
+
+        Returns
+        -------
+        str
+            Algorithm name for this iteration
+
+        Notes
+        -----
+        If algorithm is a string, returns that algorithm for all iterations.
+        If algorithm is a list, returns the algorithm for the specified iteration.
+        If algorithm is None, returns 'LN_SBPLX' (default).
+
+        List length must match optimization_iterations (fail-fast validation).
+        """
+        if self.algorithm is None:
+            return 'LN_SBPLX'
+        elif isinstance(self.algorithm, str):
+            return self.algorithm
+        elif isinstance(self.algorithm, list):
+            if len(self.algorithm) != self.optimization_iterations:
+                raise ValueError(
+                    f"Algorithm list length ({len(self.algorithm)}) must match "
+                    f"optimization_iterations ({self.optimization_iterations})"
+                )
+            return self.algorithm[iteration - 1]
+        else:
+            raise ValueError(
+                f"Invalid algorithm type: {type(self.algorithm).__name__}. "
+                f"Must be str, list, or None."
+            )
 
 
 @dataclass
