@@ -15,6 +15,7 @@ import json
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 from matplotlib.backends.backend_pdf import PdfPages
 from parameters import load_configuration, ModelConfiguration
 from optimization import UtilityOptimizer, create_control_function_from_points
@@ -548,6 +549,15 @@ def main():
     print(f"  Results PDF:      {output_paths['pdf_file']}")
     if 'pdf_file_short' in output_paths:
         print(f"  Short-term PDF:   {output_paths['pdf_file_short']}")
+
+    # Create comprehensive results visualization using unified plotting
+    print("\nCreating comprehensive results visualization...")
+    from visualization_utils import create_results_report_pdf
+    import pandas as pd
+    results_df = pd.read_csv(output_paths['csv_file'])
+    comprehensive_pdf = Path(output_paths['output_dir']) / 'plots_full.pdf'
+    create_results_report_pdf({config.run_name: results_df}, comprehensive_pdf)
+    print(f"  Comprehensive PDF: {comprehensive_pdf}")
 
     print("\nWriting optimization summary CSV...")
     opt_csv_path = write_optimization_summary(opt_results, sensitivity_results, output_paths['output_dir'], 'optimization_summary.csv')

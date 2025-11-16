@@ -27,7 +27,8 @@ A simple-as-possible stylized representation of the tradeoff between investment 
 - [Unit Testing: Validating Analytical Solutions](#unit-testing-validating-analytical-solutions)
   - [Unit Test for Equation (1.2): Climate Damage](#unit-test-for-equation-12-climate-damage)
   - [Testing the Forward Model](#testing-the-forward-model)
-  - [Testing the Optimization with Parameter Overrides](#testing-the-optimization-with-parameter-overrides)
+  - [Running Optimizations with Parameter Overrides](#running-optimizations-with-parameter-overrides)
+  - [Comparing Multiple Optimization Results](#comparing-multiple-optimization-results)
 - [Time Integration](#time-integration)
   - [Integration Function](#integration-function)
   - [Implementation Notes](#implementation-notes)
@@ -924,32 +925,32 @@ python test_integration.py config_my_test.json
 
 This testing framework validates the complete model pipeline and provides immediate visual feedback on model behavior through the generated charts.
 
-### Testing the Optimization with Parameter Overrides
+### Running Optimizations with Parameter Overrides
 
-The optimization test script supports command line parameter overrides, enabling automated parameter sweeps without creating multiple configuration files.
+The optimization script supports command line parameter overrides, enabling automated parameter sweeps without creating multiple configuration files.
 
 #### Command Line Override Syntax
 
 Override any configuration parameter using dot notation:
 
 ```bash
-python test_optimization.py config.json --key.subkey.value new_value
+python run_optimization.py config.json --key.subkey.value new_value
 ```
 
 **Examples:**
 
 ```bash
 # Override single parameter
-python test_optimization.py config_baseline.json --scalar_parameters.alpha 0.35
+python run_optimization.py config_baseline.json --scalar_parameters.alpha 0.35
 
 # Override multiple parameters
-python test_optimization.py config_baseline.json \
+python run_optimization.py config_baseline.json \
   --run_name "sensitivity_test" \
   --optimization_parameters.initial_guess 0.3 \
   --scalar_parameters.rho 0.015
 
 # Override nested parameters
-python test_optimization.py config_baseline.json \
+python run_optimization.py config_baseline.json \
   --time_functions.A.growth_rate 0.02 \
   --optimization_parameters.n_points_final 100
 ```
@@ -984,7 +985,7 @@ config_file = "config_baseline.json"
 # Sweep over alpha values
 for alpha in [0.25, 0.30, 0.35, 0.40]:
     cmd = [
-        "python", "test_optimization.py", config_file,
+        "python", "run_optimization.py", config_file,
         "--scalar_parameters.alpha", str(alpha),
         "--run_name", f"alpha_{alpha:.2f}"
     ]
@@ -997,6 +998,81 @@ for alpha in [0.25, 0.30, 0.35, 0.40]:
 - Git-friendly: only baseline configs need version control
 - Clear provenance: command documents what changed from baseline
 - Composable: combine multiple overrides in one command
+
+### Comparing Multiple Optimization Results
+
+After running multiple optimizations (e.g., parameter sweeps or scenario comparisons), use the comparison tool to analyze and visualize differences across runs.
+
+#### Running Comparisons
+
+The `compare_results.py` script accepts unlimited directory paths with wildcard support:
+
+```bash
+python compare_results.py <path1> [path2] [path3] [...]
+```
+
+**Examples:**
+
+```bash
+# Compare all runs matching a pattern
+python compare_results.py "data/output/test_*/"
+
+# Compare specific directories
+python compare_results.py data/output/baseline/ data/output/high_eta/
+
+# Compare multiple patterns
+python compare_results.py "data/output/alpha_*/" "data/output/rho_*/"
+```
+
+#### Comparison Outputs
+
+The tool creates a timestamped directory `data/output/comparison_YYYYMMDD-HHMMSS/` containing:
+
+1. **`comparison_summary.xlsx`** - Excel workbook with multi-sheet comparison:
+   - Sheet 1: "Directories" - list of all compared directories with case names
+   - Sheet 2: "Objective" - objective values by iteration for each case
+   - Sheet 3: "Evaluations" - function evaluation counts
+   - Sheet 4: "Elapsed Time (s)" - computation time (if available)
+   - Sheet 5: "Termination Status" - optimization termination reasons
+   - Cases appear as columns, iterations as rows
+
+2. **`comparison_plots.pdf`** - PDF report with visualizations:
+   - Page 1: Summary scatter plots (objective, time, evaluations)
+   - Pages 2+: Time series overlays for all model variables (26 variables, 6 per page)
+   - 16:9 landscape format optimized for screen viewing
+   - Multi-line plots show different cases in different colors
+
+#### What Gets Compared
+
+The tool compares data from two sources:
+
+1. **`optimization_summary.csv`** - Optimization performance metrics:
+   - Required in each result directory
+   - Contains iteration-by-iteration optimization statistics
+
+2. **`results.csv`** - Full model time series (optional):
+   - If present, adds detailed time series comparisons to PDF
+   - Includes all 26 model variables (economic, climate, inequality, etc.)
+   - If missing, only optimization summary is compared
+
+#### Example Workflow
+
+```bash
+# Run parameter sweep
+python run_optimization.py config_baseline.json --scalar_parameters.eta 0.5 --run_name eta_0.5
+python run_optimization.py config_baseline.json --scalar_parameters.eta 1.0 --run_name eta_1.0
+python run_optimization.py config_baseline.json --scalar_parameters.eta 1.5 --run_name eta_1.5
+
+# Compare results (creates data/output/comparison_YYYYMMDD-HHMMSS/)
+python compare_results.py "data/output/eta_*/"
+
+# View outputs (use actual timestamp from comparison output)
+cd data/output/comparison_YYYYMMDD-HHMMSS/
+open comparison_summary.xlsx
+open comparison_plots.pdf
+```
+
+This workflow enables systematic comparison of how model results depend on parameter choices, facilitating sensitivity analysis and scenario comparison.
 
 ## Time Integration
 
@@ -1696,8 +1772,13 @@ coin_equality/
 ├── income_distribution.py             # Core income distribution functions
 ├── economic_model.py                  # Economic production and tendency calculations
 ├── parameters.py                      # Parameter definitions and configuration loading
+├── optimization.py                    # Optimization framework with iterative refinement
 ├── output.py                          # Output generation (CSV and PDF)
-├── test_integration.py                # Test script demonstrating complete workflow
+├── test_integration.py                # Test script for forward integration
+├── run_optimization.py                # Main script for running optimizations
+├── compare_results.py                 # Compare multiple optimization runs
+├── comparison_utils.py                # Utilities for multi-run comparison
+├── visualization_utils.py             # Unified visualization functions
 ├── config_baseline.json               # Baseline scenario configuration
 ├── config_high_inequality.json        # High inequality scenario configuration
 ├── data/output/                       # Output directory (timestamped subdirectories)

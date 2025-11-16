@@ -1388,11 +1388,11 @@ class UtilityOptimizer:
             print(f"  Status: {time_opt_result['termination_name']}")
             print(f"\n  Optimized control points (time, f_value):")
             for pt in time_opt_result['control_points']:
-                print(f"    {pt}")
+                print(f"    ({float(pt[0])}, {float(pt[1])})")
             if 's_control_points' in time_opt_result and time_opt_result['s_control_points'] is not None:
                 print(f"\n  Optimized s control points (time, s_value):")
                 for pt in time_opt_result['s_control_points']:
-                    print(f"    {pt}")
+                    print(f"    ({float(pt[0])}, {float(pt[1])})")
             sys.stdout.flush()
 
         result = {
