@@ -1275,24 +1275,47 @@ The optimizer supports both derivative-free and gradient-based algorithms. Gradi
 
 The algorithm list length must exactly match `optimization_iterations`. This enables progressive refinement strategies where early iterations explore broadly and later iterations refine with gradient information.
 
+#### Tested Algorithms
+
+The following algorithms have been tested with the COIN_equality model:
+
+**✅ Derivative-Free Algorithms (Recommended)**
+- **LN_SBPLX** - Primary recommendation, fast and robust
+- **LN_BOBYQA** - Good alternative
+- **LN_COBYLA** - Handles nonlinear constraints
+- **LN_NELDERMEAD** - Classic simplex method
+
+**✅ Gradient-Based Algorithms (Working)**
+- **LD_SLSQP** - Sequential Quadratic Programming, recommended for gradient-based optimization
+- **LD_MMA** - Method of Moving Asymptotes, robust alternative
+
+**❌ Known Issues**
+- **LD_LBFGS** - Runtime errors due to numerical instability with this problem structure. Use LD_SLSQP instead.
+
+**Untested**
+- **LD_CCSAQ**, **LD_VAR1**, **LD_VAR2** - May work but not yet tested
+- **GN_ISRES**, **GN_DIRECT_L** - Global optimizers, expect much longer runtime
+
 #### Algorithm Categories
 
 **LN_\* (Local, No derivatives):** LN_SBPLX, LN_BOBYQA, LN_COBYLA, LN_NELDERMEAD
 - Fast, robust for noisy objectives
 - No gradient computation overhead
 - Recommended for early iterations and general use
+- **Primary recommendation:** LN_SBPLX
 
-**LD_\* (Local, Derivative-based):** LD_SLSQP, LD_MMA, LD_LBFGS, LD_CCSAQ
+**LD_\* (Local, Derivative-based):** LD_SLSQP, LD_MMA
 - Uses numerical gradients via finite differences
 - Requires N+1 objective evaluations per gradient (N = number of parameters)
 - Better convergence for smooth objectives
 - Recommended for final polishing after derivative-free convergence
+- **Primary recommendation:** LD_SLSQP
 
 **GN_\* (Global, No derivatives):** GN_ISRES, GN_DIRECT_L
 - Explores parameter space broadly
 - Good for avoiding local minima
 - Slower convergence
-- Recommended for first iteration when starting from poor initial guess
+- Use only for first iteration when starting from poor initial guess
 
 #### Progressive Refinement Strategy
 
@@ -1316,7 +1339,7 @@ Gradient-based algorithms compute gradients numerically using forward finite dif
 ∂f/∂x[i] ≈ (f(x + ε·e[i]) - f(x)) / ε
 ```
 
-where ε = 1e-10 (LOOSE_EPSILON) and e[i] is the i-th unit vector.
+where ε = 1e-6 (LOOSER_EPSILON) and e[i] is the i-th unit vector.
 
 **Cost:** N+1 objective evaluations per gradient, where N is the total number of control parameters (n_f_points + n_s_points in dual mode).
 

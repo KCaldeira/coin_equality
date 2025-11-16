@@ -7,6 +7,7 @@ and optimization using NLopt to maximize discounted aggregate utility.
 
 import numpy as np
 import nlopt
+import sys
 import time
 from scipy.interpolate import PchipInterpolator
 from economic_model import integrate_model
@@ -76,17 +77,19 @@ def calculate_chebyshev_times(n_points, t_start, t_end, scaling_power, dt):
     Algorithm:
     1. Generate normalized Chebyshev-like nodes: u[k] = (1 - cos(k*π/(N-1))) / 2
        for k = 0, 1, ..., N-1
-    2. Apply power transformation: u_scaled[k] = u[k]^scaling_power
-    3. Map to time interval: t[k] = t_start + (t_end - t_start) * u_scaled[k]
-    4. Enforce minimum spacing: t[k] = clip(t[k], t_start + k*dt, t_end - (N-1-k)*dt)
+    2. Calculate maximum scaling power that ensures x[1] ≥ t_start + dt:
+       max_scaling_power = log(dt / (t_end - t_start)) / log(u[1])
+    3. Use effective_scaling_power = min(scaling_power, max_scaling_power)
+    4. Apply power transformation: u_scaled[k] = u[k]^effective_scaling_power
+    5. Map to time interval: t[k] = t_start + (t_end - t_start) * u_scaled[k]
 
-    The minimum spacing constraint ensures:
-    - Point k is at least k*dt from t_start
-    - Point k is at least (N-1-k)*dt from t_end
-    - Consecutive points are at least dt apart
+    The maximum scaling power constraint ensures:
+    - The second point (k=1) is at least dt from t_start
+    - All subsequent points maintain proper Chebyshev spacing
+    - No artificial clipping that distorts the distribution
 
     This prevents numerical issues from having control points closer together
-    than the integration time step.
+    than the integration time step while preserving the Chebyshev distribution shape.
 
     Examples
     --------
@@ -103,23 +106,27 @@ def calculate_chebyshev_times(n_points, t_start, t_end, scaling_power, dt):
     # Transformed Chebyshev nodes mapped to [0, 1]
     u = (1 - np.cos(k_values * np.pi / (N - 1))) / 2
 
-    # Apply power transformation
-    u_scaled = u ** scaling_power
+    # Calculate maximum scaling power that ensures x[1] >= t_start + dt
+    # From: t_start + (t_end - t_start) * u[1]^scaling_power >= t_start + dt
+    # We get: scaling_power <= log(dt / (t_end - t_start)) / log(u[1])
+    u_1 = u[1]  # Second point's normalized position
+    normalized_dt = dt / (t_end - t_start)
+    max_scaling_power = np.log(normalized_dt) / np.log(u_1)
+
+    # Use the minimum of requested scaling_power and the constraint
+    effective_scaling_power = min(scaling_power, max_scaling_power)
+
+    # Apply power transformation with effective scaling
+    u_scaled = u ** effective_scaling_power
 
     # Map to [t_start, t_end]
     times = t_start + (t_end - t_start) * u_scaled
-
-    # Enforce minimum spacing constraint
-    # Point k must be at least k*dt from t_start and (N-1-k)*dt from t_end
-    lower_bounds = t_start + k_values * dt
-    upper_bounds = t_end - (N - 1 - k_values) * dt
-    times = np.clip(times, lower_bounds, upper_bounds)
 
     # Ensure exact endpoints (handle floating point precision)
     times[0] = t_start
     times[-1] = t_end
 
-    return times
+    return times, effective_scaling_power
 
 
 def interpolate_to_new_grid(old_times, old_values, new_times):
@@ -746,6 +753,11 @@ class UtilityOptimizer:
         opt.set_max_objective(objective_wrapper)
         opt.set_maxeval(max_evaluations)
 
+        # For LD_LBFGS, set vector storage (number of corrections to store)
+        # Default is often too small; use larger value for better approximation
+        if algorithm == 'LD_LBFGS':
+            opt.set_vector_storage(20)
+
         if ftol_rel is not None:
             opt.set_ftol_rel(ftol_rel)
         if ftol_abs is not None:
@@ -761,9 +773,29 @@ class UtilityOptimizer:
         # Ensure x0 is within bounds (clip to bounds to handle floating point precision issues)
         x0 = np.clip(x0, lower_bounds, upper_bounds)
 
-        optimal_x = opt.optimize(x0)
-        optimal_f_val = opt.last_optimum_value()
-        termination_code = opt.last_optimize_result()
+        # For gradient-based algorithms, test the gradient computation at initial point
+        if algorithm.startswith('LD_') or algorithm.startswith('GD_'):
+            print(f"\n  Testing gradient computation at initial point...")
+            test_grad = np.zeros(len(x0))
+            test_obj = objective_wrapper(x0, test_grad)
+            print(f"  Initial objective value (scaled): {test_obj:.6e}")
+            print(f"  Initial gradient norm: {np.linalg.norm(test_grad):.6e}")
+            print(f"  Gradient min: {np.min(test_grad):.6e}, max: {np.max(test_grad):.6e}")
+            if not np.all(np.isfinite(test_grad)):
+                print(f"  WARNING: {np.sum(~np.isfinite(test_grad))} non-finite gradient components!")
+
+        try:
+            optimal_x = opt.optimize(x0)
+            optimal_f_val = opt.last_optimum_value()
+            termination_code = opt.last_optimize_result()
+        except Exception as e:
+            print(f"\n  ERROR during optimization:")
+            print(f"    Exception type: {type(e).__name__}")
+            print(f"    Exception message: {e}")
+            print(f"    Algorithm: {algorithm}")
+            print(f"    Initial guess: {x0}")
+            print(f"    Bounds: f=[{bounds_f[0]}, {bounds_f[1]}], s=[{bounds_s[0]}, {bounds_s[1]}]")
+            raise
 
         termination_names = {
             1: 'SUCCESS',
@@ -1189,7 +1221,7 @@ class UtilityOptimizer:
 
             # Calculate f control points
             n_points_f = round(1 + (n_points_initial - 1) * refinement_base_f**(iteration - 1))
-            f_control_times = calculate_chebyshev_times(
+            f_control_times, f_effective_scaling = calculate_chebyshev_times(
                 n_points_f,
                 self.base_config.integration_params.t_start,
                 self.base_config.integration_params.t_end,
@@ -1207,9 +1239,10 @@ class UtilityOptimizer:
             iteration_f_control_grids.append(f_control_times.copy())
 
             # Calculate s control points (if optimizing both f and s)
+            s_effective_scaling = None
             if optimize_f_and_s:
                 n_points_s = round(1 + (n_points_initial_s - 1) * refinement_base_s**(iteration - 1))
-                s_control_times = calculate_chebyshev_times(
+                s_control_times, s_effective_scaling = calculate_chebyshev_times(
                     n_points_s,
                     self.base_config.integration_params.t_start,
                     self.base_config.integration_params.t_end,
@@ -1233,16 +1266,21 @@ class UtilityOptimizer:
             if requires_gradient(iteration_algorithm):
                 print(f"    (gradient-based, using numerical derivatives)")
 
+            # Print effective scaling power (may be constrained by minimum spacing)
+            requested_scaling = self.base_config.optimization_params.chebyshev_scaling_power
+            if f_effective_scaling < requested_scaling - 1e-10:
+                print(f"  Chebyshev scaling: {requested_scaling:.3f} (requested) → {f_effective_scaling:.3f} (effective, constrained by dt)")
+            else:
+                print(f"  Chebyshev scaling: {f_effective_scaling:.3f}")
+
             print(f"\n  f (abatement fraction) - OPTIMIZED:")
             print(f"    Control points: {n_points_f}")
             print(f"    Time points: {f_control_times}")
-            print(f"    Initial values: {f_initial_guess}")
 
             if optimize_f_and_s:
                 print(f"\n  s (savings rate) - OPTIMIZED:")
                 print(f"    Control points: {n_points_s}")
                 print(f"    Time points: {s_control_times}")
-                print(f"    Initial values: {s_initial_guess}")
             print(f"{'=' * 80}\n")
 
             # Run optimization with timing
@@ -1295,6 +1333,7 @@ class UtilityOptimizer:
             print(f"\n  Optimized f values: {opt_result['optimal_values']}")
             if optimize_f_and_s:
                 print(f"  Optimized s values: {opt_result['s_optimal_values']}")
+            sys.stdout.flush()
 
         final_result = iteration_history[-1]
 
@@ -1354,6 +1393,7 @@ class UtilityOptimizer:
                 print(f"\n  Optimized s control points (time, s_value):")
                 for pt in time_opt_result['s_control_points']:
                     print(f"    {pt}")
+            sys.stdout.flush()
 
         result = {
             'optimal_values': final_result['optimal_values'],

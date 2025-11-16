@@ -22,8 +22,8 @@ EPSILON = 1e-12
 # Used for:
 # - Convergence criterion in y_eff iterative solver
 # - Default value for xtol_abs in optimization (control parameter convergence)
-# Provides practical precision (1e-10 absolute) without requiring machine precision
-LOOSE_EPSILON = 1e-10
+# Provides practical precision (1e-8 absolute) without requiring machine precision
+LOOSE_EPSILON = 1e-8
 
 # Even looser epsilon for numerical gradient computation via finite differences
 # Used for:
