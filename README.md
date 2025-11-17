@@ -1123,17 +1123,25 @@ The tool creates a timestamped directory `data/output/comparison_YYYYMMDD-HHMMSS
    - Sheet 3: "Evaluations" - function evaluation counts
    - Sheet 4: "Elapsed Time (s)" - computation time (if available)
    - Sheet 5: "Termination Status" - optimization termination reasons
+   - Sheets 6+: "Iter N f(t)" - f control points for each iteration
+     - Shows optimal f(t) trajectory (abatement allocation) at each iteration
+     - Time in column A, f values for each case in subsequent columns
+     - Allows comparing how the optimal control evolved across iterations
+   - Additional sheets: "Iter N s(t)" - s control points (for dual optimization cases)
+     - Shows optimal s(t) trajectory (savings rate) at each iteration
+     - Only included if any case optimizes both f and s
    - Cases appear as columns, iterations as rows
 
 2. **`results_comparison_summary.xlsx`** - Excel workbook with time series results:
    - Sheet 1: "Directories" - list of all compared directories
-   - Sheets 2-26: One sheet per variable (25 model variables)
+   - Sheets 2-27: One sheet per variable (26 model variables)
    - Each sheet has time in column A, one column per case for that variable
    - Variables match plots in PDF: economic, climate, abatement, inequality, and utility metrics
+   - Includes Gini_climate: post-climate-damage inequality (before redistribution)
 
 3. **`comparison_plots.pdf`** - PDF report with visualizations:
    - Page 1: Summary scatter plots (objective, time, evaluations)
-   - Pages 2+: Time series overlays for all model variables (25 variables)
+   - Pages 2+: Time series overlays for all model variables (26 variables)
    - 16:9 landscape format optimized for screen viewing
    - Multi-line plots show different cases in different colors
    - For multi-case comparisons: unified legend in top-left position of each page (5 plots per page)

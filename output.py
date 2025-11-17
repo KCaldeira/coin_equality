@@ -21,6 +21,7 @@ VARIABLE_METADATA = {
     'E': {'description': 'Actual Emissions', 'units': 'tCO₂/yr', 'group': 'climate'},
     'Ecum': {'description': 'Cumulative Emissions', 'units': 'tCO₂', 'group': 'climate'},
     'G_eff': {'description': 'Effective Gini Index', 'units': '', 'group': 'inequality'},
+    'Gini_climate': {'description': 'Post-Climate-Damage Gini', 'units': '', 'group': 'inequality'},
     'K': {'description': 'Capital Stock', 'units': '$', 'group': 'economic'},
     'L': {'description': 'Population', 'units': 'people', 'group': 'economic'},
     'Lambda': {'description': 'Abatement Cost Fraction', 'units': '', 'group': 'abatement'},
@@ -50,7 +51,7 @@ VARIABLE_GROUPS = {
         {'type': 'combined', 'title': 'Control Variables', 'variables': ['f', 's'], 'units': 'fraction'},
         {'type': 'single', 'variables': ['mu']},
         {'type': 'combined', 'title': 'Economic Impact Fractions', 'variables': ['Omega', 'Lambda'], 'units': 'fraction'},
-        {'type': 'single', 'variables': ['G_eff']},
+        {'type': 'combined', 'title': 'Inequality Measures', 'variables': ['Gini', 'Gini_climate', 'G_eff'], 'units': ''},
         {'type': 'single', 'variables': ['U']}
     ],
     'dollar_variables': [

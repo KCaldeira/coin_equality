@@ -138,7 +138,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             n_iterations += 1
 
             # Calculate climate damage using current income estimate
-            # Uses params: psi1, psi2, y_damage_halfsat, fract_gdp
+            # Uses params: psi1, psi2, y_damage_halfsat
             Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
                 delta_T, Gini, y_eff_prev, params
             )

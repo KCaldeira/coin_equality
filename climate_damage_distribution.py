@@ -56,7 +56,6 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
         - 'psi1': linear damage coefficient (°C⁻¹)
         - 'psi2': quadratic damage coefficient (°C⁻²)
         - 'y_damage_halfsat': income half-saturation constant ($)
-        - 'fract_gdp': optional, fraction of GDP redistributed (default 0)
 
     Returns
     -------
@@ -75,14 +74,13 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     psi1 = params['psi1']
     psi2 = params['psi2']
     y_half = params['y_damage_halfsat']
-    fract_gdp = params.get('fract_gdp', 0)
 
     # Quadratic damage response (Barrage & Nordhaus, 2023)
     omega_max = psi1 * delta_T + psi2 * (delta_T ** 2)
     omega_max = min(omega_max, 1.0 - EPSILON)
 
-    # Uniform damage special cases
-    if y_half > INVERSE_EPSILON or fract_gdp >= 1:
+    # Uniform damage special case: large y_half means damage is uniform across income levels
+    if y_half > INVERSE_EPSILON:
         return omega_max, Gini_current
 
     # Convert Gini → Pareto parameter

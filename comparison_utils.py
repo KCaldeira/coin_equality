@@ -159,6 +159,96 @@ def load_optimization_summaries(directories):
     return data
 
 
+def load_control_points(directories):
+    """
+    Load control points for each iteration from optimization_summary.csv files.
+
+    Parameters
+    ----------
+    directories : list of Path
+        Result directories
+
+    Returns
+    -------
+    tuple
+        (f_data, s_data) where each is:
+        {case_name: {iteration: pd.DataFrame(columns=['t', 'f' or 's']), ...}, ...}
+        Nested dicts with iteration-specific control point DataFrames for each case.
+
+    Examples
+    --------
+    >>> dirs = [Path('results/baseline'), Path('results/test_010')]
+    >>> f_data, s_data = load_control_points(dirs)
+    >>> f_data['baseline'][1]  # f control points for iteration 1
+       t      f
+    0  0.0  0.50
+    1  400.0  0.50
+    """
+    f_data = {}
+    s_data = {}
+
+    for directory in directories:
+        case_name = generate_case_name(directory)
+        csv_path = directory / 'optimization_summary.csv'
+
+        with open(csv_path, 'r') as f:
+            lines = f.readlines()
+
+        case_f_iterations = {}
+        case_s_iterations = {}
+
+        # Find all "Iteration N Control Points (f):" and "Control Points (s):" sections
+        for i, line in enumerate(lines):
+            is_f = 'Control Points (f):' in line
+            is_s = 'Control Points (s):' in line
+
+            if is_f or is_s:
+                # Extract iteration number from line like "Iteration 1 Control Points (f):"
+                parts = line.split()
+                if 'Iteration' in parts:
+                    iter_idx = parts.index('Iteration') + 1
+                    if iter_idx < len(parts):
+                        iteration_num = int(parts[iter_idx])
+                    else:
+                        continue
+                else:
+                    continue
+
+                # Determine variable name to parse
+                var_name = 'f' if is_f else 's'
+
+                # Parse control points - format: "  t=XXX.X yr: f=Y.YYYYYY" or "  t=XXX.X yr: s=Y.YYYYYY"
+                control_points = []
+                j = i + 1
+                while j < len(lines):
+                    cp_line = lines[j].strip()
+                    if not cp_line or 'Iteration' in cp_line or 'Control Points' in cp_line:
+                        break
+                    # Parse "t=XXX.X yr: {var}=Y.YYYYYY"
+                    if 't=' in cp_line and f'{var_name}=' in cp_line:
+                        try:
+                            t_part = cp_line.split('t=')[1].split('yr:')[0].strip()
+                            val_part = cp_line.split(f'{var_name}=')[1].strip()
+                            t_val = float(t_part)
+                            val = float(val_part)
+                            control_points.append({'t': t_val, var_name: val})
+                        except (ValueError, IndexError):
+                            pass
+                    j += 1
+
+                if control_points:
+                    df = pd.DataFrame(control_points)
+                    if is_f:
+                        case_f_iterations[iteration_num] = df
+                    else:
+                        case_s_iterations[iteration_num] = df
+
+        f_data[case_name] = case_f_iterations
+        s_data[case_name] = case_s_iterations
+
+    return f_data, s_data
+
+
 def load_results_csvs(directories):
     """
     Load results.csv from multiple directories.
@@ -225,13 +315,86 @@ def create_directories_sheet(wb, directories):
         ws.cell(row_idx, 2, str(directory))
 
 
+def create_control_point_sheets(wb, control_points_data, var_name):
+    """
+    Create sheets showing control points for each iteration across all cases.
+
+    Parameters
+    ----------
+    wb : openpyxl.Workbook
+        Workbook to add sheets to
+    control_points_data : dict
+        {case_name: {iteration: DataFrame(columns=['t', var_name]), ...}, ...}
+    var_name : str
+        Variable name ('f' or 's')
+    """
+    if not control_points_data:
+        return
+
+    # Find all unique iterations across all cases
+    all_iterations = set()
+    for case_iters in control_points_data.values():
+        all_iterations.update(case_iters.keys())
+
+    if not all_iterations:
+        return
+
+    # Create a sheet for each iteration
+    for iteration in sorted(all_iterations):
+        sheet_name = f'Iter {iteration} {var_name}(t)'
+        ws = wb.create_sheet(sheet_name)
+
+        # Header row
+        ws['A1'] = 'Time (years)'
+        ws['A1'].font = Font(bold=True)
+        ws['A1'].fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+
+        # Add case names as column headers
+        case_names = []
+        for col_idx, case_name in enumerate(sorted(control_points_data.keys()), start=2):
+            if iteration in control_points_data[case_name]:
+                case_names.append((col_idx, case_name))
+                cell = ws.cell(1, col_idx, case_name)
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+                cell.alignment = Alignment(horizontal='center')
+
+        # Collect all unique time points for this iteration
+        time_points = set()
+        for case_name, case_iters in control_points_data.items():
+            if iteration in case_iters:
+                df = case_iters[iteration]
+                time_points.update(df['t'].values)
+
+        if not time_points:
+            continue
+
+        # Sort time points
+        sorted_times = sorted(time_points)
+
+        # Write data rows
+        for row_idx, t_val in enumerate(sorted_times, start=2):
+            ws.cell(row_idx, 1, t_val)
+
+            # For each case, write value at this time point (if exists)
+            for col_idx, case_name in case_names:
+                if iteration in control_points_data[case_name]:
+                    df = control_points_data[case_name][iteration]
+                    # Find value at this time
+                    matching_rows = df[df['t'] == t_val]
+                    if not matching_rows.empty:
+                        val = matching_rows.iloc[0][var_name]
+                        cell = ws.cell(row_idx, col_idx, val)
+                        cell.number_format = '0.000000'  # 6 decimal places
+
+
 def create_comparison_xlsx(optimization_data, directories, output_path):
     """
     Create Excel workbook comparing optimization summaries across cases.
 
     Creates multi-sheet workbook with one sheet per metric (Objective,
-    Evaluations, Elapsed Time, Termination Status). Cases are columns,
-    iterations are rows.
+    Evaluations, Elapsed Time, Termination Status) plus control point sheets
+    for each iteration. Cases are columns, iterations are rows.
 
     Parameters
     ----------
@@ -250,10 +413,17 @@ def create_comparison_xlsx(optimization_data, directories, output_path):
     - Sheet 3: "Evaluations" - function evaluation counts
     - Sheet 4: "Elapsed Time (s)" - computation time (if available)
     - Sheet 5: "Termination Status" - optimization termination reasons
+    - Sheets 6+: "Iter N f(t)" - f control points for each iteration
+    - Additional sheets: "Iter N s(t)" - s control points (if dual optimization)
 
     Each metric sheet has:
     - Column A: Iteration number
     - Columns B+: One column per case
+    - Header row with case names
+
+    Each control point sheet has:
+    - Column A: Time (years)
+    - Columns B+: f or s values for each case at each time point
     - Header row with case names
 
     Examples
@@ -267,19 +437,30 @@ def create_comparison_xlsx(optimization_data, directories, output_path):
     # Sheet 1: List of directories
     create_directories_sheet(wb, directories)
 
-    # Define comparison sheets with column name and number format
+    # Load control points data (f and s)
+    f_control_points, s_control_points = load_control_points(directories)
+
+    # Define comparison sheets with column name and Excel number format
+    # Excel number format codes (not Python format strings)
     comparison_specs = [
-        ('Objective', 'objective', '{:.6e}'),
-        ('Evaluations', 'n_evaluations', '{:.0f}'),
-        ('Termination Status', 'termination_status', '{}')
+        ('Objective', 'objective', '0.000000E+00'),       # Scientific notation, 6 decimals
+        ('Evaluations', 'n_evaluations', '0'),            # Integer
+        ('Termination Status', 'termination_status', None)  # Text, no format
     ]
 
     # Add elapsed_time sheet only if data contains it
     if optimization_data and any('elapsed_time' in df.columns for df in optimization_data.values()):
-        comparison_specs.insert(2, ('Elapsed Time (s)', 'elapsed_time', '{:.2f}'))
+        comparison_specs.insert(2, ('Elapsed Time (s)', 'elapsed_time', '0.00'))  # 2 decimal places
 
     for sheet_name, column_name, number_format in comparison_specs:
         create_comparison_sheet(wb, sheet_name, column_name, optimization_data, number_format)
+
+    # Add control point sheets for f (abatement allocation)
+    create_control_point_sheets(wb, f_control_points, 'f')
+
+    # Add control point sheets for s (savings rate) if any case has s optimization
+    if any(case_s_iters for case_s_iters in s_control_points.values()):
+        create_control_point_sheets(wb, s_control_points, 's')
 
     # Auto-size columns
     for sheet in wb.worksheets:
@@ -310,8 +491,8 @@ def create_comparison_sheet(wb, sheet_name, column_name, data, number_format):
         Column name from optimization_summary.csv to extract
     data : dict
         {case_name: optimization_summary_df, ...}
-    number_format : str
-        Format string for cell values (e.g., '{:.6e}', '{:.2f}')
+    number_format : str or None
+        Excel number format code (e.g., '0.00E+00', '0.00') or None for no formatting
     """
     ws = wb.create_sheet(sheet_name)
 
@@ -342,9 +523,9 @@ def create_comparison_sheet(wb, sheet_name, column_name, data, number_format):
 
                 if isinstance(value, (int, float)):
                     cell.value = value
-                    # Apply number format if not default
-                    if number_format != '{}':
-                        cell.number_format = number_format.replace('{:', '').replace('}', '')
+                    # Apply Excel number format if provided
+                    if number_format is not None:
+                        cell.number_format = number_format
                 else:
                     cell.value = str(value)
 
@@ -391,7 +572,7 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
     -----
     Workbook structure:
     - Sheet 1: "Directories" - list of all compared directories
-    - Subsequent sheets: One sheet per variable (25 total)
+    - Subsequent sheets: One sheet per variable (26 total)
       - Column A: Time (years)
       - Columns B+: One column per case with variable values
 
@@ -399,7 +580,7 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
     Economic: y, y_eff, K, Consumption, Savings, s, Y_gross, Y_net
     Climate: delta_T, E, Ecum
     Abatement/Damage: f, mu, Lambda, AbateCost, Omega, Climate_Damage
-    Inequality/Utility: Gini, G_eff, U, discounted_utility
+    Inequality/Utility: Gini, Gini_climate, G_eff, U, discounted_utility
     Exogenous: A, L, sigma, theta1
     """
     if not results_data:
@@ -427,6 +608,7 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
         ('Omega', 'Climate Damage (% of Output)'),
         ('Climate_Damage', 'Total Climate Damage'),
         ('Gini', 'Gini Index Before Redistribution'),
+        ('Gini_climate', 'Post-Climate-Damage Gini'),
         ('G_eff', 'Effective Gini Index'),
         ('U', 'Mean Utility Per Capita'),
         ('discounted_utility', 'Discounted Utility Per Capita'),
