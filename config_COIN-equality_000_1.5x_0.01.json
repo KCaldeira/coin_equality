@@ -1,5 +1,5 @@
 {
-    "run_name": "COIN-equality_000_1.5x",
+    "run_name": "COIN-equality_000_1.5x_0.01",
     "description": "Baseline scenario using GN_ISRES",
     "scalar_parameters": {
         "alpha": 0.3,
@@ -24,7 +24,7 @@
         "_Gini_fract": "Fraction of effective Gini change that occurs as instantaneous step (0=no step change, 1=full step change) 0.1 means 10% of total change is step change",
         "Gini_restore": 0.0,
         "_Gini_restore": "Rate at which Gini restores to initial value (yr^-1, 0=no restoration, positive=restoration to Gini_initial) 0.1 means 10% per year restoration rate",
-        "fract_gdp": 1.0,
+        "fract_gdp": 0.01,
         "_fract_gdp": "Fraction of GDP available for redistribution and abatement, >= 1.0 disables redistribution and places no bounds on abatement",
         "theta2": 2.6,
         "_theta2": "Abatement cost exponent",

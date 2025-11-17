@@ -40,13 +40,13 @@ def clean_column_names(df):
     return df
 
 
-def plot_timeseries(ax, case_data, variable, ylabel, title):
+def plot_timeseries(ax, case_data, variable, ylabel, title, show_legend=False):
     """
     Create time series plot on given axes (unified function for single/multi-run).
 
     Works for both single-run and multi-run cases with consistent formatting.
     For single case: plots one line without legend.
-    For multiple cases: plots multiple lines with legend showing case names.
+    For multiple cases: plots multiple lines (legend controlled by show_legend).
 
     Parameters
     ----------
@@ -62,11 +62,13 @@ def plot_timeseries(ax, case_data, variable, ylabel, title):
         Label for y-axis
     title : str
         Plot title
+    show_legend : bool, optional
+        If True, show legend on this plot (default: False)
 
     Notes
     -----
     - Uses tab10 colormap for consistent colors across plots
-    - Adds legend only for multi-case plots
+    - Legend display controlled by show_legend parameter
     - Gracefully handles missing variables (skips if not in DataFrame)
     """
     colors = plt.cm.tab10(np.arange(10))
@@ -76,7 +78,7 @@ def plot_timeseries(ax, case_data, variable, ylabel, title):
             ax.plot(
                 df['t'],
                 df[variable],
-                label=case_name if len(case_data) > 1 else None,
+                label=case_name,
                 linewidth=2,
                 color=colors[idx % 10]
             )
@@ -86,8 +88,38 @@ def plot_timeseries(ax, case_data, variable, ylabel, title):
     ax.set_title(title, fontsize=11, fontweight='bold')
     ax.grid(True, alpha=0.3, linestyle='--')
 
-    if len(case_data) > 1:
+    if show_legend and len(case_data) > 1:
         ax.legend(loc='best', fontsize=8)
+
+
+def create_legend_panel(ax, case_data):
+    """
+    Create a dedicated legend panel showing all case names and colors.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axes object to use for legend
+    case_data : dict
+        Dictionary mapping case names to DataFrames
+    """
+    colors = plt.cm.tab10(np.arange(10))
+
+    # Turn off axis decorations
+    ax.axis('off')
+
+    # Create dummy lines for legend
+    handles = []
+    labels = []
+    for idx, case_name in enumerate(case_data.keys()):
+        line = plt.Line2D([0], [0], color=colors[idx % 10], linewidth=3)
+        handles.append(line)
+        labels.append(case_name)
+
+    # Create legend in center of panel
+    ax.legend(handles, labels, loc='center', fontsize=12, frameon=True,
+              title='Cases', title_fontsize=14)
+    ax.set_title('Legend', fontsize=11, fontweight='bold', pad=10)
 
 
 def create_results_report_pdf(case_data, output_pdf):
@@ -155,30 +187,43 @@ def create_results_report_pdf(case_data, output_pdf):
         ('theta1', 'Marginal abatement cost ($/tCO2)', 'Marginal Abatement Cost'),
     ]
 
+    # Determine plots per page and starting index
+    is_multi_case = len(case_data) > 1
+    plots_per_page = 5 if is_multi_case else 6
+    plot_start_idx = 1 if is_multi_case else 0
+
     with PdfPages(output_pdf) as pdf:
-        # Process plots in groups of 6
-        for page_start in range(0, len(variable_specs), 6):
-            page_vars = variable_specs[page_start:page_start + 6]
+        # Process plots in groups
+        for page_start in range(0, len(variable_specs), plots_per_page):
+            page_vars = variable_specs[page_start:page_start + plots_per_page]
 
             # Create 2×3 subplot grid in 16:9 landscape orientation
             fig, axes = plt.subplots(2, 3, figsize=(16, 9))
             fig.suptitle('Results Comparison', fontsize=14, fontweight='bold')
             axes = axes.flatten()
 
+            # For multi-case, use first position for legend
+            if is_multi_case:
+                create_legend_panel(axes[0], case_data)
+                axes_offset = 1
+            else:
+                axes_offset = 0
+
             for idx, (var_name, ylabel, title) in enumerate(page_vars):
+                ax_idx = idx + axes_offset
                 # Check if variable exists in at least one dataset
                 if any(var_name in df.columns for df in case_data.values()):
-                    plot_timeseries(axes[idx], case_data, var_name, ylabel, title)
+                    plot_timeseries(axes[ax_idx], case_data, var_name, ylabel, title)
                 else:
                     # Variable not found - show message
-                    axes[idx].text(0.5, 0.5, f'{var_name}\nnot available',
-                                  ha='center', va='center',
-                                  transform=axes[idx].transAxes,
-                                  fontsize=11, color='gray')
-                    axes[idx].set_title(title, fontsize=11)
+                    axes[ax_idx].text(0.5, 0.5, f'{var_name}\nnot available',
+                                     ha='center', va='center',
+                                     transform=axes[ax_idx].transAxes,
+                                     fontsize=11, color='gray')
+                    axes[ax_idx].set_title(title, fontsize=11)
 
             # Hide any unused subplots on last page
-            for idx in range(len(page_vars), 6):
+            for idx in range(len(page_vars) + axes_offset, 6):
                 axes[idx].axis('off')
 
             plt.tight_layout()
@@ -190,7 +235,9 @@ def create_results_report_pdf(case_data, output_pdf):
 
 def create_objective_scatter_on_axes(ax, optimization_data):
     """
-    Create scatter plot comparing objective values across cases and iterations.
+    Create scatter plot comparing objective improvement across cases and iterations.
+
+    Shows improvement relative to first iteration (iteration N - iteration 1).
 
     Parameters
     ----------
@@ -203,7 +250,8 @@ def create_objective_scatter_on_axes(ax, optimization_data):
     -----
     - Different markers for different iterations (circle, square, triangle, etc.)
     - Cases positioned along x-axis
-    - Objective values on y-axis
+    - Objective improvement (relative to iteration 1) on y-axis
+    - Skips iteration 1 (baseline)
     """
     markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p']
     colors = plt.cm.tab10(np.arange(10))
@@ -211,17 +259,22 @@ def create_objective_scatter_on_axes(ax, optimization_data):
     case_names = list(optimization_data.keys())
     max_iterations = max(len(df) for df in optimization_data.values())
 
-    # Plot each iteration with different markers
-    for iter_idx in range(max_iterations):
-        marker = markers[min(iter_idx, len(markers) - 1)]
+    # Plot each iteration (starting from iteration 2) relative to iteration 1
+    for iter_idx in range(1, max_iterations):  # Skip iteration 0 (index 0), start from iteration 1 (index 1)
+        marker = markers[min(iter_idx - 1, len(markers) - 1)]
 
         x_positions = []
         y_values = []
 
         for case_idx, (case_name, df) in enumerate(optimization_data.items()):
-            if iter_idx < len(df):
+            if iter_idx < len(df) and len(df) > 0:
+                # Calculate improvement: current iteration - first iteration
+                baseline_obj = df.iloc[0]['objective']
+                current_obj = df.iloc[iter_idx]['objective']
+                improvement = current_obj - baseline_obj
+
                 x_positions.append(case_idx)
-                y_values.append(df.iloc[iter_idx]['objective'])
+                y_values.append(improvement)
 
         if x_positions:
             ax.scatter(
@@ -229,19 +282,20 @@ def create_objective_scatter_on_axes(ax, optimization_data):
                 y_values,
                 marker=marker,
                 s=100,
-                label=f'Iteration {iter_idx + 1}',
+                label=f'Iter {iter_idx + 1} - Iter 1',
                 alpha=0.7,
                 edgecolors='black',
                 linewidth=0.5
             )
 
     ax.set_xlabel('Case', fontsize=10)
-    ax.set_ylabel('Objective Value', fontsize=10)
-    ax.set_title('Objective Comparison', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Objective Improvement (vs. Iter 1)', fontsize=10)
+    ax.set_title('Objective Improvement by Iteration', fontsize=11, fontweight='bold')
     ax.set_xticks(range(len(case_names)))
     ax.set_xticklabels(case_names, rotation=45, ha='right', fontsize=8)
     ax.legend(loc='best', fontsize=8)
     ax.grid(True, alpha=0.3, linestyle='--')
+    ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
 
 
 def create_elapsed_time_scatter_on_axes(ax, optimization_data):
@@ -442,29 +496,41 @@ def create_results_report_pdf_to_existing(case_data, pdf):
         ('theta1', 'Marginal abatement cost ($/tCO2)', 'Marginal Abatement Cost'),
     ]
 
-    # Process plots in groups of 6
-    for page_start in range(0, len(variable_specs), 6):
-        page_vars = variable_specs[page_start:page_start + 6]
+    # Determine plots per page and starting index
+    is_multi_case = len(case_data) > 1
+    plots_per_page = 5 if is_multi_case else 6
+
+    # Process plots in groups
+    for page_start in range(0, len(variable_specs), plots_per_page):
+        page_vars = variable_specs[page_start:page_start + plots_per_page]
 
         # Create 2×3 subplot grid in 16:9 landscape orientation
         fig, axes = plt.subplots(2, 3, figsize=(16, 9))
         fig.suptitle('Results Comparison', fontsize=14, fontweight='bold')
         axes = axes.flatten()
 
+        # For multi-case, use first position for legend
+        if is_multi_case:
+            create_legend_panel(axes[0], case_data)
+            axes_offset = 1
+        else:
+            axes_offset = 0
+
         for idx, (var_name, ylabel, title) in enumerate(page_vars):
+            ax_idx = idx + axes_offset
             # Check if variable exists in at least one dataset
             if any(var_name in df.columns for df in case_data.values()):
-                plot_timeseries(axes[idx], case_data, var_name, ylabel, title)
+                plot_timeseries(axes[ax_idx], case_data, var_name, ylabel, title)
             else:
                 # Variable not found - show message
-                axes[idx].text(0.5, 0.5, f'{var_name}\nnot available',
-                              ha='center', va='center',
-                              transform=axes[idx].transAxes,
-                              fontsize=11, color='gray')
-                axes[idx].set_title(title, fontsize=11)
+                axes[ax_idx].text(0.5, 0.5, f'{var_name}\nnot available',
+                                 ha='center', va='center',
+                                 transform=axes[ax_idx].transAxes,
+                                 fontsize=11, color='gray')
+                axes[ax_idx].set_title(title, fontsize=11)
 
         # Hide any unused subplots on last page
-        for idx in range(len(page_vars), 6):
+        for idx in range(len(page_vars) + axes_offset, 6):
             axes[idx].axis('off')
 
         plt.tight_layout()

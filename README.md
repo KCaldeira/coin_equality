@@ -1038,9 +1038,11 @@ The tool creates a timestamped directory `data/output/comparison_YYYYMMDD-HHMMSS
 
 2. **`comparison_plots.pdf`** - PDF report with visualizations:
    - Page 1: Summary scatter plots (objective, time, evaluations)
-   - Pages 2+: Time series overlays for all model variables (26 variables, 6 per page)
+   - Pages 2+: Time series overlays for all model variables (26 variables)
    - 16:9 landscape format optimized for screen viewing
    - Multi-line plots show different cases in different colors
+   - For multi-case comparisons: unified legend in top-left position of each page (5 plots per page)
+   - For single-case: 6 plots per page without legend
 
 #### What Gets Compared
 

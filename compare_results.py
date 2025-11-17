@@ -11,8 +11,9 @@ Arguments:
                        Unlimited number of paths supported
 
 Outputs:
-    comparison_summary.xlsx - Multi-sheet Excel workbook with tabular comparisons
-    comparison_plots.pdf    - PDF report with comparative visualizations
+    optimization_comparison_summary.xlsx - Optimization metrics by iteration
+    results_comparison_summary.xlsx      - Time series results for all variables
+    comparison_plots.pdf                 - PDF report with comparative visualizations
 
 Examples:
     python compare_results.py results/baseline/ results/sensitivity/
@@ -27,7 +28,8 @@ from comparison_utils import (
     discover_result_directories,
     load_optimization_summaries,
     load_results_csvs,
-    create_comparison_xlsx
+    create_comparison_xlsx,
+    create_results_comparison_xlsx
 )
 from visualization_utils import create_comparison_report_pdf
 
@@ -77,10 +79,14 @@ def main():
     output_dir = create_comparison_directory()
     print(f"\nCreating output directory: {output_dir}")
 
-    # Generate XLSX comparison
-    print("\nGenerating Excel comparison workbook...")
-    xlsx_path = output_dir / 'comparison_summary.xlsx'
-    create_comparison_xlsx(optimization_data, directories, xlsx_path)
+    # Generate XLSX comparisons
+    print("\nGenerating optimization comparison workbook...")
+    optimization_xlsx_path = output_dir / 'optimization_comparison_summary.xlsx'
+    create_comparison_xlsx(optimization_data, directories, optimization_xlsx_path)
+
+    print("Generating results comparison workbook...")
+    results_xlsx_path = output_dir / 'results_comparison_summary.xlsx'
+    create_results_comparison_xlsx(results_data, directories, results_xlsx_path)
 
     # Generate PDF comparison report
     print("Generating PDF comparison report...")
@@ -89,9 +95,10 @@ def main():
 
     print("\n" + "="*80)
     print("Comparison complete!")
-    print(f"  Output directory: {output_dir.absolute()}")
-    print(f"  Excel workbook:   {xlsx_path.name}")
-    print(f"  PDF report:       {pdf_path.name}")
+    print(f"  Output directory:      {output_dir.absolute()}")
+    print(f"  Optimization workbook: {optimization_xlsx_path.name}")
+    print(f"  Results workbook:      {results_xlsx_path.name}")
+    print(f"  PDF report:            {pdf_path.name}")
     print("="*80)
 
 

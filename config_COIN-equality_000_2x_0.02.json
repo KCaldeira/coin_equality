@@ -10,7 +10,7 @@
         "_psi1": "Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]",
         "psi2": 0.006934,
         "_psi2": "2x = 0.006934 Quadratic climate damage coefficient (°C⁻²) [2x 0.003467 from Barrage & Nordhaus 2023]",
-        "y_damage_halfsat": 1e+20,
+        "y_damage_halfsat": 1e+4,
         "_y_damage_halfsat": "Income level ($) at which climate damage is half of maximum (lower = more regressive damage). Set very high (e.g., 1e12) for uniform damage",
         "k_climate": 5e-13,
         "_k_climate": "Temperature sensitivity to cumulative  (K/tCO2) 0.5e-12 ~ 1.8 K per 1000 GtC [noe we are in CO2 units]",

@@ -292,6 +292,7 @@ def create_comparison_xlsx(optimization_data, directories, output_path):
             sheet.column_dimensions[column_letter].width = max_length + 2
 
     wb.save(output_path)
+    wb.close()
     print(f"Comparison Excel workbook saved to: {output_path}")
 
 
@@ -346,3 +347,137 @@ def create_comparison_sheet(wb, sheet_name, column_name, data, number_format):
                         cell.number_format = number_format.replace('{:', '').replace('}', '')
                 else:
                     cell.value = str(value)
+
+
+def clean_column_names(df):
+    """
+    Extract simple variable names from CSV headers with format 'var_name, Description, (units)'.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with full column names from results.csv
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with simplified column names (just the variable name)
+    """
+    new_columns = []
+    for col in df.columns:
+        var_name = col.split(',')[0].strip()
+        new_columns.append(var_name)
+    df.columns = new_columns
+    return df
+
+
+def create_results_comparison_xlsx(results_data, directories, output_path):
+    """
+    Create Excel workbook comparing results time series across cases.
+
+    Creates multi-sheet workbook with one sheet per variable. Each sheet has
+    time in column A and one column per case.
+
+    Parameters
+    ----------
+    results_data : dict
+        {case_name: results_df, ...}
+    directories : list of Path
+        List of result directories included in comparison
+    output_path : Path or str
+        Output Excel file path
+
+    Notes
+    -----
+    Workbook structure:
+    - Sheet 1: "Directories" - list of all compared directories
+    - Subsequent sheets: One sheet per variable (25 total)
+      - Column A: Time (years)
+      - Columns B+: One column per case with variable values
+
+    Variable sheets match the plots in comparison_plots.pdf:
+    Economic: y, y_eff, K, Consumption, Savings, s, Y_gross, Y_net
+    Climate: delta_T, E, Ecum
+    Abatement/Damage: f, mu, Lambda, AbateCost, Omega, Climate_Damage
+    Inequality/Utility: Gini, G_eff, U, discounted_utility
+    Exogenous: A, L, sigma, theta1
+    """
+    if not results_data:
+        print("No results data available - skipping results comparison workbook")
+        return
+
+    results_data_cleaned = {name: clean_column_names(df.copy()) for name, df in results_data.items()}
+
+    variable_specs = [
+        ('y', 'Per-Capita Consumption'),
+        ('y_eff', 'Effective Per-Capita Income'),
+        ('K', 'Capital Stock'),
+        ('Consumption', 'Total Consumption'),
+        ('Savings', 'Gross Investment'),
+        ('s', 'Savings Rate'),
+        ('Y_gross', 'Gross Production'),
+        ('Y_net', 'Net Output After Damages & Abatement'),
+        ('delta_T', 'Temperature Change from Pre-Industrial'),
+        ('E', 'CO2 Emissions Rate'),
+        ('Ecum', 'Cumulative CO2 Emissions'),
+        ('f', 'Abatement Allocation Fraction'),
+        ('mu', 'Emissions Abatement Fraction'),
+        ('Lambda', 'Abatement Cost (% of Output)'),
+        ('AbateCost', 'Total Abatement Cost'),
+        ('Omega', 'Climate Damage (% of Output)'),
+        ('Climate_Damage', 'Total Climate Damage'),
+        ('Gini', 'Gini Index Before Redistribution'),
+        ('G_eff', 'Effective Gini Index'),
+        ('U', 'Mean Utility Per Capita'),
+        ('discounted_utility', 'Discounted Utility Per Capita'),
+        ('A', 'Total Factor Productivity'),
+        ('L', 'Population'),
+        ('sigma', 'Carbon Intensity of GDP'),
+        ('theta1', 'Marginal Abatement Cost'),
+    ]
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    create_directories_sheet(wb, directories)
+
+    for var_name, sheet_title in variable_specs:
+        if not any(var_name in df.columns for df in results_data_cleaned.values()):
+            continue
+
+        ws = wb.create_sheet(sheet_title[:31])
+
+        ws['A1'] = 'Time (years)'
+        ws['A1'].font = Font(bold=True)
+        ws['A1'].fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+
+        case_names = list(results_data_cleaned.keys())
+        for col_idx, case_name in enumerate(case_names, start=2):
+            cell = ws.cell(1, col_idx, case_name)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+            cell.alignment = Alignment(horizontal='center')
+
+        representative_df = next(iter(results_data_cleaned.values()))
+        time_values = representative_df['t'].values
+
+        for row_idx, time_val in enumerate(time_values, start=2):
+            ws.cell(row_idx, 1, float(time_val))
+
+            for col_idx, (case_name, df) in enumerate(results_data_cleaned.items(), start=2):
+                if var_name in df.columns:
+                    value = df.iloc[row_idx - 2][var_name]
+                    ws.cell(row_idx, col_idx, float(value))
+
+    for sheet in wb.worksheets:
+        for column in sheet.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            sheet.column_dimensions[column_letter].width = max_length + 2
+
+    wb.save(output_path)
+    wb.close()
+    print(f"Results comparison workbook saved to: {output_path}")
