@@ -28,6 +28,7 @@ A simple-as-possible stylized representation of the tradeoff between investment 
   - [Unit Test for Equation (1.2): Climate Damage](#unit-test-for-equation-12-climate-damage)
   - [Testing the Forward Model](#testing-the-forward-model)
   - [Running Optimizations with Parameter Overrides](#running-optimizations-with-parameter-overrides)
+  - [Running Multiple Optimizations in Parallel](#running-multiple-optimizations-in-parallel)
   - [Comparing Multiple Optimization Results](#comparing-multiple-optimization-results)
 - [Time Integration](#time-integration)
   - [Integration Function](#integration-function)
@@ -900,8 +901,9 @@ The test script provides detailed console output including:
 Each test run creates a timestamped directory:
 ```
 ./data/output/{run_name}_YYYYMMDD-HHMMSS/
-├── results.csv    # Complete time series data (all variables)
-└── plots.pdf      # Multi-page charts organized by variable type
+├── results.csv          # Complete time series data (all variables)
+├── plots.pdf            # Multi-page charts organized by variable type
+└── terminal_output.txt  # Console output from the run
 ```
 
 The PDF contains four organized sections:
@@ -999,6 +1001,93 @@ for alpha in [0.25, 0.30, 0.35, 0.40]:
 - Clear provenance: command documents what changed from baseline
 - Composable: combine multiple overrides in one command
 
+### Running Multiple Optimizations in Parallel
+
+The `run_parallel.py` script enables launching multiple optimization jobs simultaneously, with each job running on its own CPU core. This is ideal for parameter sweeps or running multiple scenarios.
+
+#### Parallel Execution
+
+The script accepts file patterns (with wildcards) for JSON configuration files:
+
+```bash
+python run_parallel.py <pattern1> [pattern2] [pattern3] [...]
+```
+
+**Examples:**
+
+```bash
+# Run all COIN equality configs in parallel
+python run_parallel.py "config_COIN-equality_000*.json"
+
+# Run specific configuration files
+python run_parallel.py config_baseline.json config_sensitivity.json
+
+# Run multiple patterns
+python run_parallel.py "config_COIN*.json" "config_DICE*.json"
+```
+
+#### How It Works
+
+- **Parallel execution**: All matching JSON files are launched simultaneously as separate Python processes
+- **Independent cores**: Each optimization runs on its own CPU core
+- **Terminal output**: Automatically saved to `terminal_output.txt` in each job's output directory
+- **Non-blocking**: The script exits immediately after launching all jobs (does not wait for completion)
+
+#### Monitoring and Controlling Jobs
+
+The output directory and `terminal_output.txt` file are created at the start of each optimization run, allowing you to monitor progress in real-time:
+
+```bash
+# Find the most recent output directory for a run
+ls -lt data/output/<run_name>_* | head -1
+
+# Monitor progress in real-time (updates automatically)
+tail -f data/output/<run_name>_YYYYMMDD-HHMMSS/terminal_output.txt
+
+# View current progress
+cat data/output/<run_name>_YYYYMMDD-HHMMSS/terminal_output.txt
+
+# View running processes
+ps aux | grep run_optimization
+```
+
+**Stopping jobs:**
+
+```bash
+# Kill a specific job by PID
+kill <PID>
+
+# Kill ALL run_optimization.py jobs at once
+pkill -f run_optimization.py
+```
+
+Process IDs (PIDs) are displayed when jobs are launched. The terminal output file updates continuously as the optimization progresses, allowing you to track:
+- Configuration loading and setup
+- Optimization iterations and progress
+- Function evaluations and objective values
+- Final results and file generation
+
+**Note:** The `pkill` command will terminate all running `run_optimization.py` processes, which is useful for stopping an entire parameter sweep but should be used with caution if you have multiple independent jobs running.
+
+#### Typical Workflow
+
+```bash
+# 1. Launch parameter sweep in parallel
+python run_parallel.py "config_sensitivity_*.json"
+
+# 2. Monitor progress
+watch -n 10 'ps aux | grep run_optimization | wc -l'
+
+# 3. After jobs complete, compare results
+python compare_results.py "data/output/sensitivity_*/"
+```
+
+**Benefits:**
+- Fully utilizes multi-core systems
+- No need to wait for sequential completion
+- Terminal output saved for each job
+- Simple command-line interface
+
 ### Comparing Multiple Optimization Results
 
 After running multiple optimizations (e.g., parameter sweeps or scenario comparisons), use the comparison tool to analyze and visualize differences across runs.
@@ -1026,9 +1115,9 @@ python compare_results.py "data/output/alpha_*/" "data/output/rho_*/"
 
 #### Comparison Outputs
 
-The tool creates a timestamped directory `data/output/comparison_YYYYMMDD-HHMMSS/` containing:
+The tool creates a timestamped directory `data/output/comparison_YYYYMMDD-HHMMSS/` containing three files:
 
-1. **`comparison_summary.xlsx`** - Excel workbook with multi-sheet comparison:
+1. **`optimization_comparison_summary.xlsx`** - Excel workbook with optimization metrics:
    - Sheet 1: "Directories" - list of all compared directories with case names
    - Sheet 2: "Objective" - objective values by iteration for each case
    - Sheet 3: "Evaluations" - function evaluation counts
@@ -1036,9 +1125,15 @@ The tool creates a timestamped directory `data/output/comparison_YYYYMMDD-HHMMSS
    - Sheet 5: "Termination Status" - optimization termination reasons
    - Cases appear as columns, iterations as rows
 
-2. **`comparison_plots.pdf`** - PDF report with visualizations:
+2. **`results_comparison_summary.xlsx`** - Excel workbook with time series results:
+   - Sheet 1: "Directories" - list of all compared directories
+   - Sheets 2-26: One sheet per variable (25 model variables)
+   - Each sheet has time in column A, one column per case for that variable
+   - Variables match plots in PDF: economic, climate, abatement, inequality, and utility metrics
+
+3. **`comparison_plots.pdf`** - PDF report with visualizations:
    - Page 1: Summary scatter plots (objective, time, evaluations)
-   - Pages 2+: Time series overlays for all model variables (26 variables)
+   - Pages 2+: Time series overlays for all model variables (25 variables)
    - 16:9 landscape format optimized for screen viewing
    - Multi-line plots show different cases in different colors
    - For multi-case comparisons: unified legend in top-left position of each page (5 plots per page)
@@ -1059,18 +1154,32 @@ The tool compares data from two sources:
 
 #### Example Workflow
 
+**Sequential execution:**
 ```bash
-# Run parameter sweep
+# Run parameter sweep one at a time
 python run_optimization.py config_baseline.json --scalar_parameters.eta 0.5 --run_name eta_0.5
 python run_optimization.py config_baseline.json --scalar_parameters.eta 1.0 --run_name eta_1.0
 python run_optimization.py config_baseline.json --scalar_parameters.eta 1.5 --run_name eta_1.5
 
 # Compare results (creates data/output/comparison_YYYYMMDD-HHMMSS/)
 python compare_results.py "data/output/eta_*/"
+```
+
+**Parallel execution (faster):**
+```bash
+# Create config files for parameter sweep
+# (or use run_parallel.py with existing configs)
+
+# Run all optimizations in parallel
+python run_parallel.py "config_eta_*.json"
+
+# After jobs complete, compare results
+python compare_results.py "data/output/eta_*/"
 
 # View outputs (use actual timestamp from comparison output)
 cd data/output/comparison_YYYYMMDD-HHMMSS/
-open comparison_summary.xlsx
+open optimization_comparison_summary.xlsx
+open results_comparison_summary.xlsx
 open comparison_plots.pdf
 ```
 
@@ -1778,6 +1887,7 @@ coin_equality/
 ├── output.py                          # Output generation (CSV and PDF)
 ├── test_integration.py                # Test script for forward integration
 ├── run_optimization.py                # Main script for running optimizations
+├── run_parallel.py                    # Launch multiple optimizations in parallel
 ├── compare_results.py                 # Compare multiple optimization runs
 ├── comparison_utils.py                # Utilities for multi-run comparison
 ├── visualization_utils.py             # Unified visualization functions

@@ -629,7 +629,7 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
     plt.close(fig)
 
 
-def save_results(results, run_name, plot_short_horizon=None):
+def save_results(results, run_name, plot_short_horizon=None, output_dir=None):
     """
     Save model results to CSV and PDF in timestamped directory.
 
@@ -643,6 +643,8 @@ def save_results(results, run_name, plot_short_horizon=None):
         If provided, creates a second PDF with results up to this time (years).
         Creates both plots_full.pdf and plots_short.pdf.
         If None, creates single plots.pdf with all results.
+    output_dir : str or None
+        If provided, uses this directory for output. If None, creates new timestamped directory.
 
     Returns
     -------
@@ -655,13 +657,14 @@ def save_results(results, run_name, plot_short_horizon=None):
 
     Notes
     -----
-    Creates directory: ./data/output/{run_name}_YYYYMMDD-HHMMSS
+    Creates directory: ./data/output/{run_name}_YYYYMMDD-HHMMSS (if output_dir not provided)
     Writes files:
     - results.csv: all variables in tabular format
     - plots_full.pdf: time series plots for entire integration period
     - plots_short.pdf: time series plots for short horizon (if plot_short_horizon provided)
     """
-    output_dir = create_output_directory(run_name)
+    if output_dir is None:
+        output_dir = create_output_directory(run_name)
     csv_file = write_results_csv(results, output_dir)
 
     output_dict = {

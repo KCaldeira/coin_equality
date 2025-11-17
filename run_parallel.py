@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""
+Run multiple optimization cases in parallel.
+
+Launches run_optimization.py for each JSON configuration file in parallel,
+with each job running on its own core. Terminal output for each job is
+automatically saved to terminal_output.txt in its respective output directory.
+
+Usage:
+    python run_parallel.py <pattern1> [pattern2] [pattern3] [...]
+
+Arguments:
+    pattern1, pattern2, ...: File path patterns or glob patterns for JSON config files
+                             (e.g., "config_COIN-equality_000*.json" or "config_DICE*.json")
+                             Unlimited number of patterns supported
+
+Examples:
+    python run_parallel.py "config_COIN-equality_000*.json"
+    python run_parallel.py config_baseline.json config_sensitivity.json
+    python run_parallel.py "config_COIN*.json" "config_DICE*.json"
+
+Notes:
+    - All matching JSON files are launched simultaneously in parallel
+    - Each job runs as a separate Python process
+    - Terminal output for each job is saved to terminal_output.txt in its output directory
+    - The script exits after launching all jobs (does not wait for completion)
+    - To monitor progress, check the terminal_output.txt files or use 'ps' to see running processes
+"""
+
+import sys
+import glob
+import subprocess
+from pathlib import Path
+
+
+def discover_config_files(patterns):
+    """
+    Discover JSON configuration files from path patterns.
+
+    Expands glob patterns and validates that each file exists and is a JSON file.
+
+    Parameters
+    ----------
+    patterns : list of str
+        List of file paths or glob patterns
+        Examples: ['config_*.json', 'configs/baseline.json']
+
+    Returns
+    -------
+    list of Path
+        Sorted list of JSON configuration files
+
+    Raises
+    ------
+    ValueError
+        If no valid JSON files found
+    """
+    config_files = []
+
+    for pattern in patterns:
+        matches = glob.glob(pattern)
+        for match in matches:
+            path = Path(match)
+            if path.is_file() and path.suffix == '.json':
+                config_files.append(path)
+
+    if not config_files:
+        raise ValueError(f"No valid JSON configuration files found for patterns: {patterns}")
+
+    return sorted(set(config_files))
+
+
+def launch_optimization(config_file):
+    """
+    Launch run_optimization.py for a single configuration file as a background process.
+
+    Parameters
+    ----------
+    config_file : Path
+        Path to JSON configuration file
+
+    Returns
+    -------
+    subprocess.Popen
+        Process handle for the launched job
+    """
+    cmd = ['python', 'run_optimization.py', str(config_file)]
+
+    # Launch process in background
+    # stdout and stderr are handled by run_optimization.py itself (saved to terminal_output.txt)
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+
+    return process
+
+
+def main():
+    """Main entry point for parallel launcher."""
+
+    if len(sys.argv) < 2:
+        print("Usage: python run_parallel.py <pattern1> [pattern2] [pattern3] [...]")
+        print("\nArguments:")
+        print("  pattern1, pattern2, ...: File path patterns or glob patterns for JSON files")
+        print("\nExamples:")
+        print('  python run_parallel.py "config_COIN-equality_000*.json"')
+        print('  python run_parallel.py config_baseline.json config_sensitivity.json')
+        print('  python run_parallel.py "config_COIN*.json" "config_DICE*.json"')
+        sys.exit(1)
+
+    patterns = sys.argv[1:]
+
+    print(f"Discovering configuration files from patterns: {patterns}")
+
+    # Discover config files
+    config_files = discover_config_files(patterns)
+
+    print(f"\nFound {len(config_files)} configuration files:")
+    for f in config_files:
+        print(f"  - {f}")
+
+    # Launch all jobs in parallel
+    print(f"\n{'=' * 80}")
+    print(f"Launching {len(config_files)} optimization jobs in parallel...")
+    print(f"{'=' * 80}\n")
+
+    processes = []
+    for config_file in config_files:
+        print(f"Starting: {config_file}")
+        process = launch_optimization(config_file)
+        processes.append((config_file, process))
+
+    print(f"\n{'=' * 80}")
+    print(f"All {len(config_files)} jobs launched successfully!")
+    print(f"{'=' * 80}\n")
+
+    print("Process IDs:")
+    for config_file, process in processes:
+        print(f"  {config_file.name}: PID {process.pid}")
+
+    print("\nNotes:")
+    print("  - Jobs are running in the background")
+    print("  - Terminal output for each job is saved to terminal_output.txt in its output directory")
+    print("\nMonitoring:")
+    print("  - View running jobs:     ps aux | grep run_optimization")
+    print("  - Monitor job progress:  tail -f data/output/<run_name>_*/terminal_output.txt")
+    print("\nControl:")
+    print("  - Kill specific job:     kill <PID>")
+    print("  - Kill ALL these jobs:   pkill -f run_optimization.py")
+
+
+if __name__ == '__main__':
+    main()

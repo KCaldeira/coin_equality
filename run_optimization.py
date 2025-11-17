@@ -16,11 +16,32 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+from io import StringIO
 from matplotlib.backends.backend_pdf import PdfPages
 from parameters import load_configuration, ModelConfiguration
 from optimization import UtilityOptimizer, create_control_function_from_points
 from economic_model import integrate_model
-from output import save_results, write_optimization_summary, copy_config_file
+from output import save_results, write_optimization_summary, copy_config_file, create_output_directory
+
+
+class TeeOutput:
+    """Write output to both console and file (like Unix tee command)."""
+
+    def __init__(self, file_path, original_stream):
+        self.file = open(file_path, 'w')
+        self.original_stream = original_stream
+
+    def write(self, data):
+        self.original_stream.write(data)
+        self.file.write(data)
+        self.file.flush()
+
+    def flush(self):
+        self.original_stream.flush()
+        self.file.flush()
+
+    def close(self):
+        self.file.close()
 
 
 def apply_config_override(config_dict, key_path, value):
@@ -402,6 +423,13 @@ def main():
     """Main execution function."""
     start_time = time.time()
 
+    # Capture output to buffer initially (until output directory is created)
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    output_buffer = StringIO()
+    sys.stdout = output_buffer
+    sys.stderr = output_buffer
+
     # Parse command line arguments
     config_path, overrides = parse_arguments()
 
@@ -428,6 +456,21 @@ def main():
     finally:
         os.unlink(tmp_path)
     opt_params = config.optimization_params
+
+    # Create output directory immediately and start logging to file
+    output_dir = create_output_directory(config.run_name)
+    terminal_output_path = Path(output_dir) / 'terminal_output.txt'
+
+    # Write buffered output to file and switch to tee mode
+    buffered_output = output_buffer.getvalue()
+    sys.stdout = original_stdout
+    sys.stderr = original_stderr
+    tee_stdout = TeeOutput(terminal_output_path, original_stdout)
+    sys.stdout = tee_stdout
+    sys.stderr = tee_stdout
+
+    # Display buffered output
+    print(buffered_output, end='')
 
     is_iterative = opt_params.is_iterative_refinement()
 
@@ -543,7 +586,9 @@ def main():
 
     print("\nSaving integration results (CSV and PDF)...")
     plot_short_horizon = config.integration_params.plot_short_horizon
-    output_paths = save_results(optimal_results, optimal_config.run_name, plot_short_horizon)
+    # Pass the pre-created output_dir to save_results
+    output_paths = save_results(optimal_results, optimal_config.run_name, plot_short_horizon, output_dir)
+
     print(f"  Output directory: {output_paths['output_dir']}")
     print(f"  Results CSV:      {output_paths['csv_file']}")
     print(f"  Results PDF:      {output_paths['pdf_file']}")
@@ -555,16 +600,16 @@ def main():
     from visualization_utils import create_results_report_pdf
     import pandas as pd
     results_df = pd.read_csv(output_paths['csv_file'])
-    comprehensive_pdf = Path(output_paths['output_dir']) / 'plots_full.pdf'
+    comprehensive_pdf = Path(output_dir) / 'plots_full.pdf'
     create_results_report_pdf({config.run_name: results_df}, comprehensive_pdf)
     print(f"  Comprehensive PDF: {comprehensive_pdf}")
 
     print("\nWriting optimization summary CSV...")
-    opt_csv_path = write_optimization_summary(opt_results, sensitivity_results, output_paths['output_dir'], 'optimization_summary.csv')
+    opt_csv_path = write_optimization_summary(opt_results, sensitivity_results, output_dir, 'optimization_summary.csv')
     print(f"  Optimization CSV: {opt_csv_path}")
 
     print("\nCopying configuration file...")
-    config_copy_path = copy_config_file(config_path, output_paths['output_dir'])
+    config_copy_path = copy_config_file(config_path, output_dir)
     print(f"  Configuration:    {config_copy_path}")
 
     if comparison_results:
@@ -593,12 +638,19 @@ def main():
         for t, s_val in opt_results['s_control_points']:
             print(f"  t={t:6.1f} yr: s={s_val:.6f}")
 
-    print(f"\nAll results saved to: {output_paths['output_dir']}")
+    print(f"\nAll results saved to: {output_dir}")
 
     elapsed_time = time.time() - start_time
     print(f"\nTotal runtime: {elapsed_time:.2f} seconds ({elapsed_time/60:.2f} minutes)")
 
     print_header("OPTIMIZATION TEST COMPLETE")
+
+    # Close output file and restore original stdout/stderr
+    if isinstance(sys.stdout, TeeOutput):
+        sys.stdout.close()
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        print(f"\nTerminal output saved to: {terminal_output_path}")
 
 
 if __name__ == '__main__':
