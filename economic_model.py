@@ -122,8 +122,59 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         y_gross = 0.0
 
     # Income-dependent climate damage
+    # Special case: Gini = 0 for DICE-like behavior (no inequality, no regressive damage)
+    if Gini == 0.0:
+        # Simplified calculation without Gini-dependent damage
+        Omega = max(0.0, min(omega_max, 1.0 - EPSILON))  # Clamp to [0, 1)
+        Gini_climate = 0.0
+        Climate_Damage = Omega * Y_gross
+        Y_damaged = Y_gross - Climate_Damage
+
+        Lambda = f * fract_gdp
+        AbateCost = Lambda * Y_damaged
+        Y_net = Y_damaged - AbateCost
+
+        Savings = s * Y_damaged
+        Consumption = Y_damaged - Savings - AbateCost
+
+        y = (Consumption + AbateCost) / L if L > 0 else 0.0
+        y_eff = Consumption / L if L > 0 else 0.0
+
+        G_eff = 0.0
+        Redistribution = 0.0
+        redistribution = 0.0
+        n_iterations = 0
+
+        # Eq 2.1: Potential emissions (unabated)
+        Epot = sigma * Y_gross
+
+        # Eq 1.6: Abatement fraction
+        if Epot > 0 and AbateCost > 0:
+            mu = min(mu_max, (AbateCost * theta2 / (Epot * theta1)) ** (1 / theta2))
+        else:
+            mu = 0.0
+
+        # Eq 3.5: Mean utility (simplified for Gini = 0)
+        if y_eff > 0:
+            if np.abs(eta - 1.0) < EPSILON:
+                U = np.log(y_eff)
+            else:
+                U = (y_eff ** (1 - eta)) / (1 - eta)
+        else:
+            U = NEG_BIGNUM
+
+        # Eq 2.3: Actual emissions (after abatement)
+        E = sigma * (1 - mu) * Y_gross
+
+        # Eq 1.10: Capital tendency
+        dK_dt = s * Y_net - delta * K
+
+        # Gini dynamics (stays at zero)
+        dGini_dt = 0.0
+        Gini_step_change = 0.0
+
     # Iteratively solve for y_eff since climate damage depends on effective income
-    if y_gross > 0 and omega_max < 1.0:
+    elif y_gross > 0 and omega_max < 1.0:
         # Initial guess: analytical approximation
         y_half = params['y_damage_halfsat']
         omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
@@ -143,8 +194,11 @@ def calculate_tendencies(state, params, store_detailed_output=True):
                 delta_T, Gini, y_eff_prev, params
             )
 
-            # Clamp Gini_climate to valid bounds
-            Gini_climate = np.clip(Gini_climate, EPSILON, 1.0 - EPSILON)
+            # Clamp Gini_climate to valid bounds (only if not zero)
+            if Gini_climate == 0.0:
+                pass  # Keep at zero
+            else:
+                Gini_climate = np.clip(Gini_climate, EPSILON, 1.0 - EPSILON)
 
             # Eq 1.3: Production after climate damage
             Climate_Damage = Omega * Y_gross
@@ -163,7 +217,11 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             Y_net = Y_damaged - AbateCost
 
             # Redistribution amount
-            if fract_gdp < 1.0: # do normal redistribution calculation
+            if Gini_climate == 0.0:
+                # No inequality, no redistribution needed
+                G_eff = 0.0
+                Redistribution = 0.0
+            elif fract_gdp < 1.0: # do normal redistribution calculation
             # you can't redistribute more than is needed to produce a zero Gini index
                 redist_max_fraction = ((2 * Gini_climate) / (1 + Gini_climate)) *                  \
                             ((1 - Gini_climate) / (1 + Gini_climate))**((1-Gini_climate)/ (2*Gini_climate))
@@ -504,11 +562,12 @@ def integrate_model(config, store_detailed_output=True):
             # do not allow cumulative emissions to go negative, making it colder than the initial condition
             state['Ecum'] = max(0.0, state['Ecum'] + dt * outputs['dEcum_dt'])
             # Gini update includes both continuous change and discontinuous step
-            # Clamp Gini to stay within valid bounds (0, 1) exclusive
-            state['Gini'] = np.clip(
-                state['Gini'] + dt * outputs['dGini_dt'] + outputs['Gini_step_change'],
-                EPSILON,
-                1.0 - EPSILON
-            )
+            # Special case: if Gini is exactly 0.0, keep it at 0.0 (DICE-like mode)
+            new_Gini = state['Gini'] + dt * outputs['dGini_dt'] + outputs['Gini_step_change']
+            if state['Gini'] == 0.0:
+                state['Gini'] = 0.0  # Keep at zero for DICE-like simulations
+            else:
+                # Clamp Gini to stay within valid bounds (0, 1) exclusive
+                state['Gini'] = np.clip(new_Gini, EPSILON, 1.0 - EPSILON)
 
     return results
