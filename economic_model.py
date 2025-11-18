@@ -183,6 +183,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
         n_iterations = 0
         converged = False
+        y_eff_prev_prev = None
+        y_eff_new_prev = None
 
         while n_iterations < MAX_INITIAL_CAPITAL_ITERATIONS and not converged:
             y_eff_prev = y_eff
@@ -241,11 +243,28 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             y = (Consumption + AbateCost) / L
 
             # Eq 1.9: Effective per-capita income after climate damage and abatement costs
-            # Use relaxation to blend old and new estimates for faster, more stable convergence
-            # RELAXATION_FACTOR = 1.0 gives fastest convergence (6 iterations vs 42 with 0.5)
-            RELAXATION_FACTOR = 1.0
+            # Use Aitken's delta-squared acceleration for faster convergence
             y_eff_new = Consumption / L
-            y_eff = RELAXATION_FACTOR * y_eff_new + (1.0 - RELAXATION_FACTOR) * y_eff_prev
+
+            if n_iterations == 1:
+                # First iteration: use simple update
+                y_eff = y_eff_new
+            else:
+                # Aitken acceleration: use last two iterations to extrapolate
+                delta1 = y_eff_prev - y_eff_prev_prev
+                delta2 = y_eff_new - y_eff_prev
+                denominator = delta2 - delta1
+
+                if np.abs(denominator) > EPSILON:
+                    # Apply Aitken's formula
+                    y_eff = y_eff_prev_prev - delta1**2 / denominator
+                else:
+                    # Denominator too small, use simple update
+                    y_eff = y_eff_new
+
+            # Store values for next iteration
+            y_eff_prev_prev = y_eff_prev
+            y_eff_new_prev = y_eff_new
 
             # Check convergence using LOOSE_EPSILON for practical precision
             converged = np.abs(y_eff - y_eff_prev) < LOOSE_EPSILON
