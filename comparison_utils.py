@@ -607,7 +607,7 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
         ('AbateCost', 'Total Abatement Cost'),
         ('Omega', 'Climate Damage (% of Output)'),
         ('Climate_Damage', 'Total Climate Damage'),
-        ('Gini', 'Gini Index Before Redistribution'),
+        ('Gini', 'Starting Gini Index'),
         ('Gini_climate', 'Post-Climate-Damage Gini'),
         ('G_eff', 'Effective Gini Index'),
         ('U', 'Mean Utility Per Capita'),
