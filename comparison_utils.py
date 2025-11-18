@@ -572,14 +572,14 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
     -----
     Workbook structure:
     - Sheet 1: "Directories" - list of all compared directories
-    - Subsequent sheets: One sheet per variable (26 total)
+    - Subsequent sheets: One sheet per variable (27 total)
       - Column A: Time (years)
       - Columns B+: One column per case with variable values
 
     Variable sheets match the plots in comparison_plots.pdf:
     Economic: y, y_eff, K, Consumption, Savings, s, Y_gross, Y_net
     Climate: delta_T, E, Ecum
-    Abatement/Damage: f, mu, Lambda, AbateCost, Omega, Climate_Damage
+    Abatement/Damage: f, mu, Lambda, AbateCost, Omega, Climate_Damage, marginal_abatement_cost
     Inequality/Utility: Gini, Gini_climate, G_eff, U, discounted_utility
     Exogenous: A, L, sigma, theta1
     """
@@ -612,10 +612,11 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
         ('G_eff', 'Effective Gini Index'),
         ('U', 'Mean Utility Per Capita'),
         ('discounted_utility', 'Discounted Utility Per Capita'),
+        ('marginal_abatement_cost', 'Marginal Abatement Cost'),
         ('A', 'Total Factor Productivity'),
         ('L', 'Population'),
         ('sigma', 'Carbon Intensity of GDP'),
-        ('theta1', 'Marginal Abatement Cost'),
+        ('theta1', 'Abatement Cost Parameter (theta1)'),
     ]
 
     wb = openpyxl.Workbook()

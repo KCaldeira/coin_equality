@@ -19,7 +19,7 @@
     "rho": 0.01,
     "_rho": "Pure rate of time preference (1 % per year)",
     "Gini_initial": 0.0,
-    "_Gini_initial": "Initial Gini index (uniform)",
+    "_Gini_initial": "Initial Gini index (uniform); if 0.0 assumed DICE mode and GDP-dependent damage (y_damage is ignored",
     "Gini_fract": 0.0,
     "_Gini_fract": "Fraction of effective Gini change that occurs as instantaneous step (0=no step change, 1=full step change) 0.1 means 10% of total change is step change",
     "Gini_restore": 0.0,

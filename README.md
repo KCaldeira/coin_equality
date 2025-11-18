@@ -1007,10 +1007,10 @@ The `run_parallel.py` script enables launching multiple optimization jobs simult
 
 #### Parallel Execution
 
-The script accepts file patterns (with wildcards) for JSON configuration files:
+The script accepts file patterns (with wildcards) for JSON configuration files, plus optional parameter overrides:
 
 ```bash
-python run_parallel.py <pattern1> [pattern2] [pattern3] [...]
+python run_parallel.py <pattern1> [pattern2] [...] [--key value] [...]
 ```
 
 **Examples:**
@@ -1024,12 +1024,19 @@ python run_parallel.py config_baseline.json config_sensitivity.json
 
 # Run multiple patterns
 python run_parallel.py "config_COIN*.json" "config_DICE*.json"
+
+# Quick test with reduced evaluations (applied to all jobs)
+python run_parallel.py "config_*.json" --optimization_params.max_evaluations 100
+
+# Override multiple parameters
+python run_parallel.py "config_*.json" --optimization_params.max_evaluations 100 --run_name quick_test
 ```
 
 #### How It Works
 
 - **Parallel execution**: All matching JSON files are launched simultaneously as separate Python processes
 - **Independent cores**: Each optimization runs on its own CPU core
+- **Parameter overrides**: Optional `--key value` pairs are applied to ALL jobs (useful for quick tests)
 - **Terminal output**: Automatically saved to `terminal_output.txt` in each job's output directory
 - **Non-blocking**: The script exits immediately after launching all jobs (does not wait for completion)
 
@@ -1072,13 +1079,16 @@ Process IDs (PIDs) are displayed when jobs are launched. The terminal output fil
 #### Typical Workflow
 
 ```bash
-# 1. Launch parameter sweep in parallel
-python run_parallel.py "config_sensitivity_*.json"
+# 1. Quick test with reduced evaluations
+python run_parallel.py "config_sensitivity_*.json" --optimization_params.max_evaluations 100
 
 # 2. Monitor progress
 watch -n 10 'ps aux | grep run_optimization | wc -l'
 
-# 3. After jobs complete, compare results
+# 3. After test completes, run full optimization
+python run_parallel.py "config_sensitivity_*.json"
+
+# 4. After jobs complete, compare results
 python compare_results.py "data/output/sensitivity_*/"
 ```
 
@@ -1086,6 +1096,7 @@ python compare_results.py "data/output/sensitivity_*/"
 - Fully utilizes multi-core systems
 - No need to wait for sequential completion
 - Terminal output saved for each job
+- Parameter overrides for quick testing
 - Simple command-line interface
 
 ### Comparing Multiple Optimization Results
@@ -1134,14 +1145,15 @@ The tool creates a timestamped directory `data/output/comparison_YYYYMMDD-HHMMSS
 
 2. **`results_comparison_summary.xlsx`** - Excel workbook with time series results:
    - Sheet 1: "Directories" - list of all compared directories
-   - Sheets 2-27: One sheet per variable (26 model variables)
+   - Sheets 2-28: One sheet per variable (27 model variables)
    - Each sheet has time in column A, one column per case for that variable
    - Variables match plots in PDF: economic, climate, abatement, inequality, and utility metrics
    - Includes Gini_climate: post-climate-damage inequality (before redistribution)
+   - Includes marginal_abatement_cost: actual marginal cost at current mu, and theta1: marginal cost at mu=1
 
 3. **`comparison_plots.pdf`** - PDF report with visualizations:
    - Page 1: Summary scatter plots (objective, time, evaluations)
-   - Pages 2+: Time series overlays for all model variables (26 variables)
+   - Pages 2+: Time series overlays for all model variables (27 variables)
    - 16:9 landscape format optimized for screen viewing
    - Multi-line plots show different cases in different colors
    - For multi-case comparisons: unified legend in top-left position of each page (5 plots per page)
@@ -1157,7 +1169,7 @@ The tool compares data from two sources:
 
 2. **`results.csv`** - Full model time series (optional):
    - If present, adds detailed time series comparisons to PDF
-   - Includes all 26 model variables (economic, climate, inequality, etc.)
+   - Includes all 27 model variables (economic, climate, inequality, etc.)
    - If missing, only optimization summary is compared
 
 #### Example Workflow

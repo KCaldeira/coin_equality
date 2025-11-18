@@ -181,11 +181,14 @@ def create_results_report_pdf(case_data, output_pdf):
         ('U', 'Mean utility', 'Mean Utility Per Capita'),
         ('discounted_utility', 'Discounted utility', 'Discounted Utility Per Capita'),
 
+        # Abatement Economics
+        ('marginal_abatement_cost', 'Marginal abatement cost ($/tCO2)', 'Marginal Abatement Cost'),
+
         # Exogenous Drivers
         ('A', 'Total factor productivity ($)', 'Total Factor Productivity'),
         ('L', 'Population (persons)', 'Population'),
         ('sigma', 'Carbon intensity (tCO2/$)', 'Carbon Intensity of GDP'),
-        ('theta1', 'Marginal abatement cost ($/tCO2)', 'Marginal Abatement Cost'),
+        ('theta1', 'Marginal cost at mu=1 ($/tCO2)', 'Abatement Cost Parameter (theta1)'),
     ]
 
     # Determine plots per page and starting index
@@ -491,11 +494,14 @@ def create_results_report_pdf_to_existing(case_data, pdf):
         ('U', 'Mean utility', 'Mean Utility Per Capita'),
         ('discounted_utility', 'Discounted utility', 'Discounted Utility Per Capita'),
 
+        # Abatement Economics
+        ('marginal_abatement_cost', 'Marginal abatement cost ($/tCO2)', 'Marginal Abatement Cost'),
+
         # Exogenous Drivers
         ('A', 'Total factor productivity ($)', 'Total Factor Productivity'),
         ('L', 'Population (persons)', 'Population'),
         ('sigma', 'Carbon intensity (tCO2/$)', 'Carbon Intensity of GDP'),
-        ('theta1', 'Marginal abatement cost ($/tCO2)', 'Marginal Abatement Cost'),
+        ('theta1', 'Marginal cost at mu=1 ($/tCO2)', 'Abatement Cost Parameter (theta1)'),
     ]
 
     # Determine plots per page and starting index

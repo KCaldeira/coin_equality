@@ -93,7 +93,7 @@
     },
     "optimization_parameters": {
         "_description": "ITERATIVE REFINEMENT MODE: optimization_iterations is integer (number of iterations), initial_guess is scalar",
-        "max_evaluations": 10000,
+        "max_evaluations": 16000,
         "_max_evaluations": "Maximum number of objective function evaluations PER ITERATION",
         "optimization_iterations": 2,
         "_optimization_iterations": "INTEGER: Number of refinement iterations. Final iteration will have n_points_final_f control points if specified.",
