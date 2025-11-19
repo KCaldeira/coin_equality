@@ -292,8 +292,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
                 term1 = (y_eff ** (1 - eta)) / (1 - eta)
                 numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
                 denominator = 1 + G_eff * (2 * eta - 1)
-                term2 = (numerator / denominator) ** (1 / (1 - eta))
-                U = term1 * term2
+                U = term1 * (numerator / denominator)
         else:
             U = NEG_BIGNUM
 
