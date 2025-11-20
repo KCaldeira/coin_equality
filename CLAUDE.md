@@ -29,6 +29,12 @@ This project prioritizes elegant, fail-fast code that surfaces errors quickly ra
 ### Code Organization
 - All imports at the top of the file - no imports inside functions or scattered throughout the code
 
+### Plot Axis Scaling
+- **Zero-bound expansion**: For vertical y-axes, if both bounds have the same sign and `min(|lower_bound|, |upper_bound|) < 0.5 * max(|lower_bound|, |upper_bound|)`, then replace the bound with smaller absolute magnitude with zero. This improves plot readability by anchoring the axis at zero when one bound is significantly smaller than the other.
+  - Example: bounds [0.2, 1.0] → [0, 1.0] (since 0.2 < 0.5 * 1.0)
+  - Example: bounds [-1.0, -0.2] → [-1.0, 0] (since 0.2 < 0.5 * 1.0)
+  - Example: bounds [0.6, 1.0] → unchanged (since 0.6 ≮ 0.5 * 1.0)
+
 ### Protected Directories
 - Never modify files in `./barrage_nordhaus_2023/` - this directory contains reference materials that must remain unchanged
 
