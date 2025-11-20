@@ -41,7 +41,10 @@ VARIABLE_METADATA = {
     'theta1': {'description': 'Marginal Abatement Cost at mu=1', 'units': '$/tCO₂', 'group': 'abatement'},
     'marginal_abatement_cost': {'description': 'Marginal Abatement Cost', 'units': '$/tCO₂', 'group': 'abatement'},
     'y': {'description': 'Mean Per-Capita Income', 'units': '$/person', 'group': 'economic'},
-    'y_eff': {'description': 'Effective Per-Capita Income', 'units': '$/person', 'group': 'economic'}
+    'y_eff': {'description': 'Effective Per-Capita Income', 'units': '$/person', 'group': 'economic'},
+    'delta_Gini': {'description': 'Gini Perturbation from Background', 'units': '', 'group': 'inequality'},
+    'Gini_background': {'description': 'Background Gini Index', 'units': '', 'group': 'inequality'},
+    'Gini': {'description': 'Total Gini Index', 'units': '', 'group': 'inequality'}
 }
 
 # Variable grouping for organized layout with combined charts
@@ -51,6 +54,7 @@ VARIABLE_GROUPS = {
         {'type': 'combined', 'title': 'Control Variables', 'variables': ['f', 's'], 'units': 'fraction'},
         {'type': 'single', 'variables': ['mu']},
         {'type': 'combined', 'title': 'Economic Impact Fractions', 'variables': ['Omega', 'Lambda'], 'units': 'fraction'},
+        {'type': 'combined', 'title': 'Gini Components', 'variables': ['delta_Gini', 'Gini_background', 'Gini'], 'units': ''},
         {'type': 'combined', 'title': 'Inequality Measures', 'variables': ['Gini', 'Gini_climate', 'G_eff'], 'units': ''},
         {'type': 'single', 'variables': ['U']}
     ],
