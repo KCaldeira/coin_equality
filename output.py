@@ -665,16 +665,16 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
 
             # Only apply if data doesn't cross zero (all positive or all negative)
             if data_min * data_max > 0:  # Same sign
-                ymin, ymax = ax.get_ylim()
-                abs_min = abs(ymin)
-                abs_max = abs(ymax)
-                # If the smaller bound is less than half the larger, replace it with zero
-                if min(abs_min, abs_max) < 0.5 * max(abs_min, abs_max):
-                    if abs_min < abs_max:
-                        # Lower bound has smaller magnitude - set to zero
+                abs_data_min = abs(data_min)
+                abs_data_max = abs(data_max)
+                # If the smaller DATA bound is less than half the larger, replace it with zero
+                if min(abs_data_min, abs_data_max) < 0.5 * max(abs_data_min, abs_data_max):
+                    ymin, ymax = ax.get_ylim()
+                    if abs_data_min < abs_data_max:
+                        # Data starts closer to zero - set lower bound to zero
                         ax.set_ylim(0, ymax)
                     else:
-                        # Upper bound has smaller magnitude - set to zero
+                        # Data ends closer to zero - set upper bound to zero
                         ax.set_ylim(ymin, 0)
 
     # Save to PDF
