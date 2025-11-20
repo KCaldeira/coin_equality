@@ -179,10 +179,15 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     # Iteratively solve for y_net since climate damage depends on effective income
     elif y_gross > 0 and omega_max < 1.0:
         # Initial guess: analytical approximation
-        y_half = params['y_damage_halfsat']
-        omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
-        lambda_approx = f * fract_gdp
-        y_net = y_gross * (1.0 - omega_approx) * (1-lambda_approx) * (1.0 - s)
+        # Guard against s approaching 1.0 (100% savings, zero consumption)
+        if s >= 1.0 - EPSILON:
+            # When savings rate is 100%, consumption is zero
+            y_net = EPSILON
+        else:
+            y_half = params['y_damage_halfsat']
+            omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
+            lambda_approx = f * fract_gdp
+            y_net = y_gross * (1.0 - omega_approx) * (1-lambda_approx) * (1.0 - s)
 
         n_iterations = 0
         converged = False
@@ -195,7 +200,11 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
             # Ensure y_net_prev is positive (negative income is economically impossible)
             # If optimization explores bad parameter space, clamp to small positive value
-            y_net_for_damage = max(y_net_prev, EPSILON)
+            # Also guard against nan/inf from numerical instabilities
+            if not np.isfinite(y_net_prev) or y_net_prev <= 0:
+                y_net_for_damage = EPSILON
+            else:
+                y_net_for_damage = y_net_prev
 
             # Calculate climate damage using current income estimate
             # Uses params: psi1, psi2, y_damage_halfsat
@@ -263,8 +272,16 @@ def calculate_tendencies(state, params, store_detailed_output=True):
                 denominator = delta2 - delta1
 
                 if np.abs(denominator) > EPSILON:
-                    # Apply Aitken's formula
-                    y_net = y_net_prev_prev - delta1**2 / denominator
+                    # Apply Aitken's formula with error suppression
+                    # (overflow/underflow can occur in extreme parameter space)
+                    with np.errstate(all='ignore'):
+                        y_net_aitken = y_net_prev_prev - delta1**2 / denominator
+                    # Verify Aitken result is valid (positive, finite)
+                    if np.isfinite(y_net_aitken) and y_net_aitken > 0:
+                        y_net = y_net_aitken
+                    else:
+                        # Aitken produced invalid result, use simple update
+                        y_net = y_net_new
                 else:
                     # Denominator too small, use simple update
                     y_net = y_net_new
@@ -275,6 +292,10 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
             # Check convergence using LOOSE_EPSILON for practical precision
             converged = np.abs(y_net - y_net_prev) < LOOSE_EPSILON
+
+        # Final safety check: ensure y_net is valid after iterative solver
+        if not np.isfinite(y_net) or y_net <= 0:
+            y_net = EPSILON
 
         # Eq 4.3: Per-capita amount redistributed
         redistribution = Redistribution / L
