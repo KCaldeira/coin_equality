@@ -193,10 +193,14 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             y_net_prev = y_net
             n_iterations += 1
 
+            # Ensure y_net_prev is positive (negative income is economically impossible)
+            # If optimization explores bad parameter space, clamp to small positive value
+            y_net_for_damage = max(y_net_prev, EPSILON)
+
             # Calculate climate damage using current income estimate
             # Uses params: psi1, psi2, y_damage_halfsat
             Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
-                delta_T, Gini, y_net_prev, params
+                delta_T, Gini, y_net_for_damage, params
             )
 
             # Clamp Gini_climate to valid bounds (only if not zero)
