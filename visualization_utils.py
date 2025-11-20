@@ -85,8 +85,16 @@ def plot_timeseries(ax, case_data, variable, ylabel, title, show_legend=False):
 
     ax.set_xlabel('Time (years)', fontsize=10)
     ax.set_ylabel(ylabel, fontsize=10)
-    ax.set_title(title, fontsize=11, fontweight='bold')
+    ax.set_title(f'{variable}: {title}', fontsize=11, fontweight='bold')
     ax.grid(True, alpha=0.3, linestyle='--')
+
+    # Apply logarithmic scale for specific variables
+    log_scale_vars = {'y', 'y_eff', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
+    if variable in log_scale_vars:
+        ax.set_yscale('log')
+
+    # Apply zero-bound expansion for linear scales (must be done AFTER layout/sizing)
+    # This will be called later in create_results_report_pdf_to_existing
 
     if show_legend and len(case_data) > 1:
         ax.legend(loc='best', fontsize=8)
@@ -542,5 +550,44 @@ def create_results_report_pdf_to_existing(case_data, pdf):
             axes[idx].axis('off')
 
         plt.tight_layout()
+
+        # Apply zero-bound expansion AFTER layout (to prevent being overridden)
+        log_scale_vars = {'y', 'y_eff', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
+        for idx, (var_name, ylabel, title) in enumerate(page_vars):
+            ax_idx = idx + axes_offset
+            ax = axes[ax_idx]
+
+            # Skip if variable not available or uses log scale
+            if not any(var_name in df.columns for df in case_data.values()):
+                continue
+            if var_name in log_scale_vars:
+                continue
+
+            # Check actual data range (not axis limits which may have matplotlib padding)
+            all_data = []
+            for df in case_data.values():
+                if var_name in df.columns:
+                    all_data.extend(df[var_name].values)
+
+            if not all_data:
+                continue
+
+            data_min = np.min(all_data)
+            data_max = np.max(all_data)
+
+            # Only apply if data doesn't cross zero (all positive or all negative)
+            if data_min * data_max > 0:  # Same sign
+                ymin, ymax = ax.get_ylim()
+                abs_min = abs(ymin)
+                abs_max = abs(ymax)
+                # If the smaller bound is less than half the larger, replace it with zero
+                if min(abs_min, abs_max) < 0.5 * max(abs_min, abs_max):
+                    if abs_min < abs_max:
+                        # Lower bound has smaller magnitude - set to zero
+                        ax.set_ylim(0, ymax)
+                    else:
+                        # Upper bound has smaller magnitude - set to zero
+                        ax.set_ylim(ymin, 0)
+
         pdf.savefig(fig, orientation='landscape')
         plt.close(fig)
