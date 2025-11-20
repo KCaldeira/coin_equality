@@ -558,6 +558,9 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
     # Define colors for multi-line plots
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
 
+    # Variables that should use logarithmic y-axis
+    log_scale_vars = {'y', 'y_eff', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
+
     # Plot each chart
     for i, chart_spec in enumerate(chart_specs):
         if i >= len(axes):
@@ -612,18 +615,23 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
             # Add legend
             ax.legend(fontsize=9, loc='best', framealpha=0.8)
 
+        # Apply logarithmic scale if any variable in this chart uses it
+        if any(var in log_scale_vars for var in var_list):
+            ax.set_yscale('log')
+
         # Improve grid and formatting
         ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
         ax.tick_params(axis='both', which='major', labelsize=10)
 
-        # Use custom scientific notation formatting
-        all_data = np.concatenate([results[var] for var in var_list])
-        max_val = np.max(np.abs(all_data))
+        # Use custom scientific notation formatting (skip for log scale - already handles it)
+        if not any(var in log_scale_vars for var in var_list):
+            all_data = np.concatenate([results[var] for var in var_list])
+            max_val = np.max(np.abs(all_data))
 
-        if max_val == 0:
-            pass  # No formatting needed for zero data
-        elif max_val > 1e4 or max_val < 1e-2:
-            ax.yaxis.set_major_formatter(FuncFormatter(format_scientific_notation))
+            if max_val == 0:
+                pass  # No formatting needed for zero data
+            elif max_val > 1e4 or max_val < 1e-2:
+                ax.yaxis.set_major_formatter(FuncFormatter(format_scientific_notation))
 
         # Set background color
         ax.set_facecolor('#fafafa')
