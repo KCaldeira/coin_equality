@@ -97,7 +97,7 @@ For the differential equation solver, variables are calculated in this order:
 15. **U** from y_eff, G_eff, η (Eq 3.5: mean utility)
 16. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
 17. **dK/dt** from s, Y_net, δ, K (Eq 1.10: capital tendency)
-18. **dGini/dt, Gini_step** from Gini dynamics (Gini tendency and step change)
+18. **d(delta_Gini)/dt, delta_Gini_step_change** from Gini dynamics (delta_Gini tendency and step change)
 
 ### Core Components
 
@@ -397,7 +397,7 @@ The perturbation evolves through two mechanisms:
 
 1. **Instantaneous Step Change** (fraction of policy effect applied immediately):
 ```
-Gini_step = Gini_fract · (G_eff - Gini)
+delta_Gini_step_change = Gini_fract · (G_eff - Gini)
 ```
 where:
 - `Gini = Gini_background(t) + delta_Gini` is the current total Gini
@@ -419,7 +419,7 @@ where:
 
 **Combined Update Rule:**
 ```
-delta_Gini(t+dt) = delta_Gini(t) + dt · d(delta_Gini)/dt + Gini_step
+delta_Gini(t+dt) = delta_Gini(t) + dt · d(delta_Gini)/dt + delta_Gini_step_change
 ```
 
 **Physical Interpretation:**
@@ -427,7 +427,7 @@ delta_Gini(t+dt) = delta_Gini(t) + dt · d(delta_Gini)/dt + Gini_step
 This formulation cleanly separates exogenous and endogenous inequality dynamics:
 - **Exogenous background** (`Gini_background(t)`): Captures structural inequality trends (demographics, technology, institutions) specified externally
 - **Endogenous perturbation** (`delta_Gini`): Captures policy-driven deviations from background that restore to zero
-- **Policy pressure** (via `Gini_step`): Redistribution policies create perturbations from background
+- **Policy pressure** (via `delta_Gini_step_change`): Redistribution policies create perturbations from background
 - **Structural restoration** (via `d(delta_Gini)/dt`): Absent continued intervention, perturbations decay back to zero
 
 The `Gini_fract` parameter controls the **speed of policy effect**:
@@ -733,7 +733,7 @@ The iteration count is printed during model execution for debugging purposes.
 
 See `config_baseline.json` for a complete example. To create new scenarios, copy and modify this file.
 
-**Note**: `config_test_DICE.json` provides a configuration for simulations close to the parameters and setup presented in Barrage & Nordhaus (2023), including Gompertz population growth, double exponential functions for carbon intensity and abatement costs, and settings that replicate DICE2023 behavior (deltaL = 1.0 for pure abatement mode, Gini_initial = 0.0 for no inequality).
+**Note**: `config_DICE_000.json` provides a configuration for simulations close to the parameters and setup presented in Barrage & Nordhaus (2023), including Gompertz population growth, double exponential functions for carbon intensity and abatement costs, and settings that replicate DICE2023 behavior (fract_gdp >= 1.0 for pure abatement mode, Gini_background = 0.0 for no inequality).
 
 **Example: Population with Gompertz growth**
 ```json
@@ -1312,14 +1312,14 @@ Compared to initial implementation, these optimizations provide ~200x faster int
 
 The results dictionary contains arrays for:
 - **Time**: `t`
-- **State variables**: `K`, `Ecum`, `Gini`
-- **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`, `s`
+- **State variables**: `K`, `Ecum`, `delta_Gini`
+- **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`, `s`, `Gini_background`
 - **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_eff`
 - **Climate variables**: `delta_T`, `Omega`, `E`, `Climate_Damage`
 - **Abatement variables**: `mu`, `Lambda`, `AbateCost`, `redistribution`, `marginal_abatement_cost`
 - **Investment/Consumption**: `Savings`, `Consumption`
-- **Inequality/utility**: `G_eff`, `Gini_climate`, `U`, `discounted_utility`
-- **Tendencies**: `dK_dt`, `dEcum_dt`, `dGini_dt`, `Gini_step_change`
+- **Inequality/utility**: `Gini`, `G_eff`, `Gini_climate`, `U`, `discounted_utility`
+- **Tendencies**: `dK_dt`, `dEcum_dt`, `d_delta_Gini_dt`, `delta_Gini_step_change`
 
 All arrays have the same length corresponding to time points from `t_start` to `t_end` in steps of `dt`.
 
