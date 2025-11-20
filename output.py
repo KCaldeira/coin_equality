@@ -351,8 +351,8 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'E',  # CO2 emissions
         'dK_dt',  # Net capital accumulation
         'y',  # Per-capita Consumption (before abatement)
-        'dGini_dt',  # Continuous Gini change rate
-        'Gini_step_change',  # Discontinuous Gini step change
+        'd_delta_Gini_dt',  # Continuous delta_Gini change rate
+        'delta_Gini_step_change',  # Discontinuous delta_Gini step change
         'marginal_abatement_cost',  # Marginal abatement cost (social cost of carbon)
     ]
 
@@ -381,10 +381,13 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'Consumption': ('Total Consumption', '$/yr'),
         'dK_dt': ('Net capital accumulation', '$/yr'),
         'y': ('Per-capita Consumption', '$/person/yr'),
-        'Gini': ('Gini index before redistribution', 'dimensionless'),
+        'delta_Gini': ('Perturbation from background Gini index', 'dimensionless'),
+        'Gini': ('Total Gini index (background + perturbation)', 'dimensionless'),
+        'Gini_background': ('Background Gini index', 'dimensionless'),
+        'Gini_climate': ('Gini index after climate damage', 'dimensionless'),
         'G_eff': ('Gini index after redistribution', 'dimensionless'),
-        'dGini_dt': ('Continuous Gini change rate', '1/yr'),
-        'Gini_step_change': ('Discontinuous Gini step change', 'dimensionless'),
+        'd_delta_Gini_dt': ('Continuous delta_Gini change rate', '1/yr'),
+        'delta_Gini_step_change': ('Discontinuous delta_Gini step change', 'dimensionless'),
         'U': ('Mean utility per capita', 'dimensionless'),
         'discounted_utility': ('Discounted utility per capita', 'dimensionless'),
         's': ('Savings rate', 'dimensionless'),
