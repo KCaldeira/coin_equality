@@ -160,7 +160,7 @@ def create_results_report_pdf(case_data, output_pdf):
     # Define all variables to plot (in display order, grouped by category)
     variable_specs = [
         # Economic Variables
-        ('y', 'Per-capita consumption ($/person/yr)', 'Per-Capita Consumption'),
+        ('y', 'Per-capita consumption plus abatement ($/person/yr)', 'Per-Capita Consumption Plus Abatement'),
         ('y_eff', 'Effective income ($/person/yr)', 'Effective Per-Capita Income'),
         ('K', 'Capital stock ($)', 'Capital Stock Over Time'),
         ('Consumption', 'Total consumption ($/yr)', 'Total Consumption'),
@@ -473,7 +473,7 @@ def create_results_report_pdf_to_existing(case_data, pdf):
 
     variable_specs = [
         # Economic Variables
-        ('y', 'Per-capita consumption ($/person/yr)', 'Per-Capita Consumption'),
+        ('y', 'Per-capita consumption plus abatement ($/person/yr)', 'Per-Capita Consumption Plus Abatement'),
         ('y_eff', 'Effective income ($/person/yr)', 'Effective Per-Capita Income'),
         ('K', 'Capital stock ($)', 'Capital Stock Over Time'),
         ('Consumption', 'Total consumption ($/yr)', 'Total Consumption'),
