@@ -61,6 +61,8 @@ VARIABLE_GROUPS = {
     'dollar_variables': [
         {'type': 'combined', 'title': 'GDP Components', 'variables': ['Y_gross', 'Y_damaged', 'Y_net'], 'units': '$'},
         {'type': 'single', 'variables': ['K']},
+        {'type': 'single', 'variables': ['Consumption']},
+        {'type': 'single', 'variables': ['Savings']},
         {'type': 'single', 'variables': ['AbateCost']},
         {'type': 'single', 'variables': ['dK_dt']},
         {'type': 'combined', 'title': 'Per-Capita Income', 'variables': ['y', 'y_eff'], 'units': '$/person'},
