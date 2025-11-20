@@ -92,9 +92,9 @@ For the differential equation solver, variables are calculated in this order:
 10. **μ** from AbateCost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated, capped at μ_max)
 11. **Λ** from AbateCost, Y_damaged (Eq 1.7: abatement cost fraction)
 12. **Y_net** from Y_damaged, Λ (Eq 1.8: production after abatement costs)
-13. **y_eff** from y, AbateCost, L (Eq 1.9: effective per-capita income)
+13. **y_net** from y, AbateCost, L (Eq 1.9: effective per-capita income)
 14. **G_eff** from f, f_gdp, G_climate (Eq 4.4: effective Gini after redistribution/abatement; when f_gdp >= 1, G_eff = G_climate with no redistribution effect)
-15. **U** from y_eff, G_eff, η (Eq 3.5: mean utility)
+15. **U** from y_net, G_eff, η (Eq 3.5: mean utility)
 16. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
 17. **dK/dt** from s, Y_net, δ, K (Eq 1.10: capital tendency)
 18. **d(delta_Gini)/dt, delta_Gini_step_change** from Gini dynamics (delta_Gini tendency and step change)
@@ -208,7 +208,7 @@ Production after both climate damage and abatement costs.
 
 **Eq. (1.9) - Effective Per-Capita Income:**
 ```
-y_eff(t) = y(t) - AbateCost(t) / L(t)
+y_net(t) = y(t) - AbateCost(t) / L(t)
 ```
 This is the per-capita income after subtracting abatement costs, used for utility calculations.
 
@@ -348,12 +348,12 @@ When `f_gdp >= 1`, the model disables redistribution and enables pure abatement 
    - Available budget: `redistribution = y * delta_L` (Line 136 of `economic_model.py`)
    - With `delta_L >= 1`, this creates `redistribution >= y` (budget at least equals full per-capita income)
    - Abatement expenditure: `AbateCost = f * redistribution * L` (Line 142)
-   - Effective income: `y_eff = y - AbateCost/L = y - f * redistribution`
+   - Effective income: `y_net = y - AbateCost/L = y - f * redistribution`
 
 4. **Optimizer Behavior**:
    - The optimizer chooses `f` to maximize utility over time
    - **Naturally selects `f << 1`** because:
-     - Large `f` would make `y_eff = y - f * redistribution` very small or negative
+     - Large `f` would make `y_net = y - f * redistribution` very small or negative
      - This would result in terrible current utility (Consumption crash)
      - Optimizer balances current Consumption vs. future climate benefits
    - **Equivalence**: Optimization of `f` becomes equivalent to optimizing the abatement/Consumption tradeoff
@@ -1266,11 +1266,11 @@ The model includes several optimizations for computational efficiency while main
 
 **1. Income-Dependent Climate Damage Iteration (economic_model.py)**
 
-Climate damage depends on effective per-capita income (y_eff), which itself depends on climate damage, creating a circular dependency. This is resolved iteratively:
+Climate damage depends on effective per-capita income (y_net), which itself depends on climate damage, creating a circular dependency. This is resolved iteratively:
 
 ```python
 # Convergence criterion using LOOSE_EPSILON (1e-10)
-converged = np.abs(y_eff - y_eff_prev) < LOOSE_EPSILON
+converged = np.abs(y_net - y_net_prev) < LOOSE_EPSILON
 ```
 
 - **RELAXATION_FACTOR = 1.0**: No relaxation (direct substitution) provides fastest convergence
@@ -1290,7 +1290,7 @@ H2 = hyp2f1(1.0, 2.0 * a, 2.0 * a + 1.0, -b)  # Inequality adjustment
 
 - **scipy.special.hyp2f1**: ~200x faster than arbitrary-precision libraries
 - **Accuracy**: Machine precision (~1e-16 relative error)
-- **Performance**: Evaluated twice per timestep per y_eff iteration
+- **Performance**: Evaluated twice per timestep per y_net iteration
 
 **3. Numerical Constants (constants.py)**
 
@@ -1298,7 +1298,7 @@ Two precision levels for different purposes:
 
 - **EPSILON = 1e-12**: Strict tolerance for mathematical comparisons (Gini bounds, float comparisons)
 - **LOOSE_EPSILON = 1e-10**: Practical tolerance for iterative solvers and optimization convergence
-  - Used for y_eff convergence in economic_model.py
+  - Used for y_net convergence in economic_model.py
   - Default value for xtol_abs in optimization (control parameter convergence)
   - Appropriate for variables in [0, 1] range
 
@@ -1314,7 +1314,7 @@ The results dictionary contains arrays for:
 - **Time**: `t`
 - **State variables**: `K`, `Ecum`, `delta_Gini`
 - **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`, `s`, `Gini_background`
-- **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_eff`
+- **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_net`
 - **Climate variables**: `delta_T`, `Omega`, `E`, `Climate_Damage`
 - **Abatement variables**: `mu`, `Lambda`, `AbateCost`, `redistribution`, `marginal_abatement_cost`
 - **Investment/Consumption**: `Savings`, `Consumption`

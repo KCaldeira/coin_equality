@@ -20,7 +20,7 @@ EPSILON = 1e-12
 
 # Looser epsilon for iterative convergence and optimization tolerances
 # Used for:
-# - Convergence criterion in y_eff iterative solver
+# - Convergence criterion in y_net iterative solver
 # - Default value for xtol_abs in optimization (control parameter convergence)
 # Provides practical precision (1e-8 absolute) without requiring machine precision
 LOOSE_EPSILON = 1e-8

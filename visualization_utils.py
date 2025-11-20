@@ -89,7 +89,7 @@ def plot_timeseries(ax, case_data, variable, ylabel, title, show_legend=False):
     ax.grid(True, alpha=0.3, linestyle='--')
 
     # Apply logarithmic scale for specific variables
-    log_scale_vars = {'y', 'y_eff', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
+    log_scale_vars = {'y', 'y_net', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
     if variable in log_scale_vars:
         ax.set_yscale('log')
 
@@ -161,7 +161,7 @@ def create_results_report_pdf(case_data, output_pdf):
     variable_specs = [
         # Economic Variables
         ('y', 'Per-capita consumption plus abatement ($/person/yr)', 'Per-Capita Consumption Plus Abatement'),
-        ('y_eff', 'Effective income ($/person/yr)', 'Effective Per-Capita Income'),
+        ('y_net', 'Effective income ($/person/yr)', 'Effective Per-Capita Income'),
         ('K', 'Capital stock ($)', 'Capital Stock Over Time'),
         ('Consumption', 'Total consumption ($/yr)', 'Total Consumption'),
         ('Savings', 'Gross investment ($/yr)', 'Gross Investment'),
@@ -474,7 +474,7 @@ def create_results_report_pdf_to_existing(case_data, pdf):
     variable_specs = [
         # Economic Variables
         ('y', 'Per-capita consumption plus abatement ($/person/yr)', 'Per-Capita Consumption Plus Abatement'),
-        ('y_eff', 'Effective income ($/person/yr)', 'Effective Per-Capita Income'),
+        ('y_net', 'Effective income ($/person/yr)', 'Effective Per-Capita Income'),
         ('K', 'Capital stock ($)', 'Capital Stock Over Time'),
         ('Consumption', 'Total consumption ($/yr)', 'Total Consumption'),
         ('Savings', 'Gross investment ($/yr)', 'Gross Investment'),
@@ -552,7 +552,7 @@ def create_results_report_pdf_to_existing(case_data, pdf):
         plt.tight_layout()
 
         # Apply zero-bound expansion AFTER layout (to prevent being overridden)
-        log_scale_vars = {'y', 'y_eff', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
+        log_scale_vars = {'y', 'y_net', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
         for idx, (var_name, ylabel, title) in enumerate(page_vars):
             ax_idx = idx + axes_offset
             ax = axes[ax_idx]

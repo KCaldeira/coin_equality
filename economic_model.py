@@ -53,7 +53,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         Dictionary containing:
         - Tendencies: 'dK_dt', 'dEcum_dt', 'd_delta_Gini_dt', 'delta_Gini_step_change'
         - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y, redistribution,
-          mu, Lambda, AbateCost, y_eff, G_eff, U, E
+          mu, Lambda, AbateCost, y_net, G_eff, U, E
 
     Notes
     -----
@@ -70,9 +70,9 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     10. μ from AbateCost, θ₁, θ₂, E_pot (Eq 1.6)
     11. Λ from AbateCost, Y_damaged (Eq 1.7)
     12. Y_net from Y_damaged, Λ (Eq 1.8)
-    13. y_eff from y, AbateCost, L (Eq 1.9)
+    13. y_net from y, AbateCost, L (Eq 1.9)
     14. G_eff from f, ΔL, G_climate (Eq 4.4, applied to climate-damaged distribution)
-    15. U from y_eff, G_eff, η (Eq 3.5)
+    15. U from y_net, G_eff, η (Eq 3.5)
     16. E from σ, μ, Y_gross (Eq 2.3)
     17. dK/dt from s, Y_net, δ, K (Eq 1.10)
     18. d(delta_Gini)/dt, Gini_step from Gini dynamics
@@ -141,7 +141,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         Consumption = Y_damaged - Savings - AbateCost
 
         y = (Consumption + AbateCost) / L if L > 0 else 0.0
-        y_eff = Consumption / L if L > 0 else 0.0
+        y_net = Consumption / L if L > 0 else 0.0
 
         G_eff = 0.0
         Redistribution = 0.0
@@ -158,11 +158,11 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             mu = 0.0
 
         # Eq 3.5: Mean utility (simplified for Gini = 0)
-        if y_eff > 0:
+        if y_net > 0:
             if np.abs(eta - 1.0) < EPSILON:
-                U = np.log(y_eff)
+                U = np.log(y_net)
             else:
-                U = (y_eff ** (1 - eta)) / (1 - eta)
+                U = (y_net ** (1 - eta)) / (1 - eta)
         else:
             U = NEG_BIGNUM
 
@@ -176,27 +176,27 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         d_delta_Gini_dt = 0.0
         delta_Gini_step_change = 0.0
 
-    # Iteratively solve for y_eff since climate damage depends on effective income
+    # Iteratively solve for y_net since climate damage depends on effective income
     elif y_gross > 0 and omega_max < 1.0:
         # Initial guess: analytical approximation
         y_half = params['y_damage_halfsat']
         omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
         lambda_approx = f * fract_gdp
-        y_eff = y_gross * (1.0 - omega_approx) * (1-lambda_approx) * (1.0 - s)
+        y_net = y_gross * (1.0 - omega_approx) * (1-lambda_approx) * (1.0 - s)
 
         n_iterations = 0
         converged = False
-        y_eff_prev_prev = None
-        y_eff_new_prev = None
+        y_net_prev_prev = None
+        y_net_new_prev = None
 
         while n_iterations < MAX_INITIAL_CAPITAL_ITERATIONS and not converged:
-            y_eff_prev = y_eff
+            y_net_prev = y_net
             n_iterations += 1
 
             # Calculate climate damage using current income estimate
             # Uses params: psi1, psi2, y_damage_halfsat
             Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
-                delta_T, Gini, y_eff_prev, params
+                delta_T, Gini, y_net_prev, params
             )
 
             # Clamp Gini_climate to valid bounds (only if not zero)
@@ -247,30 +247,30 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
             # Eq 1.9: Effective per-capita income after climate damage and abatement costs
             # Use Aitken's delta-squared acceleration for faster convergence
-            y_eff_new = Consumption / L
+            y_net_new = Consumption / L
 
             if n_iterations == 1:
                 # First iteration: use simple update
-                y_eff = y_eff_new
+                y_net = y_net_new
             else:
                 # Aitken acceleration: use last two iterations to extrapolate
-                delta1 = y_eff_prev - y_eff_prev_prev
-                delta2 = y_eff_new - y_eff_prev
+                delta1 = y_net_prev - y_net_prev_prev
+                delta2 = y_net_new - y_net_prev
                 denominator = delta2 - delta1
 
                 if np.abs(denominator) > EPSILON:
                     # Apply Aitken's formula
-                    y_eff = y_eff_prev_prev - delta1**2 / denominator
+                    y_net = y_net_prev_prev - delta1**2 / denominator
                 else:
                     # Denominator too small, use simple update
-                    y_eff = y_eff_new
+                    y_net = y_net_new
 
             # Store values for next iteration
-            y_eff_prev_prev = y_eff_prev
-            y_eff_new_prev = y_eff_new
+            y_net_prev_prev = y_net_prev
+            y_net_new_prev = y_net_new
 
             # Check convergence using LOOSE_EPSILON for practical precision
-            converged = np.abs(y_eff - y_eff_prev) < LOOSE_EPSILON
+            converged = np.abs(y_net - y_net_prev) < LOOSE_EPSILON
 
         # Eq 4.3: Per-capita amount redistributed
         redistribution = Redistribution / L
@@ -288,11 +288,11 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             mu = 0.0
 
         # Eq 3.5: Mean utility
-        if y_eff > 0 and 0 <= G_eff <= 1.0:
+        if y_net > 0 and 0 <= G_eff <= 1.0:
             if np.abs(eta - 1.0) < EPSILON:
-                U = np.log(y_eff) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
+                U = np.log(y_net) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
             else:
-                term1 = (y_eff ** (1 - eta)) / (1 - eta)
+                term1 = (y_net ** (1 - eta)) / (1 - eta)
                 numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
                 denominator = 1 + G_eff * (2 * eta - 1)
                 U = term1 * (numerator / denominator)
@@ -321,7 +321,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         Redistribution = 0.0
         Consumption = 0.0
         y = 0.0
-        y_eff = 0.0
+        y_net = 0.0
         redistribution = 0.0
         n_iterations = 0
         G_eff = Gini
@@ -360,7 +360,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             'Lambda': Lambda,
             'AbateCost': AbateCost,
             'marginal_abatement_cost': marginal_abatement_cost,
-            'y_eff': y_eff,
+            'y_net': y_net,
             'G_eff': G_eff,
             'U': U,
             'E': E,
@@ -412,7 +412,7 @@ def integrate_model(config, store_detailed_output=True):
         - 'Gini_background': array of background Gini index values
         - 'A', 'sigma', 'theta1', 'f': time-dependent inputs
         - All derived variables: Y_gross, delta_T, Omega, Gini_climate, Y_damaged, Y_net,
-          y, redistribution, mu, Lambda, AbateCost, marginal_abatement_cost, y_eff, G_eff, E
+          y, redistribution, mu, Lambda, AbateCost, marginal_abatement_cost, y_net, G_eff, E
         - 'd_delta_Gini_dt', 'delta_Gini_step_change': perturbation tendencies
 
     Notes
@@ -507,7 +507,7 @@ def integrate_model(config, store_detailed_output=True):
             'Lambda': np.zeros(n_steps),
             'AbateCost': np.zeros(n_steps),
             'marginal_abatement_cost': np.zeros(n_steps),
-            'y_eff': np.zeros(n_steps),
+            'y_net': np.zeros(n_steps),
             'G_eff': np.zeros(n_steps),
             'E': np.zeros(n_steps),
             'dK_dt': np.zeros(n_steps),
@@ -571,7 +571,7 @@ def integrate_model(config, store_detailed_output=True):
             results['Lambda'][i] = outputs['Lambda']
             results['AbateCost'][i] = outputs['AbateCost']
             results['marginal_abatement_cost'][i] = outputs['marginal_abatement_cost']
-            results['y_eff'][i] = outputs['y_eff']
+            results['y_net'][i] = outputs['y_net']
             results['G_eff'][i] = outputs['G_eff']
             results['E'][i] = outputs['E']
             results['dK_dt'][i] = outputs['dK_dt']

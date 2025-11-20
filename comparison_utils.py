@@ -577,7 +577,7 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
       - Columns B+: One column per case with variable values
 
     Variable sheets match the plots in comparison_plots.pdf:
-    Economic: y, y_eff, K, Consumption, Savings, s, Y_gross, Y_net
+    Economic: y, y_net, K, Consumption, Savings, s, Y_gross, Y_net
     Climate: delta_T, E, Ecum
     Abatement/Damage: f, mu, Lambda, AbateCost, Omega, Climate_Damage, marginal_abatement_cost
     Inequality/Utility: Gini, Gini_climate, G_eff, U, discounted_utility
@@ -591,7 +591,7 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
 
     variable_specs = [
         ('y', 'Per-Capita Consumption'),
-        ('y_eff', 'Effective Per-Capita Income'),
+        ('y_net', 'Effective Per-Capita Income'),
         ('K', 'Capital Stock'),
         ('Consumption', 'Total Consumption'),
         ('Savings', 'Gross Investment'),

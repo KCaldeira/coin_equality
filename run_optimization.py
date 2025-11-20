@@ -369,8 +369,8 @@ def create_visualization_plots(sensitivity_results, opt_results, comparison_resu
         ax = axes[0, 0]
         for (label, data), color in zip(comparison_results.items(), colors):
             t = data['results']['t']
-            y_eff = data['results']['y_eff']
-            ax.plot(t, y_eff, label=label, linewidth=2, color=color)
+            y_net = data['results']['y_net']
+            ax.plot(t, y_net, label=label, linewidth=2, color=color)
         ax.set_xlabel('Time (years)', fontsize=11)
         ax.set_ylabel('Effective per-capita income ($)', fontsize=11)
         ax.set_title('Per-Capita Income Over Time', fontsize=12, fontweight='bold')
