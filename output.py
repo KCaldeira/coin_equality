@@ -658,18 +658,23 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
 
         # Skip log scale plots
         if not any(var in log_scale_vars for var in var_list):
-            ymin, ymax = ax.get_ylim()
-            # Check if both bounds have the same sign (both positive or both negative)
-            if ymin * ymax > 0:  # Same sign (excludes zero crossings)
+            # Check actual data range (not axis limits which may have matplotlib padding)
+            all_data = np.concatenate([results[var] for var in var_list])
+            data_min = np.min(all_data)
+            data_max = np.max(all_data)
+
+            # Only apply if data doesn't cross zero (all positive or all negative)
+            if data_min * data_max > 0:  # Same sign
+                ymin, ymax = ax.get_ylim()
                 abs_min = abs(ymin)
                 abs_max = abs(ymax)
                 # If the smaller bound is less than half the larger, replace it with zero
                 if min(abs_min, abs_max) < 0.5 * max(abs_min, abs_max):
                     if abs_min < abs_max:
-                        # Lower bound has smaller magnitude
+                        # Lower bound has smaller magnitude - set to zero
                         ax.set_ylim(0, ymax)
                     else:
-                        # Upper bound has smaller magnitude
+                        # Upper bound has smaller magnitude - set to zero
                         ax.set_ylim(ymin, 0)
 
     # Save to PDF
