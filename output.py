@@ -40,8 +40,11 @@ VARIABLE_METADATA = {
     'sigma': {'description': 'Carbon Intensity of GDP', 'units': 'tCO₂/$', 'group': 'climate'},
     'theta1': {'description': 'Marginal Abatement Cost at mu=1', 'units': '$/tCO₂', 'group': 'abatement'},
     'marginal_abatement_cost': {'description': 'Marginal Abatement Cost', 'units': '$/tCO₂', 'group': 'abatement'},
-    'y': {'description': 'Mean Per-Capita Income', 'units': '$/person', 'group': 'economic'},
+    'y': {'description': 'Per-Capita Consumption', 'units': '$/person', 'group': 'economic'},
     'y_eff': {'description': 'Effective Per-Capita Income', 'units': '$/person', 'group': 'economic'},
+    'Consumption': {'description': 'Total Consumption', 'units': '$/yr', 'group': 'economic'},
+    'Savings': {'description': 'Gross Investment', 'units': '$/yr', 'group': 'economic'},
+    's': {'description': 'Savings Rate', 'units': '', 'group': 'policy'},
     'delta_Gini': {'description': 'Gini Perturbation from Background', 'units': '', 'group': 'inequality'},
     'Gini_background': {'description': 'Background Gini Index', 'units': '', 'group': 'inequality'},
     'Gini': {'description': 'Total Gini Index', 'units': '', 'group': 'inequality'}
