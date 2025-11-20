@@ -592,7 +592,7 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
             else:
                 ylabel = description
             ax.set_ylabel(ylabel, fontsize=11)
-            ax.set_title(var_name, fontsize=12, fontweight='bold', pad=10)
+            ax.set_title(f'{var_name}: {description}', fontsize=12, fontweight='bold', pad=10)
 
         elif chart_type == 'combined':
             # Combined variables plot
@@ -624,22 +624,6 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
         if any(var in log_scale_vars for var in var_list):
             ax.set_yscale('log')
 
-        # Apply zero-bound expansion for better axis scaling (skip for log scale)
-        if not any(var in log_scale_vars for var in var_list):
-            ymin, ymax = ax.get_ylim()
-            # Check if both bounds have the same sign (both positive or both negative)
-            if ymin * ymax > 0:  # Same sign (excludes zero crossings)
-                abs_min = abs(ymin)
-                abs_max = abs(ymax)
-                # If the smaller bound is less than half the larger, replace it with zero
-                if min(abs_min, abs_max) < 0.5 * max(abs_min, abs_max):
-                    if abs_min < abs_max:
-                        # Lower bound has smaller magnitude
-                        ax.set_ylim(0, ymax)
-                    else:
-                        # Upper bound has smaller magnitude
-                        ax.set_ylim(ymin, 0)
-
         # Improve grid and formatting
         ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
         ax.tick_params(axis='both', which='major', labelsize=10)
@@ -661,9 +645,34 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
     for i in range(n_charts, len(axes)):
         axes[i].set_visible(False)
 
-    # Adjust layout and save
+    # Adjust layout
     plt.tight_layout()
     plt.subplots_adjust(top=0.9)
+
+    # Apply zero-bound expansion AFTER layout adjustment (to prevent being overridden)
+    for i, chart_spec in enumerate(chart_specs):
+        if i >= len(axes):
+            break
+        ax = axes[i]
+        var_list = chart_spec['variables']
+
+        # Skip log scale plots
+        if not any(var in log_scale_vars for var in var_list):
+            ymin, ymax = ax.get_ylim()
+            # Check if both bounds have the same sign (both positive or both negative)
+            if ymin * ymax > 0:  # Same sign (excludes zero crossings)
+                abs_min = abs(ymin)
+                abs_max = abs(ymax)
+                # If the smaller bound is less than half the larger, replace it with zero
+                if min(abs_min, abs_max) < 0.5 * max(abs_min, abs_max):
+                    if abs_min < abs_max:
+                        # Lower bound has smaller magnitude
+                        ax.set_ylim(0, ymax)
+                    else:
+                        # Upper bound has smaller magnitude
+                        ax.set_ylim(ymin, 0)
+
+    # Save to PDF
     pdf.savefig(fig, dpi=150, bbox_inches='tight')
     plt.close(fig)
 
