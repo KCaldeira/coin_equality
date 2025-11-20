@@ -321,7 +321,9 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         's',  # Savings rate
         # State variables
         'K',  # Capital stock
-        'Gini',  # Gini index before redistribution
+        'delta_Gini',  # Perturbation from background Gini
+        'Gini_background',  # Background Gini index
+        'Gini',  # Total Gini index (background + perturbation)
         'Ecum',  # Cumulative emissions
         # Related to Ecum
         'dEcum_dt',  # Rate of cumulative emissions change
