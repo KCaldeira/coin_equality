@@ -183,9 +183,9 @@ def create_results_report_pdf(case_data, output_pdf):
         ('Climate_Damage', 'Climate damage ($/yr)', 'Total Climate Damage'),
 
         # Inequality and Utility
-        ('Gini', 'Gini before redistribution', 'Starting Gini Index'),
+        ('Gini', 'Gini before redistribution', 'Background Gini Index'),
         ('Gini_climate', 'Gini after climate damage', 'Post-Climate-Damage Gini'),
-        ('G_eff', 'Gini after redistribution', 'Effective Gini Index'),
+        ('G_eff', 'Gini after redistribution', 'Post-Climate-Damage Post-Transfer Gini Index'),
         ('U', 'Mean utility', 'Mean Utility Per Capita'),
         ('discounted_utility', 'Discounted utility', 'Discounted Utility Per Capita'),
 
@@ -496,9 +496,9 @@ def create_results_report_pdf_to_existing(case_data, pdf):
         ('Climate_Damage', 'Climate damage ($/yr)', 'Total Climate Damage'),
 
         # Inequality and Utility
-        ('Gini', 'Gini before redistribution', 'Starting Gini Index'),
+        ('Gini', 'Gini before redistribution', 'Background Gini Index'),
         ('Gini_climate', 'Gini after climate damage', 'Post-Climate-Damage Gini'),
-        ('G_eff', 'Gini after redistribution', 'Effective Gini Index'),
+        ('G_eff', 'Gini after redistribution', 'Post-Climate-Damage Post-Transfer Gini Index'),
         ('U', 'Mean utility', 'Mean Utility Per Capita'),
         ('discounted_utility', 'Discounted utility', 'Discounted Utility Per Capita'),
 

@@ -20,7 +20,7 @@ VARIABLE_METADATA = {
     'A': {'description': 'Total Factor Productivity', 'units': '', 'group': 'economic'},
     'E': {'description': 'Actual Emissions', 'units': 'tCO₂/yr', 'group': 'climate'},
     'Ecum': {'description': 'Cumulative Emissions', 'units': 'tCO₂', 'group': 'climate'},
-    'G_eff': {'description': 'Effective Gini Index', 'units': '', 'group': 'inequality'},
+    'G_eff': {'description': 'Post-Climate-Damage Post-Transfer Gini Index', 'units': '', 'group': 'inequality'},
     'Gini_climate': {'description': 'Post-Climate-Damage Gini', 'units': '', 'group': 'inequality'},
     'K': {'description': 'Capital Stock', 'units': '$', 'group': 'economic'},
     'L': {'description': 'Population', 'units': 'people', 'group': 'economic'},
