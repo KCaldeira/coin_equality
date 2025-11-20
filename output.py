@@ -361,7 +361,7 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'mu',  # Abatement fraction
         'E',  # CO2 emissions
         'dK_dt',  # Net capital accumulation
-        'y',  # Per-capita Consumption (before abatement)
+        'y',  # Per-capita Consumption Plus Abatement
         'd_delta_Gini_dt',  # Continuous delta_Gini change rate
         'delta_Gini_step_change',  # Discontinuous delta_Gini step change
         'marginal_abatement_cost',  # Marginal abatement cost (social cost of carbon)
@@ -391,7 +391,7 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'K': ('Capital stock', '$'),
         'Consumption': ('Total Consumption', '$/yr'),
         'dK_dt': ('Net capital accumulation', '$/yr'),
-        'y': ('Per-capita Consumption', '$/person/yr'),
+        'y': ('Per-capita Consumption Plus Abatement', '$/person/yr'),
         'delta_Gini': ('Perturbation from background Gini index', 'dimensionless'),
         'Gini': ('Total Gini index (background + perturbation)', 'dimensionless'),
         'Gini_background': ('Background Gini index', 'dimensionless'),
