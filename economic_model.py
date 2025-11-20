@@ -39,9 +39,9 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         - 'theta1': Abatement cost coefficient (current, $ tCO2^-1)
         - 'theta2': Abatement cost exponent
         - 'mu_max': Maximum allowed abatement fraction (cap on μ)
-        - 'Gini_initial': Initial Gini index
+        - 'Gini_background': Background Gini index (current, from time function)
         - 'Gini_fract': Fraction of Gini change as instantaneous step
-        - 'Gini_restore': Rate of restoration to Gini_initial (yr^-1)
+        - 'Gini_restore': Rate of restoration to Gini_background (yr^-1)
         - 'fract_gdp': Fraction of GDP available for redistribution and abatement
         - 'f': Fraction allocated to abatement vs redistribution
     store_detailed_output : bool, optional
@@ -75,12 +75,12 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     15. U from y_eff, G_eff, η (Eq 3.5)
     16. E from σ, μ, Y_gross (Eq 2.3)
     17. dK/dt from s, Y_net, δ, K (Eq 1.10)
-    18. dGini/dt, Gini_step from Gini dynamics
+    18. d(delta_Gini)/dt, Gini_step from Gini dynamics
     """
     # Extract state variables
     K = state['K']
     Ecum = state['Ecum']
-    Gini = state['Gini']
+    delta_Gini = state['delta_Gini']
 
     # Extract parameters
     alpha = params['alpha']
@@ -97,10 +97,13 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     theta2 = params['theta2']
     mu_max = params['mu_max']
     fract_gdp = params['fract_gdp']
-    Gini_initial = params['Gini_initial']
+    Gini_background = params['Gini_background']
     Gini_fract = params['Gini_fract']
     Gini_restore = params['Gini_restore']
     f = params['f']
+
+    # Compute total Gini from background + perturbation
+    Gini = Gini_background + delta_Gini
 
     # strange things can happen during the optimization phase, thus the if-then checks below
 
@@ -302,9 +305,9 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         # Eq 1.10: Capital tendency
         dK_dt = s * Y_net - delta * K
 
-        # Gini dynamics
-        dGini_dt = -Gini_restore * (Gini - Gini_initial)
-        Gini_step_change = Gini_fract * (G_eff - Gini)
+        # Gini perturbation dynamics (restore to zero)
+        d_delta_Gini_dt = -Gini_restore * delta_Gini
+        delta_Gini_step_change = Gini_fract * (G_eff - Gini)
 
     else:
         Omega = 0.0
@@ -325,8 +328,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         U = NEG_BIGNUM
         E = 0.0
         dK_dt = -delta * K
-        dGini_dt = -Gini_restore * (Gini - Gini_initial)
-        Gini_step_change = Gini_fract * (G_eff - Gini)
+        d_delta_Gini_dt = -Gini_restore * delta_Gini
+        delta_Gini_step_change = Gini_fract * (G_eff - Gini)
         
     # Prepare output
     results = {}
@@ -341,8 +344,10 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         results.update({
             'dK_dt': dK_dt,
             'dEcum_dt': E,
-            'dGini_dt': dGini_dt,
-            'Gini_step_change': Gini_step_change,
+            'd_delta_Gini_dt': d_delta_Gini_dt,
+            'delta_Gini_step_change': delta_Gini_step_change,
+            'Gini': Gini,  # Total Gini (background + perturbation) for plotting
+            'Gini_background': Gini_background,  # Background Gini for reference
             'Y_gross': Y_gross,
             'delta_T': delta_T,
             'Omega': Omega,
@@ -366,14 +371,14 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             's': s,  # Savings rate (currently constant, may become time-dependent)
             'n_iterations': n_iterations,  # Number of iterations for climate damage convergence
         })
-    
+
         # Return minimal variables needed for optimization
     results.update( {
         'U': U,
         'dK_dt': dK_dt,
         'dEcum_dt': E,
-        'dGini_dt': dGini_dt,
-        'Gini_step_change': Gini_step_change,
+        'd_delta_Gini_dt': d_delta_Gini_dt,
+        'delta_Gini_step_change': delta_Gini_step_change,
     })
     
     return results
@@ -416,7 +421,7 @@ def integrate_model(config, store_detailed_output=True):
     Initial conditions are computed automatically:
     - Ecum(0) = Ecum_initial (initial cumulative emissions from configuration)
     - K(0) = (s·A(0)/δ)^(1/(1-α))·L(0) (steady-state capital)
-    - Gini(0) = Gini_initial (initial Gini index from configuration)
+    - Gini(0) = Gini_background(t_start) (background Gini from time function at start)
     """
     # Extract integration parameters
     t_start = config.integration_params.t_start
@@ -438,7 +443,7 @@ def integrate_model(config, store_detailed_output=True):
     Ecum_initial = config.scalar_params.Ecum_initial
     params = evaluate_params_at_time(t_start, config)
 
-    Gini = config.scalar_params.Gini_initial
+    Gini = config.time_functions['Gini_background'](t_start)
     k_climate = params['k_climate']
     delta_T = k_climate * Ecum_initial
 
@@ -473,7 +478,7 @@ def integrate_model(config, store_detailed_output=True):
     state = {
         'K': config.scalar_params.K_initial,
         'Ecum': config.scalar_params.Ecum_initial,
-        'Gini': config.scalar_params.Gini_initial
+        'delta_Gini': 0.0  # Initialize perturbation to zero
     }
 
     # Initialize storage for variables
@@ -489,6 +494,8 @@ def integrate_model(config, store_detailed_output=True):
             'Y_gross': np.zeros(n_steps),
             'delta_T': np.zeros(n_steps),
             'Omega': np.zeros(n_steps),
+            'Gini': np.zeros(n_steps),  # Total Gini (background + perturbation)
+            'Gini_background': np.zeros(n_steps),  # Background Gini
             'Gini_climate': np.zeros(n_steps),
             'Y_damaged': np.zeros(n_steps),
             'Y_net': np.zeros(n_steps),
@@ -503,8 +510,8 @@ def integrate_model(config, store_detailed_output=True):
             'E': np.zeros(n_steps),
             'dK_dt': np.zeros(n_steps),
             'dEcum_dt': np.zeros(n_steps),
-            'dGini_dt': np.zeros(n_steps),
-            'Gini_step_change': np.zeros(n_steps),
+            'd_delta_Gini_dt': np.zeros(n_steps),
+            'delta_Gini_step_change': np.zeros(n_steps),
             'Climate_Damage': np.zeros(n_steps),
             'Savings': np.zeros(n_steps),
             'Consumption': np.zeros(n_steps),
@@ -518,7 +525,7 @@ def integrate_model(config, store_detailed_output=True):
         't': t_array,
         'K': np.zeros(n_steps),
         'Ecum': np.zeros(n_steps),
-        'Gini': np.zeros(n_steps),
+        'delta_Gini': np.zeros(n_steps),
         'U': np.zeros(n_steps),
         'L': np.zeros(n_steps),  # Needed for objective function
     })
@@ -539,7 +546,7 @@ def integrate_model(config, store_detailed_output=True):
             # Store state variables
             results['K'][i] = state['K']
             results['Ecum'][i] = state['Ecum']
-            results['Gini'][i] = state['Gini']
+            results['delta_Gini'][i] = state['delta_Gini']
 
             # Store time-dependent inputs
             results['A'][i] = params['A']
@@ -551,6 +558,8 @@ def integrate_model(config, store_detailed_output=True):
             results['Y_gross'][i] = outputs['Y_gross']
             results['delta_T'][i] = outputs['delta_T']
             results['Omega'][i] = outputs['Omega']
+            results['Gini'][i] = outputs['Gini']  # Total Gini
+            results['Gini_background'][i] = outputs['Gini_background']  # Background Gini
             results['Gini_climate'][i] = outputs['Gini_climate']
             results['Y_damaged'][i] = outputs['Y_damaged']
             results['Y_net'][i] = outputs['Y_net']
@@ -565,8 +574,8 @@ def integrate_model(config, store_detailed_output=True):
             results['E'][i] = outputs['E']
             results['dK_dt'][i] = outputs['dK_dt']
             results['dEcum_dt'][i] = outputs['dEcum_dt']
-            results['dGini_dt'][i] = outputs['dGini_dt']
-            results['Gini_step_change'][i] = outputs['Gini_step_change']
+            results['d_delta_Gini_dt'][i] = outputs['d_delta_Gini_dt']
+            results['delta_Gini_step_change'][i] = outputs['delta_Gini_step_change']
             results['Climate_Damage'][i] = outputs['Climate_Damage']
             results['Savings'][i] = outputs['Savings']
             results['Consumption'][i] = outputs['Consumption']
@@ -579,13 +588,7 @@ def integrate_model(config, store_detailed_output=True):
             state['K'] = state['K'] + dt * outputs['dK_dt']
             # do not allow cumulative emissions to go negative, making it colder than the initial condition
             state['Ecum'] = max(0.0, state['Ecum'] + dt * outputs['dEcum_dt'])
-            # Gini update includes both continuous change and discontinuous step
-            # Special case: if Gini is exactly 0.0, keep it at 0.0 (DICE-like mode)
-            new_Gini = state['Gini'] + dt * outputs['dGini_dt'] + outputs['Gini_step_change']
-            if state['Gini'] == 0.0:
-                state['Gini'] = 0.0  # Keep at zero for DICE-like simulations
-            else:
-                # Clamp Gini to stay within valid bounds (0, 1) exclusive
-                state['Gini'] = np.clip(new_Gini, EPSILON, 1.0 - EPSILON)
+            # delta_Gini update includes both continuous change and discontinuous step
+            state['delta_Gini'] = state['delta_Gini'] + dt * outputs['d_delta_Gini_dt'] + outputs['delta_Gini_step_change']
 
     return results

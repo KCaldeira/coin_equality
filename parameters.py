@@ -39,31 +39,33 @@ def create_constant(value):
     return lambda t: value
 
 
-def create_exponential_growth(initial_value, growth_rate):
+def create_exponential_growth(exponential_scaling, growth_rate, additive_constant=0.0):
     """
     Create an exponential growth/decay function.
 
     Parameters
     ----------
-    initial_value : float
-        Value at t=0
+    exponential_scaling : float
+        Scaling factor for the exponential term
     growth_rate : float
         Growth rate (yr^-1). Positive for growth, negative for decay.
+    additive_constant : float, optional
+        Constant offset added to the exponential (default: 0.0)
 
     Returns
     -------
     callable
-        Function f(t) = initial_value * exp(growth_rate * t)
+        Function f(t) = exponential_scaling * exp(growth_rate * t) + additive_constant
 
     Examples
     --------
     Population growth at 1% per year:
     >>> L = create_exponential_growth(7e9, 0.01)
 
-    Carbon intensity declining at 2% per year:
-    >>> sigma = create_exponential_growth(0.5, -0.02)
+    Carbon intensity declining at 2% per year with floor:
+    >>> sigma = create_exponential_growth(0.5, -0.02, additive_constant=0.01)
     """
-    return lambda t: initial_value * np.exp(growth_rate * t)
+    return lambda t: exponential_scaling * np.exp(growth_rate * t) + additive_constant
 
 
 def create_logistic_growth(L0, L_inf, growth_rate):
@@ -301,12 +303,10 @@ class ScalarParameters:
         Coefficient of relative risk aversion (CRRA utility parameter)
     rho : float
         Pure rate of time preference (yr^-1)
-    Gini_initial : float
-        Initial Gini index (0 < Gini_initial < 1)
     Gini_fract : float
         Fraction of effective Gini change as instantaneous step (0 <= Gini_fract <= 1)
     Gini_restore : float
-        Rate at which Gini restores to initial value (yr^-1, 0=no restoration)
+        Rate at which Gini restores to background value (yr^-1, 0=no restoration)
     fract_gdp : float
         Fraction of GDP available for redistribution and abatement
     theta2 : float
@@ -329,7 +329,6 @@ class ScalarParameters:
     k_climate: float
     eta: float
     rho: float
-    Gini_initial: float
     Gini_fract: float
     Gini_restore: float
     fract_gdp: float
@@ -617,7 +616,7 @@ def evaluate_params_at_time(t, config):
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
         'alpha', 'delta', 'psi1', 'psi2', 'y_damage_halfsat', 'k_climate',
-        'eta', 'rho', 'Gini_initial', 'Gini_fract', 'Gini_restore', 'fract_gdp', 'theta2', 'mu_max',
+        'eta', 'rho', 'Gini_background', 'Gini_fract', 'Gini_restore', 'fract_gdp', 'theta2', 'mu_max',
         'A', 'L', 'sigma', 'theta1', 'f', 's'
 
     Notes
@@ -642,7 +641,6 @@ def evaluate_params_at_time(t, config):
         'k_climate': sp.k_climate,
         'eta': sp.eta,
         'rho': sp.rho,
-        'Gini_initial': sp.Gini_initial,
         'Gini_fract': sp.Gini_fract,
         'Gini_restore': sp.Gini_restore,
         'fract_gdp': sp.fract_gdp,
@@ -654,6 +652,7 @@ def evaluate_params_at_time(t, config):
         'L': tf['L'](t),
         'sigma': tf['sigma'](t),
         'theta1': tf['theta1'](t),
+        'Gini_background': tf['Gini_background'](t),
     }
 
     # Dual control function evaluation returns (f, s)
@@ -688,8 +687,9 @@ def _create_time_function(func_spec):
         return create_constant(func_spec['value'])
     elif func_type == 'exponential_growth':
         return create_exponential_growth(
-            func_spec['initial_value'],
-            func_spec['growth_rate']
+            func_spec['exponential_scaling'],
+            func_spec['growth_rate'],
+            func_spec.get('additive_constant', 0.0)
         )
     elif func_type == 'logistic_growth':
         return create_logistic_growth(

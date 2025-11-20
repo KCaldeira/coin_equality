@@ -1,5 +1,5 @@
 {
-    "run_name": "COIN-equality_000_0.5x_0.02",
+    "run_name": "COIN-equality_000_1x",
     "description": "Baseline scenario using GN_ISRES",
     "scalar_parameters": {
         "alpha": 0.3,
@@ -8,7 +8,7 @@
         "_delta": "Capital depreciation rate (10% per year)",
         "psi1": 0,
         "_psi1": "Linear climate damage coefficient (\u00b0C\u207b\u00b9) [Barrage & Nordhaus 2023]",
-        "psi2": 0.0017335,
+        "psi2": 0.003467,
         "_psi2": "2x = 0.006934, 1.5x=0.0052005, Quadratic climate damage coefficient (\u00b0C\u207b\u00b2) [2x 0.003467 from Barrage & Nordhaus 2023]",
         "y_damage_halfsat": 10000.0,
         "_y_damage_halfsat": "Income level ($) at which climate damage is half of maximum (lower = more regressive damage). Set very high (e.g., 1e12) for uniform damage",
@@ -22,7 +22,7 @@
         "_Gini_fract": "Fraction of effective Gini change that occurs as instantaneous step (0=no step change, 1=full step change) 0.1 means 10% of total change is step change",
         "Gini_restore": 0.0,
         "_Gini_restore": "Rate at which Gini restores to initial value (yr^-1, 0=no restoration, positive=restoration to Gini_initial) 0.1 means 10% per year restoration rate",
-        "fract_gdp": 0.01,
+        "fract_gdp": 1.0,
         "_fract_gdp": "Fraction of GDP available for redistribution and abatement, >= 1.0 disables redistribution and places no bounds on abatement",
         "theta2": 2.6,
         "_theta2": "Abatement cost exponent",
@@ -76,9 +76,14 @@
             "_fract_1": "2-exponential fit to sigma in Barrage & Nordhaus 2023"
         },
         "Gini_background": {
-            "_description": "Background Gini index (restoring attractor for Gini dynamics)",
-            "type": "constant",
-            "value": 0.67
+            "_description": "Background Gini index (restoring attractor for Gini dynamics), assuming t = 0 is year 2020",
+            "type": "exponential_growth",
+            "exponential_scaling": 0.19517,
+            "_exponential_scaling": "Exponential scaling to represent projected Gini changes over time from SSP2, https://iopscience.iop.org/article/10.1088/1748-9326/acbdb0",
+            "additive_constant": 0.37796,
+            "_additive_constant": "Additive constant to represent projected Gini changes over time from SSP2, https://iopscience.iop.org/article/10.1088/1748-9326/acbdb0",
+            "growth_rate": -0.01058,
+            "_growth_rate": "Growth rate to represent projected Gini changes over time from SSP2, https://iopscience.iop.org/article/10.1088/1748-9326/acbdb0"
         }
     },
     "integration_parameters": {

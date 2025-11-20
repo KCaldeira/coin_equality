@@ -21,8 +21,6 @@
     "_eta": "Coefficient of relative risk aversion",
     "rho": 0.01,
     "_rho": "Pure rate of time preference (1% per year)",
-    "Gini_initial": 0.67,
-    "_Gini_initial": "Initial Gini index (moderate inequality)",
     "Gini_fract": 0.10,
     "_Gini_fract": "Fraction of effective Gini change that occurs as instantaneous step",
     "Gini_restore": 0.10,
@@ -38,32 +36,37 @@
     "A": {
       "_description": "Total factor productivity (TFP)",
       "type": "exponential_growth",
-      "initial_value": 454.174,
+      "exponential_scaling": 454.174,
       "growth_rate": 0.01,
-      "_growth_rate": "1% annual TFP growth",
+      "_growth_rate": "1% annual TFP growth"
     },
     "L": {
       "_description": "Population",
       "type": "exponential_growth",
-      "initial_value": 10e9,
+      "exponential_scaling": 10e9,
       "growth_rate": 0.01,
-      "_growth_rate": "1% annual population growth",
+      "_growth_rate": "1% annual population growth"
     },
     "sigma": {
       "_description": "Carbon intensity of GDP",
       "type": "exponential_growth",
-      "initial_value": 0.0005,
+      "exponential_scaling": 0.0005,
       "growth_rate": -0.02,
-      "_growth_rate": "Declining at 2% per year (decarbonization)",
+      "_growth_rate": "Declining at 2% per year (decarbonization)"
     },
     "theta1": {
       "_description": "Abatement cost per ton of CO2 for the last ton abated ($/tCO2)",
       "type": "exponential_growth",
-      "initial_value": 1000,
+      "exponential_scaling": 1000,
       "growth_rate": -0.02,
-      "_growth_rate": "Declining at 2% per year (technological progress)",
+      "_growth_rate": "Declining at 2% per year (technological progress)"
     },
-  }
+    "Gini_background": {
+      "_description": "Background Gini index (restoring attractor for Gini dynamics)",
+      "type": "constant",
+      "value": 0.67
+    }
+  },
 
   "integration_parameters": {
     "_description": "Time integration settings",
@@ -76,14 +79,14 @@
     "atol": 1e-9,
     "_tolerances": "Reserved for future adaptive solvers",
     "plot_short_horizon": 100.0,
-    "_plot_short_horizon": "Time horizon (years) for short-term detailed plots",
-  }
+    "_plot_short_horizon": "Time horizon (years) for short-term detailed plots"
+  },
 
   "control_function": {
     "_description": "Not used for iterative refinement optimization (specified in optimization_parameters instead)",
     "type": "constant",
-    "value": 0.5,
-  }
+    "value": 0.5
+  },
 
   "optimization_parameters": {
     "_description": "ITERATIVE REFINEMENT MODE: optimization_iterations is integer (number of iterations), initial_guess is scalar",
@@ -100,6 +103,6 @@
     "_algorithm": "GN_ISRES (global stochastic optimizer, explores parameter space more broadly)",
     "_stopping_criteria": "NLopt stopping criteria. For f ∈ [0,1], absolute tolerance makes more sense than relative.",
     "xtol_abs": 1e-10,
-    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |Δf| < 1e-10. Appropriate since f ∈ [0,1].",
-  },
+    "_xtol_abs": "Absolute tolerance on control parameters (f values): stops when all |Δf| < 1e-10. Appropriate since f ∈ [0,1]."
+  }
 }

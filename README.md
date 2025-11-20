@@ -376,62 +376,79 @@ For more sophisticated treatment of `f_gdp >= 1` with non-Pareto income distribu
 
 #### 5. Gini Index Dynamics and Persistence
 
-The Gini index is now a **state variable** that evolves over time, allowing for persistence of redistribution effects and gradual restoration to baseline inequality.
+The Gini index consists of two components: an **exogenous background** `Gini_background(t)` and an **endogenous perturbation** `delta_Gini(t)` that evolves over time.
+
+**Decomposition:**
+```
+Gini(t) = Gini_background(t) + delta_Gini(t)
+```
+where:
+- `Gini_background(t)`: Exogenously specified time function (e.g., demographic trends, structural inequality)
+- `delta_Gini(t)`: Endogenous state variable representing policy-driven perturbations from background
 
 **State Variable:**
 ```
-Gini(t) - Current Gini index of the income distribution
+delta_Gini(t) - Perturbation from background Gini index
 ```
 
-**Gini Evolution:**
+**Perturbation Evolution:**
 
-The Gini index evolves through two mechanisms:
+The perturbation evolves through two mechanisms:
 
 1. **Instantaneous Step Change** (fraction of policy effect applied immediately):
 ```
 Gini_step = Gini_fract · (G_eff - Gini)
 ```
 where:
+- `Gini = Gini_background(t) + delta_Gini` is the current total Gini
 - `G_eff` is the effective Gini from current policy (redistribution/abatement allocation)
 - `Gini_fract` is the fraction of the change applied as an immediate step (0 ≤ Gini_fract ≤ 1)
 - `Gini_fract = 0`: no immediate effect (fully persistent system)
 - `Gini_fract = 1`: full immediate effect (no persistence)
 - `Gini_fract = 0.1`: 10% of policy effect occurs immediately
 
-2. **Continuous Restoration** (gradual return to baseline):
+2. **Continuous Restoration** (gradual return to background):
 ```
-dGini/dt = -Gini_restore · (Gini - Gini_initial)
+d(delta_Gini)/dt = -Gini_restore · delta_Gini
 ```
 where:
 - `Gini_restore` is the restoration rate (yr⁻¹)
 - `Gini_restore = 0`: no restoration (persistent policy effects)
-- `Gini_restore > 0`: gradual restoration toward initial inequality
+- `Gini_restore > 0`: exponential decay toward background inequality
 - `Gini_restore = 0.1`: 10% per year restoration rate (timescale ~10 years)
 
 **Combined Update Rule:**
 ```
-Gini(t+dt) = Gini(t) + dt · dGini/dt + Gini_step
+delta_Gini(t+dt) = delta_Gini(t) + dt · d(delta_Gini)/dt + Gini_step
 ```
 
 **Physical Interpretation:**
 
-This formulation captures two competing effects:
-- **Policy pressure** (via `Gini_step`): Redistribution policies push toward lower inequality (G_eff < Gini_initial)
-- **Structural restoration** (via `dGini/dt`): Absent continued intervention, inequality tends to return to baseline levels
+This formulation cleanly separates exogenous and endogenous inequality dynamics:
+- **Exogenous background** (`Gini_background(t)`): Captures structural inequality trends (demographics, technology, institutions) specified externally
+- **Endogenous perturbation** (`delta_Gini`): Captures policy-driven deviations from background that restore to zero
+- **Policy pressure** (via `Gini_step`): Redistribution policies create perturbations from background
+- **Structural restoration** (via `d(delta_Gini)/dt`): Absent continued intervention, perturbations decay back to zero
 
 The `Gini_fract` parameter controls the **speed of policy effect**:
 - Small `Gini_fract`: Policy effects build up gradually (high persistence/inertia)
 - Large `Gini_fract`: Policy effects manifest quickly (low persistence/inertia)
 
 The `Gini_restore` parameter controls the **persistence of achieved changes**:
-- Small `Gini_restore`: Changes are long-lasting
-- Large `Gini_restore`: Changes decay quickly without continued policy pressure
+- Small `Gini_restore`: Perturbations are long-lasting
+- Large `Gini_restore`: Perturbations decay quickly without continued policy pressure
+
+**Initial Condition:**
+```
+delta_Gini(0) = 0
+```
+The system begins at the background inequality level.
 
 **Climate Damage Interaction:**
 
 Climate damage affects inequality through the intermediate variable `G_climate`:
 ```
-Current Gini → (climate damage) → G_climate → (redistribution/abatement) → G_eff
+Gini = Gini_background + delta_Gini → (climate damage) → G_climate → (redistribution/abatement) → G_eff
 ```
 where `G_climate > Gini` due to regressive climate damage impacts (lower incomes suffer proportionally more).
 
@@ -467,9 +484,8 @@ Utility and inequality parameters:
 |-----------|-------------|-------|----------|
 | `η` | Coefficient of relative risk aversion (CRRA) | - | `eta` |
 | `ρ` | Pure rate of time preference | yr⁻¹ | `rho` |
-| `G₁` | Initial Gini index (0 = perfect equality, 1 = max inequality) | - | `Gini_initial` |
 | `Gini_fract` | Fraction of effective Gini change as instantaneous step (0 = no step, 1 = full step) | - | `Gini_fract` |
-| `Gini_restore` | Rate at which Gini restores to initial value (0 = no restoration) | yr⁻¹ | `Gini_restore` |
+| `Gini_restore` | Rate at which delta_Gini restores to zero (0 = no restoration) | yr⁻¹ | `Gini_restore` |
 | `f_gdp` | Fraction of income available for redistribution (<1: active redistribution; >=1: redistribution disabled, pure abatement mode) | - | `fract_gdp` |
 
 ### Time-Dependent Functions
@@ -482,8 +498,9 @@ These functions are evaluated at each time step:
 | `L(t)` | Population | people | `L` |
 | `σ(t)` | Carbon intensity of GDP | tCO₂ $⁻¹ | `sigma` |
 | `θ₁(t)` | Marginal abatement cost as μ→1 | $ tCO₂⁻¹ | `theta1` |
+| `Gini_background(t)` | Background Gini index (exogenous inequality baseline) | - | `Gini_background` |
 
-Each function is specified by `type` and type-specific parameters (e.g., `initial_value`, `growth_rate`). Six function types are available: `constant`, `exponential_growth`, `logistic_growth`, `piecewise_linear`, `double_exponential_growth` (Barrage & Nordhaus 2023), and `gompertz_growth` (Barrage & Nordhaus 2023). See the Configuration section below for detailed specifications.
+Each function is specified by `type` and type-specific parameters (e.g., `exponential_scaling`, `growth_rate`). Six function types are available: `constant`, `exponential_growth`, `logistic_growth`, `piecewise_linear`, `double_exponential_growth` (Barrage & Nordhaus 2023), and `gompertz_growth` (Barrage & Nordhaus 2023). See the Configuration section below for detailed specifications.
 
 ### Control Variables
 
@@ -668,7 +685,8 @@ See `config_baseline.json` for extensive examples of documentation.
 Initial conditions are **computed automatically**:
 
 - **`Ecum(0) = Ecum_initial`**: Initial cumulative emissions from configuration (defaults to 0.0 if not specified)
-- **`Gini(0) = Gini_initial`**: Initial Gini index from configuration
+- **`delta_Gini(0) = 0.0`**: Initial perturbation from background Gini (system starts at background level)
+- **`Gini(0) = Gini_background(0)`**: Total initial Gini equals the background value
 - **`K(0)`**: Initial capital stock accounting for climate damage and abatement costs
 
 **Initial Capital Stock Calculation:**
