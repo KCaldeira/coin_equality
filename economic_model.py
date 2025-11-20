@@ -51,7 +51,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     -------
     dict
         Dictionary containing:
-        - Tendencies: 'dK_dt', 'dEcum_dt', 'dGini_dt', 'Gini_step_change'
+        - Tendencies: 'dK_dt', 'dEcum_dt', 'd_delta_Gini_dt', 'delta_Gini_step_change'
         - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y, redistribution,
           mu, Lambda, AbateCost, y_eff, G_eff, U, E
 
@@ -172,9 +172,9 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         # Eq 1.10: Capital tendency
         dK_dt = s * Y_net - delta * K
 
-        # Gini dynamics (stays at zero)
-        dGini_dt = 0.0
-        Gini_step_change = 0.0
+        # Gini dynamics (stays at zero for DICE-like mode)
+        d_delta_Gini_dt = 0.0
+        delta_Gini_step_change = 0.0
 
     # Iteratively solve for y_eff since climate damage depends on effective income
     elif y_gross > 0 and omega_max < 1.0:
@@ -407,11 +407,13 @@ def integrate_model(config, store_detailed_output=True):
         If store_detailed_output=True, also includes:
         - 'K': array of capital stock values
         - 'Ecum': array of cumulative emissions values
-        - 'Gini': array of Gini index values
+        - 'delta_Gini': array of Gini perturbation values
+        - 'Gini': array of total Gini index values (background + perturbation)
+        - 'Gini_background': array of background Gini index values
         - 'A', 'sigma', 'theta1', 'f': time-dependent inputs
         - All derived variables: Y_gross, delta_T, Omega, Gini_climate, Y_damaged, Y_net,
           y, redistribution, mu, Lambda, AbateCost, marginal_abatement_cost, y_eff, G_eff, E
-        - 'dK_dt', 'dEcum_dt', 'dGini_dt', 'Gini_step_change': tendencies
+        - 'd_delta_Gini_dt', 'delta_Gini_step_change': perturbation tendencies
 
     Notes
     -----
