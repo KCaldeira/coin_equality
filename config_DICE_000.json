@@ -10,8 +10,8 @@
         "_psi1": "Linear climate damage coefficient (\u00b0C\u207b\u00b9) [Barrage & Nordhaus 2023]",
         "psi2": 0.003467,
         "_psi2": "Quadratic climate damage coefficient (\u00b0C\u207b\u00b2) [2x 0.003467 from Barrage & Nordhaus 2023]",
-        "y_damage_halfsat": 1e+20,
-        "_y_damage_halfsat": "Income level ($) at which climate damage is half of maximum (lower = more regressive damage). Set very high (e.g., 1e12) for uniform damage",
+        "y_damage_distribution_halfsat": 1e+20,
+        "_y_damage_distribution_halfsat": "Income level ($) at which climate damage is half of maximum (lower = more regressive damage). Set very high (e.g., 1e12) for uniform damage",
         "k_climate": 5e-13,
         "_k_climate": "Temperature sensitivity to cumulative  (K/tCO2) 0.5e-12 ~ 1.8 K per 1000 GtC [noe we are in CO2 units]",
         "eta": 0.95,
@@ -31,7 +31,15 @@
         "Ecum_initial": 2494300000000.0,
         "_Ecum_initial": "Initial cumulative CO2 emissions (tCO2). Set to 0 for no prior emissions. 1.24715/k_climate to match 2020 Barrage & Nordhaus 2023.",
         "K_initial": 295000000000000.0,
-        "_K_initial": "Initial capital stock ($). Represents total productive capital at start of simulation."
+        "_K_initial": "Initial capital stock ($). Represents total productive capital at start of simulation.",
+        "income_dependent_aggregate_damage": false,
+        "_income_dependent_aggregate_damage": "If true, aggregate damage decreases as world gets richer",
+        "income_dependent_damage_distribution": false,
+        "_income_dependent_damage_distribution": "If true, damage weighted towards low-income (uses y_damage_distribution_halfsat)",
+        "tax_policy_type": "uniform_fractional",
+        "_tax_policy_type": "Options: uniform_fractional, tax_richest, uniform_utility_reduction",
+        "redistribution_policy_type": "uniform_dividend",
+        "_redistribution_policy_type": "Options: uniform_dividend, targeted_lowest_income"
     },
     "time_functions": {
         "_description": "Time-dependent exogenous functions",

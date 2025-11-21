@@ -6,9 +6,9 @@ under climate damage with income-dependent damage function.
 
 Test Cases:
 1. ΔG → 0 as G₀ → 0 (perfect equality): No initial inequality to amplify
-2. ΔG small when y_mean >> y_damage_halfsat: Wealthy population, minimal damage
+2. ΔG small when y_mean >> y_damage_distribution_halfsat: Wealthy population, minimal damage
 3. ΔG increases with ω_max: Larger damage amplifies inequality more
-4. ΔG larger with larger G₀ at y_mean = y_damage_halfsat: More initial inequality to amplify
+4. ΔG larger with larger G₀ at y_mean = y_damage_distribution_halfsat: More initial inequality to amplify
 
 Usage:
     python unit_test_gini_asymptotics.py
@@ -29,7 +29,7 @@ def test_gini_change_vanishes_with_perfect_equality():
     similar damage, so inequality change (whether increase or decrease) → 0.
 
     Note: The sign of ΔG depends on the relationship between y_mean and
-    y_damage_halfsat. What matters is |ΔG| → 0.
+    y_damage_distribution_halfsat. What matters is |ΔG| → 0.
     """
     print("=" * 80)
     print("Test 1: ΔG → 0 as G₀ → 0 (Perfect Equality)")
@@ -38,19 +38,19 @@ def test_gini_change_vanishes_with_perfect_equality():
 
     # Set up parameters with regressive damage
     omega_max = 0.15  # 15% maximum damage
-    y_damage_halfsat = 20000  # $20k half-saturation
+    y_damage_distribution_halfsat = 20000  # $20k half-saturation
     y_mean = 50000  # $50k mean income (well above half-sat, so damage is regressive)
 
     params = {
         'psi1': omega_max,
         'psi2': 0.0,
-        'y_damage_halfsat': y_damage_halfsat
+        'y_damage_distribution_halfsat': y_damage_distribution_halfsat
     }
 
     # Test with progressively smaller initial Gini (approaching perfect equality)
     Gini_initial_values = [0.4, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005]
 
-    print(f"  y_mean = ${y_mean:,}, y_damage_halfsat = ${y_damage_halfsat:,}, ω_max = {omega_max:.2%}\n")
+    print(f"  y_mean = ${y_mean:,}, y_damage_distribution_halfsat = ${y_damage_distribution_halfsat:,}, ω_max = {omega_max:.2%}\n")
 
     delta_G_values = []
     for Gini_initial in Gini_initial_values:
@@ -86,7 +86,7 @@ def test_gini_change_vanishes_with_perfect_equality():
 
 def test_gini_change_small_for_wealthy_population():
     """
-    Test 2: |ΔG| small when y_mean >> y_damage_halfsat
+    Test 2: |ΔG| small when y_mean >> y_damage_distribution_halfsat
 
     When mean income is much larger than half-saturation income, the entire
     population experiences very low damage (ω → 0 as y → ∞). With minimal
@@ -96,25 +96,25 @@ def test_gini_change_small_for_wealthy_population():
     so inequality cannot change significantly.
     """
     print("=" * 80)
-    print("Test 2: ΔG Small for Wealthy Population (y_mean >> y_damage_halfsat)")
+    print("Test 2: ΔG Small for Wealthy Population (y_mean >> y_damage_distribution_halfsat)")
     print("=" * 80)
-    print("Expected: When y_mean >> y_damage_halfsat, ΔG should be small\n")
+    print("Expected: When y_mean >> y_damage_distribution_halfsat, ΔG should be small\n")
 
     # Set up parameters
     omega_max = 0.20  # 20% maximum damage
-    y_damage_halfsat = 1000  # $1k half-saturation
+    y_damage_distribution_halfsat = 1000  # $1k half-saturation
     Gini_initial = 0.4  # Moderate inequality
 
     params = {
         'psi1': omega_max,
         'psi2': 0.0,
-        'y_damage_halfsat': y_damage_halfsat
+        'y_damage_distribution_halfsat': y_damage_distribution_halfsat
     }
 
     # Test with progressively larger mean incomes (increasingly wealthy population)
     y_mean_values = [10000, 50000, 100000, 500000, 1000000]
 
-    print(f"  y_damage_halfsat = ${y_damage_halfsat:,}, G₀ = {Gini_initial}, ω_max = {omega_max:.2%}\n")
+    print(f"  y_damage_distribution_halfsat = ${y_damage_distribution_halfsat:,}, G₀ = {Gini_initial}, ω_max = {omega_max:.2%}\n")
 
     delta_G_values = []
     for y_mean in y_mean_values:
@@ -126,11 +126,11 @@ def test_gini_change_small_for_wealthy_population():
         )
 
         delta_G = Gini_climate - Gini_initial
-        ratio = y_mean / y_damage_halfsat
+        ratio = y_mean / y_damage_distribution_halfsat
 
         delta_G_values.append(delta_G)
 
-        print(f"  y_mean/y_damage_halfsat = {ratio:8.1f}    ΔG = {delta_G:.6f}")
+        print(f"  y_mean/y_damage_distribution_halfsat = {ratio:8.1f}    ΔG = {delta_G:.6f}")
 
     # Check that |ΔG| is decreasing and final value is very small
     abs_delta_G_values = [abs(dG) for dG in delta_G_values]
@@ -166,22 +166,22 @@ def test_gini_change_increases_with_damage():
     print("Expected: ΔG should increase monotonically with ω_max\n")
 
     # Set up parameters with regressive damage
-    # Use y_mean < y_damage_halfsat so damage amplifies inequality (regressive)
-    y_damage_halfsat = 60000  # $60k half-saturation
+    # Use y_mean < y_damage_distribution_halfsat so damage amplifies inequality (regressive)
+    y_damage_distribution_halfsat = 60000  # $60k half-saturation
     y_mean = 30000  # $30k mean income (poor population)
     Gini_initial = 0.4  # Moderate inequality
 
     # Test with progressively larger maximum damage
     omega_max_values = [0.05, 0.10, 0.15, 0.20, 0.25]
 
-    print(f"  y_mean = ${y_mean:,}, y_damage_halfsat = ${y_damage_halfsat:,}, G₀ = {Gini_initial}\n")
+    print(f"  y_mean = ${y_mean:,}, y_damage_distribution_halfsat = ${y_damage_distribution_halfsat:,}, G₀ = {Gini_initial}\n")
 
     delta_G_values = []
     for omega_max in omega_max_values:
         params = {
             'psi1': omega_max,
             'psi2': 0.0,
-            'y_damage_halfsat': y_damage_halfsat
+            'y_damage_distribution_halfsat': y_damage_distribution_halfsat
         }
 
         _, Gini_climate = calculate_climate_damage_and_gini_effect(
@@ -212,9 +212,9 @@ def test_gini_change_increases_with_damage():
 
 def test_gini_change_larger_with_higher_initial_gini():
     """
-    Test 4: |ΔG| larger with larger G₀ at y_mean = y_damage_halfsat
+    Test 4: |ΔG| larger with larger G₀ at y_mean = y_damage_distribution_halfsat
 
-    At y_mean = y_damage_halfsat, the population spans the full range of the
+    At y_mean = y_damage_distribution_halfsat, the population spans the full range of the
     damage function. With higher initial Gini, there's a wider income spread,
     so the damage changes inequality more.
 
@@ -224,23 +224,23 @@ def test_gini_change_larger_with_higher_initial_gini():
     print("=" * 80)
     print("Test 4: ΔG Increases with Initial Gini at Half-Saturation")
     print("=" * 80)
-    print("Expected: At y_mean = y_damage_halfsat, ΔG should increase with G₀\n")
+    print("Expected: At y_mean = y_damage_distribution_halfsat, ΔG should increase with G₀\n")
 
     # Set up parameters with mean income = half-saturation
     omega_max = 0.15  # 15% maximum damage
-    y_damage_halfsat = 40000  # $40k half-saturation
-    y_mean = y_damage_halfsat  # Mean equals half-saturation
+    y_damage_distribution_halfsat = 40000  # $40k half-saturation
+    y_mean = y_damage_distribution_halfsat  # Mean equals half-saturation
 
     params = {
         'psi1': omega_max,
         'psi2': 0.0,
-        'y_damage_halfsat': y_damage_halfsat
+        'y_damage_distribution_halfsat': y_damage_distribution_halfsat
     }
 
     # Test with progressively larger initial Gini (more initial inequality)
     Gini_initial_values = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
 
-    print(f"  y_mean = y_damage_halfsat = ${y_mean:,}, ω_max = {omega_max:.2%}\n")
+    print(f"  y_mean = y_damage_distribution_halfsat = ${y_mean:,}, ω_max = {omega_max:.2%}\n")
 
     delta_G_values = []
     for Gini_initial in Gini_initial_values:
@@ -261,11 +261,11 @@ def test_gini_change_larger_with_higher_initial_gini():
     is_increasing = all(abs_delta_G_values[i] <= abs_delta_G_values[i+1] for i in range(len(abs_delta_G_values)-1))
 
     if is_increasing:
-        print(f"\n✓ PASS: |ΔG| increases monotonically with G₀ at y_mean = y_damage_halfsat")
+        print(f"\n✓ PASS: |ΔG| increases monotonically with G₀ at y_mean = y_damage_distribution_halfsat")
     else:
         print(f"\n✗ FAIL: |ΔG| does not increase monotonically with G₀")
         print(f"  |ΔG| values: {abs_delta_G_values}")
-        raise AssertionError("Test 4 failed: |ΔG| should increase with G₀ when y_mean = y_damage_halfsat")
+        raise AssertionError("Test 4 failed: |ΔG| should increase with G₀ when y_mean = y_damage_distribution_halfsat")
 
     print()
 

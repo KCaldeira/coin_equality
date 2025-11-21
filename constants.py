@@ -41,7 +41,7 @@ OBJECTIVE_SCALE = 1e-13
 
 # Large value for detecting effectively infinite parameters
 # Used for:
-# - Checking if y_damage_halfsat is so large that damage is effectively uniform
+# - Checking if y_damage_distribution_halfsat is so large that damage is effectively uniform
 # - Detecting when parameters should trigger special case handling
 INVERSE_EPSILON = 1.0 / EPSILON
 

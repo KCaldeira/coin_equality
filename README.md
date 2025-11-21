@@ -120,21 +120,21 @@ where `F` is the population fraction (poorest), `ȳ` is mean income, and pre-dam
 **Damage Function (Half-Saturation Model):**
 ```
 ω_max(ΔT) = psi1 · ΔT + psi2 · ΔT²  [Barrage & Nordhaus 2023]
-ω(y) = ω_max · y_damage_halfsat / (y_damage_halfsat + y)
+ω(y) = ω_max · y_damage_distribution_halfsat / (y_damage_distribution_halfsat + y)
 ```
 where:
 - `ω_max` is the maximum damage fraction (applies at zero income)
-- `y_damage_halfsat` is the income level at which damage equals ω_max/2
+- `y_damage_distribution_halfsat` is the income level at which damage equals ω_max/2
 - At income `y = 0`: damage = `ω_max` (maximum for poorest)
-- At income `y = y_damage_halfsat`: damage = `ω_max/2`
+- At income `y = y_damage_distribution_halfsat`: damage = `ω_max/2`
 - As income `y → ∞`: damage → 0 (wealthy largely protected)
 
 **Analytical Solution for Aggregate Damage:**
 The aggregate damage (fraction of total production lost) is computed analytically:
 ```
-b = y_damage_halfsat · a / (ȳ · (a-1))
+b = y_damage_distribution_halfsat · a / (ȳ · (a-1))
 Ω = (1/ȳ) · ∫₀¹ ω(y(F)) · y(F) · dF
-  = ω_max · (y_damage_halfsat/ȳ) · ₂F₁(1, a, a+1, -b)
+  = ω_max · (y_damage_distribution_halfsat/ȳ) · ₂F₁(1, a, a+1, -b)
 ```
 where:
 - `b` is a dimensionless damage concentration parameter
@@ -143,7 +143,7 @@ where:
 **Post-Damage Inequality (Gini Effect):**
 Climate damage increases inequality because lower-income populations suffer proportionally greater losses. The post-damage Gini coefficient `G_climate` is computed using:
 ```
-b = y_damage_halfsat · a / (ȳ · (a-1))               [dimensionless damage parameter]
+b = y_damage_distribution_halfsat · a / (ȳ · (a-1))               [dimensionless damage parameter]
 G₀ = 1/(2a-1)                                        [pre-damage Gini]
 Φ = ₂F₁(a-1, 1, a, -b)                               [mean damage factor]
 H = ₂F₁(1, 2a-1, 2a, -b)                             [Gini adjustment factor]
@@ -153,8 +153,8 @@ G_climate = 1 - (1 - G₀) · (1 - ω_max · H) / (1 - ω_mean)
 ```
 
 **Physical Interpretation:**
-- As `y_damage_halfsat → ∞`: damage becomes uniform, `G_climate → G₀` (no inequality effect)
-- As `y_damage_halfsat → 0`: damage is maximally regressive (concentrated on poor)
+- As `y_damage_distribution_halfsat → ∞`: damage becomes uniform, `G_climate → G₀` (no inequality effect)
+- As `y_damage_distribution_halfsat → 0`: damage is maximally regressive (concentrated on poor)
 - As `ΔT → 0`: `ω_max → 0` and `Ω → 0` (no damage)
 
 **Implementation:**
@@ -472,7 +472,7 @@ Climate and abatement parameters:
 |-----------|-------------|-------|----------|
 | `psi1` | Linear climate damage coefficient [Barrage & Nordhaus 2023] | °C⁻¹ | `psi1` |
 | `psi2` | Quadratic climate damage coefficient [Barrage & Nordhaus 2023] | °C⁻² | `psi2` |
-| `y_damage_halfsat` | Income half-saturation for climate damage (lower = more regressive) | $ | `y_damage_halfsat` |
+| `y_damage_distribution_halfsat` | Income half-saturation for climate damage (lower = more regressive) | $ | `y_damage_distribution_halfsat` |
 | `k_climate` | Temperature sensitivity to cumulative emissions | °C tCO₂⁻¹ | `k_climate` |
 | `θ₂` | Abatement cost exponent (controls cost curve shape) | - | `theta2` |
 | `μ_max` | Maximum allowed abatement fraction (cap on μ). Values >1 allow carbon removal. Defaults to INVERSE_EPSILON (no cap) if omitted. | - | `mu_max` |
@@ -625,7 +625,7 @@ Each JSON configuration file must contain:
 2. **`description`** - Optional description of the scenario
 3. **`scalar_parameters`** - Time-invariant model constants:
    - Economic: `alpha`, `delta`, `s`
-   - Climate: `psi1`, `psi2`, `y_damage_halfsat`, `k_climate`
+   - Climate: `psi1`, `psi2`, `y_damage_distribution_halfsat`, `k_climate`
    - Utility: `eta`, `rho`
    - Distribution: `Gini_initial`, `Gini_fract`, `Gini_restore`, `fract_gdp`
 
@@ -789,9 +789,9 @@ The file `unit_test_eq1.2.py` validates the analytical solution for aggregate cl
 
 The analytical solution uses hypergeometric functions to compute:
 ```
-Ω = ω_max · (y_damage_halfsat/ȳ) · ₂F₁(1, a, a+1, -b)
+Ω = ω_max · (y_damage_distribution_halfsat/ȳ) · ₂F₁(1, a, a+1, -b)
 ```
-where `b = y_damage_halfsat · a / (ȳ · (a-1))`
+where `b = y_damage_distribution_halfsat · a / (ȳ · (a-1))`
 
 This is compared against high-precision numerical integration of the original integral:
 ```
