@@ -294,7 +294,7 @@ class ScalarParameters:
         Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]
     psi2 : float
         Quadratic climate damage coefficient (°C⁻²) [Barrage & Nordhaus 2023]
-    y_damage_distribution_halfsat : float
+    y_damage_distribution_scale : float
         Income half-saturation for climate damage distribution ($)
         (income level at which damage is 50% of maximum; lower = more regressive)
         Only used when income_dependent_damage_distribution=True
@@ -325,7 +325,7 @@ class ScalarParameters:
         If True, aggregate damage decreases as world gets richer
         If False, damage fraction depends only on temperature (DICE-like)
     income_dependent_damage_distribution : bool
-        If True, damage is weighted towards low-income (uses y_damage_distribution_halfsat)
+        If True, damage is weighted towards low-income (uses y_damage_distribution_scale)
         If False, damage is distributed uniformly across income distribution
     tax_policy_type : str
         Tax/abatement cost policy: 'uniform_fractional', 'tax_richest', or 'uniform_utility_reduction'
@@ -336,7 +336,7 @@ class ScalarParameters:
     delta: float
     psi1: float
     psi2: float
-    y_damage_distribution_halfsat: float
+    y_damage_distribution_scale: float
     k_climate: float
     eta: float
     rho: float
@@ -630,7 +630,7 @@ def evaluate_params_at_time(t, config):
     dict
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
-        'alpha', 'delta', 'psi1', 'psi2', 'y_damage_distribution_halfsat', 'k_climate',
+        'alpha', 'delta', 'psi1', 'psi2', 'y_damage_distribution_scale', 'k_climate',
         'eta', 'rho', 'Gini_background', 'Gini_fract', 'Gini_restore', 'fract_gdp', 'theta2', 'mu_max',
         'A', 'L', 'sigma', 'theta1', 'f', 's'
 
@@ -652,7 +652,7 @@ def evaluate_params_at_time(t, config):
         'delta': sp.delta,
         'psi1': sp.psi1,
         'psi2': sp.psi2,
-        'y_damage_distribution_halfsat': sp.y_damage_distribution_halfsat,
+        'y_damage_distribution_scale': sp.y_damage_distribution_scale,
         'income_dependent_aggregate_damage': sp.income_dependent_aggregate_damage,
         'income_dependent_damage_distribution': sp.income_dependent_damage_distribution,
         'tax_policy_type': sp.tax_policy_type,

@@ -13,7 +13,7 @@ Currently, the damage function combines aggregate damage calculation with its di
 ### 1.1 Variable Rename
 
 - `omega_max` → `omega_aggregate` (clarifies this is the aggregate damage fraction)
-- `y_damage_halfsat` → `y_damage_distribution_halfsat` (clarifies this controls distribution, not aggregate damage)
+- `y_damage_halfsat` → `y_damage_distribution_scale` (clarifies this controls distribution, not aggregate damage)
 
 ### 1.2 Aggregate Damage Calculation
 
@@ -97,7 +97,7 @@ def pareto_integral_scipy(c_mean, a, c_scale):
 | Value | Description |
 |-------|-------------|
 | `false` | Climate damage is distributed uniformly across the income distribution (same fractional loss for all income levels). |
-| `true` | Damage is weighted towards people with low income (poor suffer disproportionately from climate impacts). Uses `y_damage_distribution_halfsat` parameter. |
+| `true` | Damage is weighted towards people with low income (poor suffer disproportionately from climate impacts). Uses `y_damage_distribution_scale` parameter. |
 
 **Implementation:**
 
@@ -106,7 +106,7 @@ When `income_dependent_damage_distribution=false`:
 - No change to Gini coefficient from climate damage (`Gini_climate = Gini`)
 
 When `income_dependent_damage_distribution=true`:
-- Use current regressive damage formula with `y_damage_distribution_halfsat`
+- Use current regressive damage formula with `y_damage_distribution_scale`
 - Climate damage increases Gini (poor lose more)
 
 ### 1.4 Four Possible Combinations
@@ -162,10 +162,10 @@ These switches should be added to the `scalar_parameters` section of config file
     "_y_damage_aggregate_halfsat": "Income scale ($) for aggregate damage saturation (only used when income_dependent_aggregate_damage=true)",
 
     "income_dependent_damage_distribution": true,
-    "_income_dependent_damage_distribution": "If true, damage weighted towards low-income (uses y_damage_distribution_halfsat)",
+    "_income_dependent_damage_distribution": "If true, damage weighted towards low-income (uses y_damage_distribution_scale)",
 
-    "y_damage_distribution_halfsat": 10000.0,
-    "_y_damage_distribution_halfsat": "Income level ($) at which climate damage is half of maximum (only used when income_dependent_damage_distribution=true)",
+    "y_damage_distribution_scale": 10000.0,
+    "_y_damage_distribution_scale": "Income level ($) at which climate damage is half of maximum (only used when income_dependent_damage_distribution=true)",
 
     "tax_policy_type": "uniform_fractional",
     "_tax_policy_type": "Options: uniform_fractional, tax_richest, uniform_utility_reduction",

@@ -55,7 +55,7 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
     params : dict
         - 'psi1': linear damage coefficient (°C⁻¹)
         - 'psi2': quadratic damage coefficient (°C⁻²)
-        - 'y_damage_distribution_halfsat': income half-saturation constant ($)
+        - 'y_damage_distribution_scale': income half-saturation constant ($)
 
     Returns
     -------
@@ -73,7 +73,7 @@ def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, para
 
     psi1 = params['psi1']
     psi2 = params['psi2']
-    y_half = params['y_damage_distribution_halfsat']
+    y_half = params['y_damage_distribution_scale']
 
     # Quadratic damage response (Barrage & Nordhaus, 2023)
     omega_max = psi1 * delta_T + psi2 * (delta_T ** 2)

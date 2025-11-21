@@ -129,7 +129,7 @@ def test_eq12_random_cases():
         # Set up parameters for the function
         # (delta_T=1.0 and psi1=omega_max, psi2=0.0 means omega_max = psi1 * 1.0)
         params = dict(
-            y_damage_distribution_halfsat=k,
+            y_damage_distribution_scale=k,
             psi1=omega_max,
             psi2=0.0
         )

@@ -30,7 +30,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         - 's': Savings rate
         - 'psi1': Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]
         - 'psi2': Quadratic climate damage coefficient (°C⁻²) [Barrage & Nordhaus 2023]
-        - 'y_damage_distribution_halfsat': Income half-saturation for climate damage ($)
+        - 'y_damage_distribution_scale': Income half-saturation for climate damage ($)
         - 'k_climate': Temperature sensitivity (°C tCO2^-1)
         - 'eta': Coefficient of relative risk aversion
         - 'A': Total factor productivity (current)
@@ -184,7 +184,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             # When savings rate is 100%, consumption is zero
             y_net = EPSILON
         else:
-            y_half = params['y_damage_distribution_halfsat']
+            y_half = params['y_damage_distribution_scale']
             omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
             lambda_approx = f * fract_gdp
             y_net = y_gross * (1.0 - omega_approx) * (1-lambda_approx) * (1.0 - s)
@@ -207,7 +207,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
                 y_net_for_damage = y_net_prev
 
             # Calculate climate damage using current income estimate
-            # Uses params: psi1, psi2, y_damage_distribution_halfsat
+            # Uses params: psi1, psi2, y_damage_distribution_scale
             Omega, Gini_climate = calculate_climate_damage_and_gini_effect(
                 delta_T, Gini, y_net_for_damage, params
             )
