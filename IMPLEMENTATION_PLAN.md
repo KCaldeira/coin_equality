@@ -10,7 +10,12 @@ This document outlines planned code modifications to enable flexible configurati
 
 Currently, the damage function combines aggregate damage calculation with its distribution across income levels. We will separate these into two independent components.
 
-### 1.1 Aggregate Damage Calculation
+### 1.1 Variable Rename
+
+- `omega_max` → `omega_aggregate` (clarifies this is the aggregate damage fraction)
+- `y_damage_halfsat` → `y_damage_distribution_halfsat` (clarifies this controls distribution, not aggregate damage)
+
+### 1.2 Aggregate Damage Calculation
 
 **Switch: `income_dependent_aggregate_damage`** (boolean)
 
@@ -19,7 +24,73 @@ Currently, the damage function combines aggregate damage calculation with its di
 | `false` | Fractional damage is independent of income level (as in DICE). Damage fraction depends only on temperature. |
 | `true` | Total fractional damage decreases as the world gets richer. Wealthier societies can better adapt/protect themselves. |
 
-### 1.2 Damage Distribution
+**Implementation:**
+
+```python
+# Base damage from temperature (always calculated)
+omega_base = psi1 * delta_T + psi2 * delta_T**2
+
+if income_dependent_aggregate_damage:
+    # Wealthier societies experience less aggregate damage
+    income_damage_scale = pareto_integral_scipy(y_mean, a, y_damage_aggregate_halfsat)
+    omega_aggregate = omega_base * income_damage_scale
+else:
+    # DICE-like: damage independent of income
+    omega_aggregate = omega_base
+```
+
+**New function to add:**
+
+```python
+import numpy as np
+from scipy.special import gammaincc, gamma
+
+def pareto_integral_scipy(c_mean, a, c_scale):
+    """
+    Computes the income-dependent damage scaling factor.
+
+    This integral represents how aggregate damage scales with mean income
+    for a Pareto-distributed population. As c_mean increases relative to
+    c_scale, the integral decreases, representing better adaptation capacity.
+
+    Parameters
+    ----------
+    c_mean : float
+        Mean income (y_mean in model).
+    a : float
+        Pareto parameter (>1), derived from Gini coefficient.
+    c_scale : float
+        Income scale for damage saturation (y_damage_aggregate_halfsat).
+
+    Returns
+    -------
+    float
+        Scaling factor for aggregate damage (0 to 1, decreasing with wealth).
+    """
+    # k = c_mean * (1 - 1/a)
+    k = c_mean * (1.0 - 1.0 / a)
+
+    # s = 1 - a
+    s = 1.0 - a
+
+    # Argument of the incomplete gamma
+    x = k / c_scale
+
+    # Upper incomplete gamma Γ(s, x)
+    # SciPy: Γ(s, x) = gammaincc(s, x) * gamma(s)
+    gamma_upper = gammaincc(s, x) * gamma(s)
+
+    # Full analytic expression
+    result = a * (k ** a) * (c_scale ** (1.0 - a)) * gamma_upper
+
+    return result
+```
+
+**New parameter needed:**
+
+- `y_damage_aggregate_halfsat`: Income scale for aggregate damage saturation ($). Controls how quickly aggregate damage decreases as society gets wealthier. Only used when `income_dependent_aggregate_damage=true`.
+
+### 1.3 Damage Distribution
 
 **Switch: `income_dependent_damage_distribution`** (boolean)
 
@@ -28,9 +99,24 @@ Currently, the damage function combines aggregate damage calculation with its di
 | `false` | Climate damage is distributed uniformly across the income distribution (same fractional loss for all income levels). |
 | `true` | Damage is weighted towards people with low income (poor suffer disproportionately from climate impacts). Uses `y_damage_distribution_halfsat` parameter. |
 
-### 1.3 Parameter Rename
+**Implementation:**
 
-- `y_damage_halfsat` → `y_damage_distribution_halfsat` (clarifies this controls distribution, not aggregate damage)
+When `income_dependent_damage_distribution=false`:
+- All income levels experience the same fractional damage (`omega_aggregate`)
+- No change to Gini coefficient from climate damage (`Gini_climate = Gini`)
+
+When `income_dependent_damage_distribution=true`:
+- Use current regressive damage formula with `y_damage_distribution_halfsat`
+- Climate damage increases Gini (poor lose more)
+
+### 1.4 Four Possible Combinations
+
+| `income_dependent_aggregate_damage` | `income_dependent_damage_distribution` | Behavior |
+|-------------------------------------|----------------------------------------|----------|
+| `false` | `false` | DICE-like: uniform damage, no income effects |
+| `false` | `true` | Fixed aggregate damage, but poor suffer more (current default) |
+| `true` | `false` | Aggregate damage decreases with wealth, but distributed uniformly |
+| `true` | `true` | Both effects: wealthy societies have less damage AND poor suffer more |
 
 ---
 
@@ -71,6 +157,9 @@ These switches should be added to the `scalar_parameters` section of config file
 "scalar_parameters": {
     "income_dependent_aggregate_damage": false,
     "_income_dependent_aggregate_damage": "If true, aggregate damage decreases as world gets richer",
+
+    "y_damage_aggregate_halfsat": 10000.0,
+    "_y_damage_aggregate_halfsat": "Income scale ($) for aggregate damage saturation (only used when income_dependent_aggregate_damage=true)",
 
     "income_dependent_damage_distribution": true,
     "_income_dependent_damage_distribution": "If true, damage weighted towards low-income (uses y_damage_distribution_halfsat)",
