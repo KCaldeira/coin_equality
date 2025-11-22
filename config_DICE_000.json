@@ -12,6 +12,8 @@
         "_psi2": "Quadratic climate damage coefficient (\u00b0C\u207b\u00b2) [2x 0.003467 from Barrage & Nordhaus 2023]",
         "y_damage_distribution_scale": 1e+20,
         "_y_damage_distribution_scale": "Income level ($) at which climate damage is half of maximum (lower = more regressive damage). Set very high (e.g., 1e12) for uniform damage",
+        "y_damage_aggregate_scale": 10000.0,
+        "_y_damage_aggregate_scale": "Income scale ($) for aggregate damage saturation (only used when income_dependent_aggregate_damage=true)",
         "k_climate": 5e-13,
         "_k_climate": "Temperature sensitivity to cumulative  (K/tCO2) 0.5e-12 ~ 1.8 K per 1000 GtC [noe we are in CO2 units]",
         "eta": 0.95,

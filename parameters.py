@@ -295,9 +295,13 @@ class ScalarParameters:
     psi2 : float
         Quadratic climate damage coefficient (°C⁻²) [Barrage & Nordhaus 2023]
     y_damage_distribution_scale : float
-        Income half-saturation for climate damage distribution ($)
-        (income level at which damage is 50% of maximum; lower = more regressive)
+        Income scale for climate damage distribution ($)
+        Controls how damage is distributed across income levels
         Only used when income_dependent_damage_distribution=True
+    y_damage_aggregate_scale : float
+        Income scale for aggregate damage saturation ($)
+        Controls how aggregate damage decreases as society gets wealthier
+        Only used when income_dependent_aggregate_damage=True
     k_climate : float
         Temperature sensitivity to cumulative emissions (°C tCO2^-1)
     eta : float
@@ -337,6 +341,7 @@ class ScalarParameters:
     psi1: float
     psi2: float
     y_damage_distribution_scale: float
+    y_damage_aggregate_scale: float
     k_climate: float
     eta: float
     rho: float
@@ -653,6 +658,7 @@ def evaluate_params_at_time(t, config):
         'psi1': sp.psi1,
         'psi2': sp.psi2,
         'y_damage_distribution_scale': sp.y_damage_distribution_scale,
+        'y_damage_aggregate_scale': sp.y_damage_aggregate_scale,
         'income_dependent_aggregate_damage': sp.income_dependent_aggregate_damage,
         'income_dependent_damage_distribution': sp.income_dependent_damage_distribution,
         'tax_policy_type': sp.tax_policy_type,

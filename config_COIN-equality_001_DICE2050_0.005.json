@@ -12,6 +12,8 @@
         "_psi2": "Gives same fractional damage as DICE for delta_T=1.941 and y_net = 23239 (2050 values in DICE baseline) assuminng 10k$ ",
         "y_damage_distribution_scale": 10000.0,
         "_y_damage_distribution_scale": "Income level ($) at which climate damage is half of maximum (lower = more regressive damage). Set very high (e.g., 1e12) for uniform damage",
+        "y_damage_aggregate_scale": 10000.0,
+        "_y_damage_aggregate_scale": "Income scale ($) for aggregate damage saturation (only used when income_dependent_aggregate_damage=true)",
         "k_climate": 0.56869e-12,
         "_k_climate": "From DICE central case emissions and temperature change 2020 to 2050; Temperature sensitivity to cumulative  (K/tCO2) 0.5e-12 ~ 1.8 K per 1000 GtC [noe we are in CO2 units]",
         "eta": 0.95,

@@ -115,8 +115,8 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
     # Eq 2.2: Temperature change from cumulative emissions
     delta_T = k_climate * Ecum
-    # maximum climate damage at epsilon income level
-    omega_max = params['psi1'] * delta_T + params['psi2'] * delta_T**2
+    # Base climate damage from temperature (before income-dependent adjustments)
+    omega_base = params['psi1'] * delta_T + params['psi2'] * delta_T**2
 
     # Mean per-capita gross income (before climate damage)
     if L > 0:
@@ -128,7 +128,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     # Special case: Gini = 0 for DICE-like behavior (no inequality, no regressive damage)
     if Gini == 0.0:
         # Simplified calculation without Gini-dependent damage
-        Omega = max(0.0, min(omega_max, 1.0 - EPSILON))  # Clamp to [0, 1)
+        Omega = max(0.0, min(omega_base, 1.0 - EPSILON))  # Clamp to [0, 1)
         Gini_climate = 0.0
         Climate_Damage = Omega * Y_gross
         Y_damaged = Y_gross - Climate_Damage
@@ -177,7 +177,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         delta_Gini_step_change = 0.0
 
     # Iteratively solve for y_net since climate damage depends on effective income
-    elif y_gross > 0 and omega_max < 1.0:
+    elif y_gross > 0 and omega_base < 1.0:
         # Initial guess: analytical approximation
         # Guard against s approaching 1.0 (100% savings, zero consumption)
         if s >= 1.0 - EPSILON:
@@ -185,7 +185,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
             y_net = EPSILON
         else:
             y_half = params['y_damage_distribution_scale']
-            omega_approx = omega_max * y_half /( y_gross *(1.0 - s))
+            omega_approx = omega_base * y_half /( y_gross *(1.0 - s))
             lambda_approx = f * fract_gdp
             y_net = y_gross * (1.0 - omega_approx) * (1-lambda_approx) * (1.0 - s)
 
