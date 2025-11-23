@@ -102,8 +102,14 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     Gini_restore = params['Gini_restore']
     f = params['f']
 
-    # Compute total Gini from background + perturbation
-    Gini = Gini_background + delta_Gini
+    # Policy switches
+    income_dependent_aggregate_damage = params['income_dependent_aggregate_damage']
+    income_dependent_damage_distribution = params['income_dependent_damage_distribution']
+    tax_policy_type = params['tax_policy_type']
+    redistribution_policy_type = params['redistribution_policy_type']
+
+    #========================================================================================
+    # First calculate things that don't depend on climate damage or redistribution or taxation
 
     # strange things can happen during the optimization phase, thus the if-then checks below
 
@@ -122,11 +128,93 @@ def calculate_tendencies(state, params, store_detailed_output=True):
 
     # Eq 2.2: Temperature change from cumulative emissions
     delta_T = k_climate * Ecum
+
     # Base climate damage from temperature (before income-dependent adjustments)
     omega_base = params['psi1'] * delta_T + params['psi2'] * delta_T**2
 
-    # Income-dependent climate damage
-    income_dependent_damage_distribution = params.get('income_dependent_damage_distribution')
+
+    #========================================================================================
+    # Now calculate things that do depend on climate damage or redistribution or taxation
+
+    n_iterations = 0
+    converged = False
+    y_net_prev_prev = None
+    y_net_new_prev = None
+
+    while n_iterations < MAX_INITIAL_CAPITAL_ITERATIONS and not converged:
+        y_net_prev = y_net
+        n_iterations += 1
+
+
+    #------------------------------------------------------------------------------------------
+    # Taxation
+    # taxation is assumed to be a fraction of gross income after climate damage but before abatement and redistribution
+    if tax_policy_type == 'uniform_fractional':
+        # Uniform carbon tax (no redistribution effect)
+        def tax(F,y, fract_gdp, Gini, mean_damage, damage_dist_fn):
+            Gini_index_part = fract_gdp * y * ((1 - Gini)/(1 + Gini))*(1 - F)**(-2 Gini/(1 + Gini))
+            damage_part = fract_gdp * mean_damage * damage_dist_fn(F)
+            return Gini_index_part - damage_part
+    elif tax_policy_type == 'tax_richest':
+        # Tax only the richest fraction of the population
+        # this would be the critical value above which people would be taxed without climate damage
+        fcrit_first_guess = 1.0-(fract_gdp*(1 + Gini)/(2* Gini))**((1 + Gini)/(1-Gini))
+    else:
+        #raise error
+        raise ValueError(f"Unknown tax_policy_type '{tax_policy_type}'.")
+
+    #------------------------------------------------------------------------------------------
+    # Redistribution
+
+    #------------------------------------------------------------------------------------------
+    # Climate damage
+
+    #------------------------------------------------------------------------------------------
+    # Abatement
+
+    #------------------------------------------------------------------------------------------
+    # Remaining calculations
+    Climate_Damage = Omega * Y_gross
+    Y_damaged = Y_gross - Climate_Damage
+
+    Lambda = f * fract_gdp
+    AbateCost = Lambda * Y_damaged
+    Y_net = Y_damaged - AbateCost
+
+    Savings = s * Y_damaged
+    Consumption = Y_damaged - Savings - AbateCost
+
+    y = (Consumption + AbateCost) / L if L > 0 else 0.0
+    y_net = Consumption / L if L > 0 else 0.0
+
+    # Eq 2.1: Potential emissions (unabated)
+    Epot = sigma * Y_gross
+
+    # Eq 1.6: Abatement fraction
+    if Epot > 0 and AbateCost > 0:
+        mu = min(mu_max, (AbateCost * theta2 / (Epot * theta1)) ** (1 / theta2))
+    else:
+        mu = 0.0
+
+    # Eq 3.5: Mean utility (simplified for Gini = 0)
+    if y_net > 0:
+        if np.abs(eta - 1.0) < EPSILON:
+            U = np.log(y_net)
+        else:
+            U = (y_net ** (1 - eta)) / (1 - eta)
+    else:
+        U = NEG_BIGNUM
+
+    # Eq 2.3: Actual emissions (after abatement)
+    E = sigma * (1 - mu) * Y_gross
+
+    # Eq 1.10: Capital tendency
+    dK_dt = s * Y_net - delta * K
+
+#==========================================================================================
+#==========================================================================================
+#==========================================================================================
+
     # Special case: Gini = 0 for DICE-like behavior (no inequality, no regressive damage)
     if not income_dependent_damage_distribution:
         # Simplified calculation without Gini-dependent damage
@@ -136,15 +224,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         Omega = omega_base * 
 
         Gini_climate = 0.0
-        Climate_Damage = Omega * Y_gross
-        Y_damaged = Y_gross - Climate_Damage
 
-        Lambda = f * fract_gdp
-        AbateCost = Lambda * Y_damaged
-        Y_net = Y_damaged - AbateCost
-
-        Savings = s * Y_damaged
-        Consumption = Y_damaged - Savings - AbateCost
 
         y = (Consumption + AbateCost) / L if L > 0 else 0.0
         y_net = Consumption / L if L > 0 else 0.0
@@ -154,29 +234,7 @@ def calculate_tendencies(state, params, store_detailed_output=True):
         redistribution = 0.0
         n_iterations = 0
 
-        # Eq 2.1: Potential emissions (unabated)
-        Epot = sigma * Y_gross
 
-        # Eq 1.6: Abatement fraction
-        if Epot > 0 and AbateCost > 0:
-            mu = min(mu_max, (AbateCost * theta2 / (Epot * theta1)) ** (1 / theta2))
-        else:
-            mu = 0.0
-
-        # Eq 3.5: Mean utility (simplified for Gini = 0)
-        if y_net > 0:
-            if np.abs(eta - 1.0) < EPSILON:
-                U = np.log(y_net)
-            else:
-                U = (y_net ** (1 - eta)) / (1 - eta)
-        else:
-            U = NEG_BIGNUM
-
-        # Eq 2.3: Actual emissions (after abatement)
-        E = sigma * (1 - mu) * Y_gross
-
-        # Eq 1.10: Capital tendency
-        dK_dt = s * Y_net - delta * K
 
         # Gini dynamics (stays at zero for DICE-like mode)
         d_delta_Gini_dt = 0.0
