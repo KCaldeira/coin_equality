@@ -30,7 +30,8 @@ References: Analytical solutions derived with assistance from ChatGPT (2025).
 """
 
 from income_distribution import a_from_G
-from scipy.special import hyp2f1, gammaincc, gamma
+from scipy.special import hyp2f1, gamma, gammaincc
+from scipy.integrate import quad
 from constants import INVERSE_EPSILON, EPSILON
 import numpy as np
 
@@ -67,8 +68,7 @@ def pareto_integral_scipy(c_mean, a, c_scale):
     # Argument of the incomplete gamma
     x = k / c_scale
 
-    # Upper incomplete gamma Γ(s, x)
-    # SciPy: Γ(s, x) = gammaincc(s, x) * gamma(s)
+    # Upper incomplete gamma Γ(s, x) using ScipPy utilities
     gamma_upper = gammaincc(s, x) * gamma(s)
 
     # Full analytic expression

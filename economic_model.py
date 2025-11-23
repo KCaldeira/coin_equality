@@ -113,22 +113,28 @@ def calculate_tendencies(state, params, store_detailed_output=True):
     else:
         Y_gross = 0.0
 
-    # Eq 2.2: Temperature change from cumulative emissions
-    delta_T = k_climate * Ecum
-    # Base climate damage from temperature (before income-dependent adjustments)
-    omega_base = params['psi1'] * delta_T + params['psi2'] * delta_T**2
-
     # Mean per-capita gross income (before climate damage)
     if L > 0:
         y_gross = Y_gross / L
     else:
         y_gross = 0.0
 
+
+    # Eq 2.2: Temperature change from cumulative emissions
+    delta_T = k_climate * Ecum
+    # Base climate damage from temperature (before income-dependent adjustments)
+    omega_base = params['psi1'] * delta_T + params['psi2'] * delta_T**2
+
     # Income-dependent climate damage
+    income_dependent_damage_distribution = params.get('income_dependent_damage_distribution')
     # Special case: Gini = 0 for DICE-like behavior (no inequality, no regressive damage)
-    if Gini == 0.0:
+    if not income_dependent_damage_distribution:
         # Simplified calculation without Gini-dependent damage
-        Omega = max(0.0, min(omega_base, 1.0 - EPSILON))  # Clamp to [0, 1)
+        Omega = omega_base
+    else:
+        pareto_scale = pareto_integral_scipy(y_gross, a, c_scale)
+        Omega = omega_base * 
+
         Gini_climate = 0.0
         Climate_Damage = Omega * Y_gross
         Y_damaged = Y_gross - Climate_Damage
