@@ -203,9 +203,144 @@ Create config files that test each combination:
 
 ---
 
+## 4. Temporal Income Distribution for Damage Calculations
+
+### The Problem
+
+Within `calculate_tendencies()`, computing climate damage requires knowledge of the income distribution. However, the income distribution itself depends on:
+- Climate damage (which reduces income, especially for the poor if `income_dependent_damage_distribution=true`)
+- Taxation policy (which removes income from certain groups)
+- Redistribution policy (which adds income to certain groups)
+
+This creates a circular dependency: we need the income distribution to calculate damage, but damage affects the income distribution. One approach would be to iterate within `calculate_tendencies()` until reaching an internally consistent solution, but this is computationally expensive and adds complexity.
+
+### The Solution: Use Previous Time Step's Income Distribution
+
+Instead of iterating to internal consistency, we use the income distribution from the **end of the previous time step** to estimate climate damage on the **current time step**. This is physically reasonable because:
+
+1. Climate damage in a given year depends on the vulnerability of the population at the start of that year
+2. The time step is small enough that the income distribution changes gradually
+3. This approach is numerically stable and avoids iteration
+
+### Information to Pass
+
+**Preferred approach: Key quantities** (rather than passing a continuous function)
+
+Pass the key parameters that characterize the income distribution at the end of the previous time step:
+
+| Quantity | Description |
+|----------|-------------|
+| `y_mean_prev` | Mean income from previous time step |
+| `gini_prev` | Gini coefficient from previous time step |
+
+**Important:** Always pass `gini`, never `a`. The Pareto parameter `a` is a derived quantity under the assumption of a Pareto-Lorenz distribution. The Gini coefficient is the fundamental state variable. Functions that need `a` should compute it internally using `a_from_G(gini)`.
+
+These quantities fully characterize a Pareto distribution, which is sufficient for all damage, taxation, and redistribution calculations.
+
+**Why key quantities over continuous function:**
+- More numerically accurate (no interpolation errors)
+- Simpler to implement and debug
+- Directly usable in analytical formulas (e.g., `pareto_integral_scipy`)
+- The Pareto assumption is already embedded in our model
+
+### Implementation Options
+
+**Option A: Add to `params` dictionary**
+
+Pass the previous income distribution as new fields in `params`:
+
+```python
+params = {
+    # ... existing parameters ...
+    'y_mean_prev': y_mean_prev,
+    'gini_prev': gini_prev,
+}
+```
+
+*Pros:* Minimal API change, consistent with existing pattern
+*Cons:* Mixes time-varying state with static parameters
+
+**Option B: Add new argument to `calculate_tendencies()`**
+
+```python
+def calculate_tendencies(state, params, prev_income_dist):
+    """
+    Parameters
+    ----------
+    state : dict
+        Current state variables
+    params : dict
+        Model parameters (static)
+    prev_income_dist : dict
+        Income distribution from previous time step:
+        {'y_mean': float, 'gini': float}
+    """
+```
+
+*Pros:* Clear separation of concerns, explicit dependency
+*Cons:* Requires updating all callers
+
+**Recommended: Option B** - The explicit argument makes the temporal dependency clear and separates static parameters from time-varying state information.
+
+### Initialization
+
+For the first time step (t=0), use the initial income distribution from the state variables:
+
+```python
+prev_income_dist = {
+    'y_mean': state['y_mean'][0],
+    'gini': state['gini'][0],
+}
+```
+
+### Usage in Damage Calculations
+
+When `income_dependent_damage_distribution=true`:
+
+```python
+# Use previous time step's income distribution for damage weighting
+gini = prev_income_dist['gini']
+y_mean = prev_income_dist['y_mean']
+
+# Calculate damage distribution using previous income structure
+# (functions compute 'a' internally from gini)
+damage_weight = pareto_damage_weight(y, gini, y_mean, y_damage_distribution_scale)
+```
+
+Similarly for taxation and redistribution calculations that depend on the income distribution.
+
+### Refactoring: Functions to Change from `a` to `gini`
+
+The following functions currently take the Pareto parameter `a` as an argument. They should be refactored to take `gini` instead and compute `a` internally using `a_from_G(gini)`:
+
+| File | Function | Current Signature | New Signature |
+|------|----------|-------------------|---------------|
+| `climate_damage_distribution.py` | `pareto_integral_scipy` | `(c_mean, a, c_scale)` | `(c_mean, gini, c_scale)` |
+
+**Note:** The unit test files (`unit_test_eq1.2.py`, etc.) may keep `a` in their function signatures since they are testing specific mathematical formulas that are naturally expressed in terms of `a`. The conversion functions `a_from_G()` and `G_from_a()` in `income_distribution.py` are utilities and should remain as-is.
+
+**Good patterns already in codebase (take `gini`, compute `a` internally):**
+- `L_pareto(F, G)` in `income_distribution.py`
+- `L_pareto_derivative(F, G)` in `income_distribution.py`
+
+### Consistency Check
+
+For validation, we can optionally compute the "error" between:
+- Income distribution used for damage calculation (from previous step)
+- Income distribution resulting from damage calculation (current step)
+
+This error should be small if the time step is appropriate. Large errors might indicate the need for smaller time steps.
+
+---
+
 ## Questions to Resolve
 
 - [ ] Should `uniform_dividend` include the people paying taxes, or only non-payers?
 - [ ] For `tax_richest`, what threshold defines "richest"? Top percentile? Above median?
 - [ ] For `targeted_lowest_income`, what threshold defines eligibility?
 - [ ] How do these policies interact with the existing Gini dynamics?
+
+## Resolved Questions
+
+- [x] **Should the Pareto parameter `a` be passed explicitly, or always derived from `gini`?**
+  - **Decision:** Always pass `gini`, never `a`. The Gini coefficient is the fundamental state variable; `a` is a derived quantity under the Pareto-Lorenz assumption. Functions that need `a` should compute it internally using `a_from_G(gini)`.
