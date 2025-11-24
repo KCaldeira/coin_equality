@@ -124,7 +124,7 @@ When `income_dependent_damage_distribution=true`:
 
 How the costs of climate policy (abatement) are distributed across the population.
 
-**Switch: `tax_policy_type`**
+**Switch: `income_dependent_tax_policy`**
 
 | Option | Description | Priority |
 |--------|-------------|----------|
@@ -167,8 +167,8 @@ These switches should be added to the `scalar_parameters` section of config file
     "y_damage_distribution_scale": 10000.0,
     "_y_damage_distribution_scale": "Income level ($) at which climate damage is half of maximum (only used when income_dependent_damage_distribution=true)",
 
-    "tax_policy_type": "uniform_fractional",
-    "_tax_policy_type": "Options: uniform_fractional, tax_richest, uniform_utility_reduction",
+    "income_dependent_tax_policy": "uniform_fractional",
+    "_income_dependent_tax_policy": "Options: uniform_fractional, tax_richest, uniform_utility_reduction",
 
     "redistribution_policy_type": "uniform_dividend",
     "_redistribution_policy_type": "Options: uniform_dividend, targeted_lowest_income"
@@ -282,14 +282,24 @@ def calculate_tendencies(state, params, prev_income_dist):
 
 **Recommended: Option B** - The explicit argument makes the temporal dependency clear and separates static parameters from time-varying state information.
 
+**Status: IMPLEMENTED** - Option B has been implemented in `economic_model.py`:
+- `calculate_tendencies()` now takes `prev_income_dist` as a required argument
+- `calculate_tendencies()` returns `current_income_dist` in its results dictionary
+- `integrate_model()` initializes `prev_income_dist` from initial conditions and updates it each time step
+
 ### Initialization
 
-For the first time step (t=0), use the initial income distribution from the state variables:
+For the first time step (t=0), use initial gross income and background Gini:
 
 ```python
+# In integrate_model():
+Y_gross_initial = A0 * (K0 ** alpha) * (L0 ** (1 - alpha))
+y_gross_initial = Y_gross_initial / L0
+Gini_initial = config.time_functions['Gini_background'](t_start)
+
 prev_income_dist = {
-    'y_mean': state['y_mean'][0],
-    'gini': state['gini'][0],
+    'y_mean': y_gross_initial,
+    'gini': Gini_initial,
 }
 ```
 
