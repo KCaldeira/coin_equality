@@ -124,13 +124,12 @@ When `income_dependent_damage_distribution=true`:
 
 How the costs of climate policy (abatement) are distributed across the population.
 
-**Switch: `income_dependent_tax_policy`**
+**Switch: `income_dependent_tax_policy`** (boolean)
 
-| Option | Description | Priority |
-|--------|-------------|----------|
-| `uniform_fractional` | Uniform fractional tax independent of income (effectively what is in DICE now). Everyone pays the same fraction of their income. | High |
-| `tax_richest` | Tax only the richest (aggregate utility optimizing). Concentrates burden on high-income individuals to maximize total utility. | High |
-| `uniform_utility_reduction` | Tax designed so everyone experiences the same utility reduction. A "fair" tax system where the burden feels equal. | Lower |
+| Value | Description |
+|-------|-------------|
+| `false` | Uniform fractional tax independent of income (effectively what is in DICE now). Everyone pays the same fraction of their income. |
+| `true` | Progressive tax - tax only the richest (aggregate utility optimizing). Concentrates burden on high-income individuals to maximize total utility. |
 
 ---
 
@@ -138,12 +137,12 @@ How the costs of climate policy (abatement) are distributed across the populatio
 
 How revenues or benefits from climate policy are distributed back to the population.
 
-**Switch: `redistribution_policy_type`**
+**Switch: `income_dependent_redistribution_policy`** (boolean)
 
-| Option | Description |
-|--------|-------------|
-| `uniform_dividend` | Everyone gets the same per-capita cash dividend (including those who contributed). Universal basic dividend approach. |
-| `targeted_lowest_income` | Benefits go only to those with lowest income (aggregate utility optimizing). Maximizes utility gain from redistribution. |
+| Value | Description |
+|-------|-------------|
+| `false` | Uniform dividend - everyone gets the same per-capita cash dividend (including those who contributed). Universal basic dividend approach. |
+| `true` | Targeted redistribution - benefits go only to those with lowest income (aggregate utility optimizing). Maximizes utility gain from redistribution. |
 
 ---
 
@@ -167,21 +166,22 @@ These switches should be added to the `scalar_parameters` section of config file
     "y_damage_distribution_scale": 10000.0,
     "_y_damage_distribution_scale": "Income level ($) at which climate damage is half of maximum (only used when income_dependent_damage_distribution=true)",
 
-    "income_dependent_tax_policy": "uniform_fractional",
-    "_income_dependent_tax_policy": "Options: uniform_fractional, tax_richest, uniform_utility_reduction",
+    "income_dependent_tax_policy": false,
+    "_income_dependent_tax_policy": "If true, progressive tax (tax richest); if false, uniform fractional tax",
 
-    "redistribution_policy_type": "uniform_dividend",
-    "_redistribution_policy_type": "Options: uniform_dividend, targeted_lowest_income"
+    "income_dependent_redistribution_policy": false,
+    "_income_dependent_redistribution_policy": "If true, targeted to lowest income; if false, uniform dividend"
 }
 ```
 
 ### Files to Modify
 
 1. **economic_model.py**: Core logic for damage, tax, and redistribution calculations
-2. **utility_functions.py**: Utility calculations for different policy scenarios
-3. **parameters.py**: Add new parameter handling
-4. **output.py**: Ensure new variables are captured in output
-5. **README.md**: Document new configuration options
+2. **policy_functions.py**: New module with utility functions for policy-dependent calculations (Section 5)
+3. **climate_damage_distribution.py**: Update to use income_dist_scale_factor with critical ranks
+4. **parameters.py**: Add new parameter handling
+5. **output.py**: Ensure new variables are captured in output (including F_crit values)
+6. **README.md**: Document new configuration options
 
 ### Testing Strategy
 
@@ -193,13 +193,151 @@ Create config files that test each combination:
 
 ---
 
+## 5. Utility Functions for Policy-Dependent Calculations
+
+To support the various `income_dependent_*` policy switches, we need utility functions that compute income, damage, and utility distributions accounting for taxation, redistribution, and climate damage.
+
+### 5.1 Core Utility Functions
+
+These functions must account for all policy switches and provide the building blocks for economic calculations:
+
+#### Function 1: `income_at_rank(F, base_income_dist, damage_params, tax_params, redistribution_params)`
+
+**Purpose**: Compute income at rank F after applying climate damage, taxation, and redistribution.
+
+**Parameters**:
+- `F`: Rank in the distribution (0 to 1)
+- `base_income_dist`: Dictionary with `{'y_mean', 'gini'}`
+- `damage_params`: Climate damage parameters
+- `tax_params`: Taxation policy parameters
+- `redistribution_params`: Redistribution policy parameters
+
+**Returns**: Income at rank F after all transformations
+
+**Logic**:
+1. Start with base Pareto income at rank F: `c(F) = y_mean * (1 - 1/a) * (1 - F)^(-1/a)`
+2. Apply climate damage based on income level (if `income_dependent_damage_distribution=true`)
+3. Apply taxation:
+   - If `income_dependent_tax_policy=false`: uniform fractional tax
+   - If `income_dependent_tax_policy=true`: progressive tax (tax only above F_crit_tax)
+4. Apply redistribution:
+   - If `income_dependent_redistribution_policy=false`: uniform dividend to all
+   - If `income_dependent_redistribution_policy=true`: targeted to F < F_crit_redistribution
+
+#### Function 2: `integrated_damage_scaling(base_income_dist, damage_params, tax_params, redistribution_params)`
+
+**Purpose**: Compute aggregate damage as fraction of GDP, integrating over the entire distribution.
+
+**Returns**: Float, aggregate damage scaling factor (0 to 1)
+
+**Logic**:
+```
+∫₀¹ damage_at_rank(F) * income_at_rank(F) dF / ∫₀¹ income_at_rank(F) dF
+```
+
+Where `damage_at_rank(F)` depends on:
+- Base temperature-dependent damage (ψ₁·ΔT + ψ₂·ΔT²)
+- Income-dependent aggregate scaling (if `income_dependent_aggregate_damage=true`)
+- Income-dependent damage distribution (if `income_dependent_damage_distribution=true`)
+- Redistribution and taxation effects on the income distribution
+
+#### Function 3: `integrated_utility(base_income_dist, damage_params, tax_params, redistribution_params, eta)`
+
+**Purpose**: Compute aggregate utility integrating over the post-damage, post-tax, post-redistribution income distribution.
+
+**Returns**: Float, mean utility
+
+**Logic**:
+```
+∫₀¹ u(income_at_rank(F)) dF
+```
+
+Where `u(c) = c^(1-η)/(1-η)` for η≠1, or `u(c) = log(c)` for η=1.
+
+### 5.2 Temporal Structure
+
+These functions are called with different temporal contexts:
+
+| Calculation | Uses Distribution From | Uses Decisions From | Purpose |
+|-------------|----------------------|-------------------|---------|
+| **Climate Damage** | Previous time step (t-1) | Previous time step (t-1) | Calculate Ω based on population vulnerability at start of period |
+| **Taxation & Redistribution** | Current time step (t) | Current time step (t) | Apply current policy decisions to current distribution |
+| **Utility** | Current time step (t) | Current time step (t) | Evaluate welfare under current conditions |
+
+**Workflow in `calculate_tendencies()`**:
+
+1. **Damage calculation** (using previous time step):
+   ```python
+   Omega = integrated_damage_scaling(
+       income_dist_scale_factor,  # t-1 distribution
+       damage_params,
+       prev_tax_params,   # t-1 tax decisions
+       prev_redistribution_params  # t-1 redistribution decisions
+   )
+   ```
+
+2. **Current step calculations** (using current time step):
+   ```python
+   # Apply damage to get current damaged income distribution
+   Y_damaged = Y_gross * (1 - Omega)
+   current_damaged_dist = compute_damaged_distribution(Y_damaged, Gini_climate)
+
+   # Calculate utility with current policies
+   U = integrated_utility(
+       current_damaged_dist,  # t distribution (post-damage)
+       damage_params,
+       current_tax_params,    # t tax decisions
+       current_redistribution_params  # t redistribution decisions
+   )
+   ```
+
+### 5.3 Critical Rank Calculation
+
+For progressive taxation and targeted redistribution, we need to determine critical ranks:
+
+#### `calculate_F_crit_tax(y_mean, gini, fract_gdp, damage_params)`
+
+Finds the rank F_crit above which individuals are taxed (progressive tax).
+
+**Constraint**: Total tax revenue = `fract_gdp * f * Y_damaged`
+
+#### `calculate_F_crit_redistribution(y_mean, gini, fract_gdp, f, redistribution_budget)`
+
+Finds the rank F_crit below which individuals receive redistribution (targeted policy).
+
+**Constraint**: Total redistribution = `fract_gdp * (1-f) * Y_damaged`
+
+### 5.4 Implementation Location
+
+Create these functions in a new module: **`policy_functions.py`**
+
+This module will be called by:
+- `economic_model.py`: For calculating damage, utility, and redistribution effects
+- `optimization.py`: For evaluating objective function
+
+### 5.5 Analytical vs. Numerical Integration
+
+- **Preferred approach**: Analytical solutions using hypergeometric functions (following existing pattern)
+- **Fallback**: Numerical integration with `scipy.integrate.quad` for complex cases
+- **Documentation**: Each function should document whether it uses analytical or numerical methods
+
+---
+
 ## Priority Order
 
 0. **Phase 0**: Add new configuration keywords to parameter loading code (parameters.py)
 1. **Phase 1**: Separate aggregate damage from damage distribution
-2. **Phase 2**: Implement tax policy options (uniform_fractional, tax_richest)
-3. **Phase 3**: Implement redistribution policy options
-4. **Phase 4**: Add uniform_utility_reduction tax option (lower priority)
+2. **Phase 2**: Implement temporal income distribution approach (Option B) - **COMPLETED**
+3. **Phase 3**: Implement boolean policy switches - **COMPLETED**
+4. **Phase 4**: Create utility functions in `policy_functions.py` (Section 5)
+   - `income_at_rank()`: Income after damage/tax/redistribution at rank F
+   - `integrated_damage_scaling()`: Aggregate damage accounting for policies
+   - `integrated_utility()`: Mean utility accounting for policies
+   - `calculate_F_crit_tax()`: Critical rank for progressive taxation
+   - `calculate_F_crit_redistribution()`: Critical rank for targeted redistribution
+5. **Phase 5**: Implement tax policy (uniform vs. progressive)
+6. **Phase 6**: Implement redistribution policy (uniform dividend vs. targeted)
+7. **Phase 7**: Testing and validation across all policy combinations
 
 ---
 
@@ -226,14 +364,21 @@ Instead of iterating to internal consistency, we use the income distribution fro
 
 **Preferred approach: Key quantities** (rather than passing a continuous function)
 
-Pass the key parameters that characterize the income distribution at the end of the previous time step:
+Pass the key parameters that characterize the income distribution and policy decisions at the end of the previous time step:
 
 | Quantity | Description |
 |----------|-------------|
-| `y_mean_prev` | Mean income from previous time step |
-| `gini_prev` | Gini coefficient from previous time step |
+| `y_mean` | Mean income from previous time step |
+| `gini` | Gini coefficient from previous time step |
+| `F_crit_tax` | Critical rank for taxation from previous time step (only if `income_dependent_tax_policy=true`) |
+| `F_crit_redistribution` | Critical rank for redistribution from previous time step (only if `income_dependent_redistribution_policy=true`) |
 
 **Important:** Always pass `gini`, never `a`. The Pareto parameter `a` is a derived quantity under the assumption of a Pareto-Lorenz distribution. The Gini coefficient is the fundamental state variable. Functions that need `a` should compute it internally using `a_from_G(gini)`.
+
+**Rationale for including critical ranks:**
+- Climate damage depends on the income distribution **and** policy decisions from the previous time step
+- Progressive taxation and targeted redistribution affect the effective income distribution
+- To correctly calculate damage, we need to know where tax/redistribution boundaries were in the previous period
 
 These quantities fully characterize a Pareto distribution, which is sufficient for all damage, taxation, and redistribution calculations.
 
@@ -263,7 +408,7 @@ params = {
 **Option B: Add new argument to `calculate_tendencies()`**
 
 ```python
-def calculate_tendencies(state, params, prev_income_dist):
+def calculate_tendencies(state, params, income_dist_scale_factor):
     """
     Parameters
     ----------
@@ -271,9 +416,14 @@ def calculate_tendencies(state, params, prev_income_dist):
         Current state variables
     params : dict
         Model parameters (static)
-    prev_income_dist : dict
-        Income distribution from previous time step:
-        {'y_mean': float, 'gini': float}
+    income_dist_scale_factor : dict
+        Income distribution and policy decisions from previous time step:
+        {
+            'y_mean': float,
+            'gini': float,
+            'F_crit_tax': float (optional, only if income_dependent_tax_policy=true),
+            'F_crit_redistribution': float (optional, only if income_dependent_redistribution_policy=true)
+        }
     """
 ```
 
@@ -283,9 +433,9 @@ def calculate_tendencies(state, params, prev_income_dist):
 **Recommended: Option B** - The explicit argument makes the temporal dependency clear and separates static parameters from time-varying state information.
 
 **Status: IMPLEMENTED** - Option B has been implemented in `economic_model.py`:
-- `calculate_tendencies()` now takes `prev_income_dist` as a required argument
-- `calculate_tendencies()` returns `current_income_dist` in its results dictionary
-- `integrate_model()` initializes `prev_income_dist` from initial conditions and updates it each time step
+- `calculate_tendencies()` now takes `income_dist_scale_factor` as a required argument
+- `calculate_tendencies()` returns `current_income_dist` in its results dictionary (needs update to include F_crit values)
+- `integrate_model()` initializes `income_dist_scale_factor` from initial conditions and updates it each time step
 
 ### Initialization
 
@@ -297,27 +447,57 @@ Y_gross_initial = A0 * (K0 ** alpha) * (L0 ** (1 - alpha))
 y_gross_initial = Y_gross_initial / L0
 Gini_initial = config.time_functions['Gini_background'](t_start)
 
-prev_income_dist = {
+income_dist_scale_factor = {
     'y_mean': y_gross_initial,
     'gini': Gini_initial,
 }
+
+# Initialize critical ranks if needed
+if params['income_dependent_tax_policy']:
+    income_dist_scale_factor['F_crit_tax'] = calculate_F_crit_tax(
+        y_gross_initial, Gini_initial, params['fract_gdp'], params
+    )
+
+if params['income_dependent_redistribution_policy']:
+    income_dist_scale_factor['F_crit_redistribution'] = calculate_F_crit_redistribution(
+        y_gross_initial, Gini_initial, params['fract_gdp'], params['f'], params
+    )
 ```
 
 ### Usage in Damage Calculations
 
-When `income_dependent_damage_distribution=true`:
+Climate damage is calculated using the previous time step's income distribution **and** policy decisions:
 
 ```python
-# Use previous time step's income distribution for damage weighting
-gini = prev_income_dist['gini']
-y_mean = prev_income_dist['y_mean']
-
-# Calculate damage distribution using previous income structure
-# (functions compute 'a' internally from gini)
-damage_weight = pareto_damage_weight(y, gini, y_mean, y_damage_distribution_scale)
+# Calculate damage using previous time step's complete state
+Omega, Gini_climate = calculate_climate_damage_from_prev_distribution(
+    delta_T, income_dist_scale_factor, params
+)
 ```
 
-Similarly for taxation and redistribution calculations that depend on the income distribution.
+Inside `calculate_climate_damage_from_prev_distribution()`:
+
+```python
+y_mean = income_dist_scale_factor['y_mean']
+gini = income_dist_scale_factor['gini']
+
+# Get critical ranks if policies are income-dependent
+if params['income_dependent_tax_policy']:
+    F_crit_tax = income_dist_scale_factor['F_crit_tax']
+else:
+    F_crit_tax = 1.0  # No one is taxed
+
+if params['income_dependent_redistribution_policy']:
+    F_crit_redistribution = income_dist_scale_factor['F_crit_redistribution']
+else:
+    F_crit_redistribution = 0.0  # No one receives redistribution
+
+# Integrate damage over the distribution, accounting for:
+# - Income-dependent damage function
+# - Tax-modified income above F_crit_tax
+# - Redistribution-modified income below F_crit_redistribution
+Omega = integrated_damage_scaling(y_mean, gini, F_crit_tax, F_crit_redistribution, params)
+```
 
 ### Refactoring: Functions to Change from `a` to `gini`
 
@@ -333,6 +513,32 @@ The following functions currently take the Pareto parameter `a` as an argument. 
 - `L_pareto(F, G)` in `income_distribution.py`
 - `L_pareto_derivative(F, G)` in `income_distribution.py`
 
+### Return Value from `calculate_tendencies()`
+
+`calculate_tendencies()` must return `current_income_dist` with all necessary information for the next time step:
+
+```python
+# At end of calculate_tendencies():
+current_income_dist = {
+    'y_mean': y_net,  # Net per-capita income after damage/tax/redistribution
+    'gini': G_eff,    # Effective Gini after damage/tax/redistribution
+}
+
+# Add critical ranks for next time step
+if params['income_dependent_tax_policy']:
+    current_income_dist['F_crit_tax'] = calculate_F_crit_tax(
+        y_net, G_eff, params['fract_gdp'], params
+    )
+
+if params['income_dependent_redistribution_policy']:
+    current_income_dist['F_crit_redistribution'] = calculate_F_crit_redistribution(
+        y_net, G_eff, params['fract_gdp'], params['f'], params
+    )
+
+results['current_income_dist'] = current_income_dist
+return results
+```
+
 ### Consistency Check
 
 For validation, we can optionally compute the "error" between:
@@ -345,12 +551,18 @@ This error should be small if the time step is appropriate. Large errors might i
 
 ## Questions to Resolve
 
-- [ ] Should `uniform_dividend` include the people paying taxes, or only non-payers?
-- [ ] For `tax_richest`, what threshold defines "richest"? Top percentile? Above median?
-- [ ] For `targeted_lowest_income`, what threshold defines eligibility?
+- [ ] For uniform dividend (`income_dependent_redistribution_policy=false`): Should it include the people paying taxes, or only non-payers?
+- [ ] For progressive tax (`income_dependent_tax_policy=true`): What threshold defines "richest"? Top percentile? Above median?
+- [ ] For targeted redistribution (`income_dependent_redistribution_policy=true`): What threshold defines eligibility for benefits?
 - [ ] How do these policies interact with the existing Gini dynamics?
 
 ## Resolved Questions
 
 - [x] **Should the Pareto parameter `a` be passed explicitly, or always derived from `gini`?**
   - **Decision:** Always pass `gini`, never `a`. The Gini coefficient is the fundamental state variable; `a` is a derived quantity under the Pareto-Lorenz assumption. Functions that need `a` should compute it internally using `a_from_G(gini)`.
+
+- [x] **Should policy switches be string enums or booleans?**
+  - **Decision:** All policy switches are now booleans with the naming convention `income_dependent_*`. This simplifies the API and makes the policy choices clearer:
+    - `income_dependent_tax_policy`: `false` = uniform fractional, `true` = progressive (tax richest)
+    - `income_dependent_redistribution_policy`: `false` = uniform dividend, `true` = targeted to lowest income
+  - Additional policy options (like `uniform_utility_reduction` tax) can be added later as separate boolean switches if needed.

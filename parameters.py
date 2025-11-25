@@ -331,10 +331,12 @@ class ScalarParameters:
     income_dependent_damage_distribution : bool
         If True, damage is weighted towards low-income (uses y_damage_distribution_scale)
         If False, damage is distributed uniformly across income distribution
-    income_dependent_tax_policy : str
-        Tax/abatement cost policy: 'uniform_fractional', 'tax_richest', or 'uniform_utility_reduction'
-    redistribution_policy_type : str
-        Redistribution policy: 'uniform_dividend' or 'targeted_lowest_income'
+    income_dependent_tax_policy : bool
+        If True, progressive tax (tax richest fraction)
+        If False, uniform fractional tax (DICE-like)
+    income_dependent_redistribution_policy : bool
+        If True, targeted redistribution (benefits to lowest income)
+        If False, uniform dividend (equal per-capita payment)
     """
     alpha: float
     delta: float
@@ -353,7 +355,7 @@ class ScalarParameters:
     income_dependent_aggregate_damage: bool
     income_dependent_damage_distribution: bool
     income_dependent_tax_policy: str
-    redistribution_policy_type: str
+    income_dependent_redistribution_policy: str
     mu_max: float = None  # Will be set to INVERSE_EPSILON in __post_init__ if None
     Ecum_initial: float = 0.0  # Default to zero (no prior emissions)
 
@@ -662,7 +664,7 @@ def evaluate_params_at_time(t, config):
         'income_dependent_aggregate_damage': sp.income_dependent_aggregate_damage,
         'income_dependent_damage_distribution': sp.income_dependent_damage_distribution,
         'income_dependent_tax_policy': sp.income_dependent_tax_policy,
-        'redistribution_policy_type': sp.redistribution_policy_type,
+        'income_dependent_redistribution_policy': sp.income_dependent_redistribution_policy,
         'k_climate': sp.k_climate,
         'eta': sp.eta,
         'rho': sp.rho,

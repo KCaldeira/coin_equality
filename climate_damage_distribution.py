@@ -13,68 +13,122 @@ this module computes:
 1. Aggregate damage Ω: fraction of total GDP lost to climate damage
 2. Post-damage Gini G_climate: inequality after climate damage is applied
 
-Damage Function (Corrected)
----------------------------
-The damage function follows a half-saturation (Michaelis–Menten) form:
-    ω(y) = ω_max * (1 - y / (y_half + y))
-         = ω_max * y_half / (y_half + y)
-
-This means lower-income individuals (small y) experience proportionally higher
-fractional losses, while high-income individuals experience smaller losses.
-
-Analytical Solutions
---------------------
-Closed-form analytical solutions use the Gauss hypergeometric function ₂F₁.
-
-References: Analytical solutions derived with assistance from ChatGPT (2025).
+import numpy as np
+from scipy.special import gammainc, gamma  # regularized & complete gamma
 """
 
-from income_distribution import a_from_G
-from scipy.special import hyp2f1, gamma, gammaincc
-from scipy.integrate import quad
-from constants import INVERSE_EPSILON, EPSILON
-import numpy as np
 
-
-def pareto_integral_scipy(c_mean, a, c_scale):
+def damage_integral(F0, F1, c_mean, gini, kc):
     """
-    Computes the income-dependent damage scaling factor for aggregate damage.
-
-    This integral represents how aggregate damage scales with mean income
-    for a Pareto-distributed population. As c_mean increases relative to
-    c_scale, the integral decreases, representing better adaptation capacity
-    of wealthier societies.
-
+    Compute ∫_{F0}^{F1} d(c(F)) dF, where:
+    
+      c(F) = c_mean * d/dF [ 1 - (1 - F)^(1 - 1/a) ]
+      d(c) = kd * c * (1 - exp(-kc * c))
+    
+    and 0 <= F0 < F1 <= 1.
+    
     Parameters
     ----------
+    F0, F1 : float
+        Integration limits in [0,1], with F0 < F1.
     c_mean : float
-        Mean income (y_mean in model).
+        Mean consumption parameter used in c(F).
     a : float
-        Pareto parameter (>1), derived from Gini coefficient.
-    c_scale : float
-        Income scale for damage saturation (y_damage_aggregate_scale).
-
+        Pareto/Lorenz shape parameter (a != 1).
+    kd, kc : float
+        Damage function parameters in d(c) = kd * c * exp(-kc * c).
+    
     Returns
     -------
     float
-        Scaling factor for aggregate damage (0 to 1, decreasing with wealth).
+        Value of the integral ∫_{F0}^{F1} d(c(F)) dF.
     """
-    # k = c_mean * (1 - 1/a)
-    k = c_mean * (1.0 - 1.0 / a)
+    a = a_from_G(gini)
 
-    # s = 1 - a
+    if not (0.0 <= F0 < F1 <= 1.0):
+        raise ValueError("Require 0 <= F0 < F1 <= 1.")
+    if np.isclose(a, 1.0):
+        raise ValueError("This closed-form expression assumes a != 1.")
+
+    # A = c_mean * (1 - 1/a)
+    A = c_mean * (1.0 - 1.0 / a)
+
+    # z0, z1 as defined from the change of variables
+    z0 = kc * A * (1.0 - F0) ** (-1.0 / a)
+    z1 = kc * A * (1.0 - F1) ** (-1.0 / a)
+
+    # Common front factor: kd * a * A * (kc * A)^(a - 1)
+    front = a * A * (kc * A) ** (a - 1.0)
+
+    # Second piece: γ(1-a, z1) - γ(1-a, z0)
     s = 1.0 - a
 
-    # Argument of the incomplete gamma
-    x = k / c_scale
+    #lower incomplete gamma terms
+    #  Lower incomplete gamma: γ(s, x) = ∫_0^x t^{s-1} e^{-t} dt
+    term_gamma =  (gammainc(s, z1) -gammainc(s,z0)) * gamma(s)
 
-    # Upper incomplete gamma Γ(s, x) using ScipPy utilities
-    gamma_upper = gammaincc(s, x) * gamma(s)
+    # Combine
+    integral_value = front *  term_gamma
 
-    # Full analytic expression
-    result = a * (k ** a) * (c_scale ** (1.0 - a)) * gamma_upper
+    return integral_value
 
-    return result
+def calculate_climate_damage_ratio_from_prev_distribution(delta_T, income_dist_scale_factor, params):
+    """
+    Calculate climate damage using income distribution from previous time step.
+
+    This function avoids circular dependency by using the income distribution from the
+    end of the previous time step to calculate damage in the current time step. This is
+    physically reasonable because climate damage depends on the vulnerability of the
+    population at the start of the period.
+
+    Parameters
+    ----------
+    delta_T : float
+        Temperature change above baseline (°C)
+    income_dist_scale_factor : dict
+        Income distribution from previous time step:
+        - 'y_mean': Mean per-capita income ($)
+        - 'gini': Gini coefficient
+    params : dict
+        Model parameters including:
+        - 'psi1': linear damage coefficient (°C⁻¹)
+        - 'psi2': quadratic damage coefficient (°C⁻²)
+        - 'income_dependent_aggregate_damage': bool
+        - 'income_dependent_damage_distribution': bool
+        - 'y_damage_aggregate_scale': income scale for aggregate damage ($)
+        - 'y_damage_distribution_scale': income scale for damage distribution ($)
+
+    Returns
+    -------
+    Omega : float
+        Aggregate damage fraction (0 ≤ Ω < 1)
+    Gini_climate : float
+        Post-damage Gini index (computed using previous distribution as base)
+    """
+    y_mean_prev = income_dist_scale_factor['y_mean']
+    gini_prev = income_dist_scale_factor['gini']
+    a = a_from_G(gini_prev)
+
+    if income_dependent_tax_policy:
+        Fcrit_tax = income_dist_scale_factor['Fcrit_tax']
+    else:
+        Fcrit_tax = 1.0
+
+    if income_dependent_redistribution_policy:
+        Fcrit_redistribution = income_dist_scale_factor['Fcrit_redistribution']
+    else:
+        Fcrit_redistribution = 0.0
+
+    middle_part = damage_integral(Fcrit_redistribution, Fcrit_tax, y_mean_prev, gini_prev, 1.0/y_damage_distribution_scale)
+    income_ratio_Fcrit_tax = (1.0 - 1.0/a)* (1.0 - Fcrit_tax)**(-1.0/a)
+    fract_damage_Fcrit_tax = income_ratio_Fcrit_tax * (1.0 - Fcrit_tax) * np.exp(-y_mean_prev * income_ratio_Fcrit_tax/y_damage_distribution_scale * y_mean_prev)
+    income_ratio_Fcrit_redistribution = (1.0 - 1.0/a)* (1.0 - Fcrit_redistribution)**(-1.0/a)
+    fract_damage_Fcrit_redistribution = income_ratio_Fcrit_redistribution * Fcrit_redistribution *  np.exp(-y_mean_prev * income_ratio_Fcrit_redistribution/y_damage_distribution_scale * y_mean_prev)
+    
+    damage_ratio = middle_part + fract_damage_Fcrit_tax - fract_damage_Fcrit_redistribution
+
+    # Delegate to existing function with previous time step's distribution
+    return damage_ratio 
 
 
 def calculate_climate_damage_and_gini_effect(delta_T, Gini_current, y_mean, params):
