@@ -19,7 +19,7 @@ from constants import EPSILON
 
 def calculate_integrated_economy(
     delta_T,
-    income_dist_scale_factor,
+    previous_step_values,
     Y_gross,
     L,
     s,
@@ -33,7 +33,9 @@ def calculate_integrated_economy(
     income_dependent_aggregate_damage,
     income_dependent_damage_distribution,
     income_dependent_tax_policy,
-    income_dependent_redistribution_policy
+    income_redistribution,
+    income_dependent_redistribution_policy,
+    n_discrete=1000
 ):
     """
     Calculate integrated economic outcomes with climate damage, taxation, and redistribution.
@@ -47,7 +49,7 @@ def calculate_integrated_economy(
     ----------
     delta_T : float
         Temperature change above baseline (°C)
-    income_dist_scale_factor : dict
+    previous_step_values : dict
         Income distribution from previous time step:
         - 'y_mean': Mean income ($)
         - 'gini': Gini coefficient
@@ -79,8 +81,14 @@ def calculate_integrated_economy(
         If True, damage weighted towards low-income individuals
     income_dependent_tax_policy : bool
         If True, progressive tax (tax richest); if False, uniform fractional tax
+    income_redistribution : bool
+        If True, enable redistribution; if False, no redistribution (all revenues to abatement)
     income_dependent_redistribution_policy : bool
         If True, targeted to lowest income; if False, uniform dividend
+        Only applies when income_redistribution=True
+    n_discrete : int, optional
+        Number of discrete segments for numerical integration over income distribution
+        Default: 1000
 
     Returns
     -------
@@ -106,27 +114,25 @@ def calculate_integrated_economy(
     - Parts of calculate_tendencies()
     """
     # Extract previous time step info
-    y_mean_prev = income_dist_scale_factor['y_mean']
-    gini_prev = income_dist_scale_factor['gini']
+    y_mean_prev = prev_income_dist['y_mean']
+    gini_prev = prev_income_dist['gini']
 
     # Get critical ranks from previous time step if applicable
-    if income_dependent_tax_policy and 'F_crit_tax' in income_dist_scale_factor:
-        F_crit_tax_prev = income_dist_scale_factor['F_crit_tax']
+    if income_dependent_tax_policy and 'F_crit_tax' in prev_income_dist:
+        F_crit_tax_prev = prev_income_dist['F_crit_tax']
     else:
-        F_crit_tax_prev = 1.0  # No one is taxed
+        F_crit_tax_prev = 1.0  # Everyone pays same tax rate
 
-    if income_dependent_redistribution_policy and 'F_crit_redistribution' in income_dist_scale_factor:
-        F_crit_redistribution_prev = income_dist_scale_factor['F_crit_redistribution']
+    if income_dependent_redistribution_policy and 'F_crit_redistribution' in prev_income_dist:
+        F_crit_redistribution_prev = prev_income_dist['F_crit_redistribution']
     else:
-        F_crit_redistribution_prev = 0.0  # No one receives redistribution
+        F_crit_redistribution_prev = 0.0  # Everyone receives the same redistribution amount
 
     #===================================================================================
     # STEP 1: Calculate climate damage using previous time step's distribution
     #===================================================================================
 
-    # Base damage from temperature
-    omega_base = psi1 * delta_T + psi2 * (delta_T ** 2)
-    omega_base = min(omega_base, 1.0 - EPSILON)
+
 
     # TODO: Implement aggregate damage calculation with income dependence
     # For now, use simple aggregate damage

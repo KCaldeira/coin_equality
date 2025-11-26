@@ -72,7 +72,7 @@ def damage_integral(F0, F1, c_mean, gini, kc):
 
     return integral_value
 
-def calculate_climate_damage_ratio_from_prev_distribution(delta_T, income_dist_scale_factor, params):
+def calculate_climate_damage_ratio_from_prev_distribution(delta_T, prev_income_dist, params):
     """
     Calculate climate damage using income distribution from previous time step.
 
@@ -85,14 +85,12 @@ def calculate_climate_damage_ratio_from_prev_distribution(delta_T, income_dist_s
     ----------
     delta_T : float
         Temperature change above baseline (°C)
-    income_dist_scale_factor : dict
+    prev_income_dist : dict
         Income distribution from previous time step:
         - 'y_mean': Mean per-capita income ($)
         - 'gini': Gini coefficient
     params : dict
         Model parameters including:
-        - 'psi1': linear damage coefficient (°C⁻¹)
-        - 'psi2': quadratic damage coefficient (°C⁻²)
         - 'income_dependent_aggregate_damage': bool
         - 'income_dependent_damage_distribution': bool
         - 'y_damage_aggregate_scale': income scale for aggregate damage ($)
@@ -105,25 +103,27 @@ def calculate_climate_damage_ratio_from_prev_distribution(delta_T, income_dist_s
     Gini_climate : float
         Post-damage Gini index (computed using previous distribution as base)
     """
-    y_mean_prev = income_dist_scale_factor['y_mean']
-    gini_prev = income_dist_scale_factor['gini']
+    y_mean_prev = prev_income_dist['y_mean']
+    gini_prev = prev_income_dist['gini']
     a = a_from_G(gini_prev)
 
     if income_dependent_tax_policy:
-        Fcrit_tax = income_dist_scale_factor['Fcrit_tax']
+        Fcrit_tax = prev_income_dist['Fcrit_tax']
+        income_ratio_Fcrit_tax = (1.0 - 1.0/a)* (1.0 - Fcrit_tax)**(-1.0/a)
+        fract_damage_Fcrit_tax = income_ratio_Fcrit_tax * (1.0 - Fcrit_tax) * np.exp(-y_mean_prev * income_ratio_Fcrit_tax/y_damage_distribution_scale * y_mean_prev)
+
     else:
         Fcrit_tax = 1.0
 
     if income_dependent_redistribution_policy:
-        Fcrit_redistribution = income_dist_scale_factor['Fcrit_redistribution']
+        Fcrit_redistribution = prev_income_dist['Fcrit_redistribution']
+        income_ratio_Fcrit_redistribution = (1.0 - 1.0/a)* (1.0 - Fcrit_redistribution)**(-1.0/a)
+        fract_damage_Fcrit_redistribution = income_ratio_Fcrit_redistribution * Fcrit_redistribution *  np.exp(-y_mean_prev * income_ratio_Fcrit_redistribution/y_damage_distribution_scale * y_mean_prev)
     else:
         Fcrit_redistribution = 0.0
+        fract_damage_Fcrit_redistribution = 0.0
 
     middle_part = damage_integral(Fcrit_redistribution, Fcrit_tax, y_mean_prev, gini_prev, 1.0/y_damage_distribution_scale)
-    income_ratio_Fcrit_tax = (1.0 - 1.0/a)* (1.0 - Fcrit_tax)**(-1.0/a)
-    fract_damage_Fcrit_tax = income_ratio_Fcrit_tax * (1.0 - Fcrit_tax) * np.exp(-y_mean_prev * income_ratio_Fcrit_tax/y_damage_distribution_scale * y_mean_prev)
-    income_ratio_Fcrit_redistribution = (1.0 - 1.0/a)* (1.0 - Fcrit_redistribution)**(-1.0/a)
-    fract_damage_Fcrit_redistribution = income_ratio_Fcrit_redistribution * Fcrit_redistribution *  np.exp(-y_mean_prev * income_ratio_Fcrit_redistribution/y_damage_distribution_scale * y_mean_prev)
     
     damage_ratio = middle_part + fract_damage_Fcrit_tax - fract_damage_Fcrit_redistribution
 

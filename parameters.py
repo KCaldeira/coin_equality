@@ -334,9 +334,16 @@ class ScalarParameters:
     income_dependent_tax_policy : bool
         If True, progressive tax (tax richest fraction)
         If False, uniform fractional tax (DICE-like)
+    income_redistribution : bool
+        If True, enable redistribution (revenues can be redistributed)
+        If False, no redistribution (all revenues go to abatement)
     income_dependent_redistribution_policy : bool
         If True, targeted redistribution (benefits to lowest income)
         If False, uniform dividend (equal per-capita payment)
+        Only applies when income_redistribution=True
+    n_discrete : int
+        Number of discrete segments for numerical integration over income distribution
+        Used when analytical solutions are not available
     """
     alpha: float
     delta: float
@@ -354,8 +361,10 @@ class ScalarParameters:
     K_initial: float
     income_dependent_aggregate_damage: bool
     income_dependent_damage_distribution: bool
-    income_dependent_tax_policy: str
-    income_dependent_redistribution_policy: str
+    income_dependent_tax_policy: bool
+    income_redistribution: bool
+    income_dependent_redistribution_policy: bool
+    n_discrete: int
     mu_max: float = None  # Will be set to INVERSE_EPSILON in __post_init__ if None
     Ecum_initial: float = 0.0  # Default to zero (no prior emissions)
 

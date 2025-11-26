@@ -15,7 +15,7 @@ from climate_damage_distribution import (
 from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_INITIAL_CAPITAL_ITERATIONS
 
 
-def calculate_tendencies(state, params, income_dist_scale_factor, store_detailed_output=True):
+def calculate_tendencies(state, params, previous_step_values, store_detailed_output=True):
     """
     Calculate time derivatives and all derived variables.
 
@@ -47,7 +47,7 @@ def calculate_tendencies(state, params, income_dist_scale_factor, store_detailed
         - 'Gini_restore': Rate of restoration to Gini_background (yr^-1)
         - 'fract_gdp': Fraction of GDP available for redistribution and abatement
         - 'f': Fraction allocated to abatement vs redistribution
-    income_dist_scale_factor : dict
+    previous_step_values : dict
         Income distribution from the previous time step, used for damage/tax/redistribution
         calculations to avoid circular dependency. Contains:
         - 'y_mean': Mean income from previous time step ($)
@@ -61,7 +61,7 @@ def calculate_tendencies(state, params, income_dist_scale_factor, store_detailed
         Dictionary containing:
         - Tendencies: 'dK_dt', 'dEcum_dt', 'd_delta_Gini_dt', 'delta_Gini_step_change'
         - Income distribution: 'current_income_dist' with {'y_mean': float, 'gini': float}
-          for use as income_dist_scale_factor in the next time step
+          for use as previous_step_values in the next time step
         - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y, redistribution,
           mu, Lambda, AbateCost, y_net, G_eff, U, E
 
@@ -116,8 +116,10 @@ def calculate_tendencies(state, params, income_dist_scale_factor, store_detailed
     income_dependent_aggregate_damage = params['income_dependent_aggregate_damage']
     income_dependent_damage_distribution = params['income_dependent_damage_distribution']
     income_dependent_tax_policy = params['income_dependent_tax_policy']
+    income_redistribution = params['income_redistribution']
     income_dependent_redistribution_policy = params['income_dependent_redistribution_policy']
 
+    income_distribution_discrete_prev = previous_step_values["income_distribution_discrete"]
     #========================================================================================
     # Calculate quantities that don't require iteration
 
@@ -135,8 +137,22 @@ def calculate_tendencies(state, params, income_dist_scale_factor, store_detailed
     # Base damage from temperature
     omega_base = psi1 * delta_T + psi2 * (delta_T ** 2)
 
-    # Multiply by income-dependent aggregate damage factor if applicable
-    Omega = min(omega_base * income_dist_scale_factor, 1.0 - EPSILON)
+    # adjust base damage for income-dependent aggregate damage
+    # note that aggregate damage is calculated before on gross production net of climate damage only
+    # whereas the income-dependent damage distribution is calculated on consumption 
+    # after savings, climate damage, taxation, and redistribution
+    if income_dependent_aggregate_damage:
+        # Wealthier societies experience less aggregate damage
+        # we want to solve for:
+        # y_damaged = y_gross * ( 1 - omega_base ) * np.exp(- y_damaged / income_aggregate_scale)
+        # The solution to this is:
+        # y_damaged = - income_aggregate_scale * W( - (y_gross * (1 - omega_base) / income_aggregate_scale) )
+        y_damaged = - income_aggregate_scale * np.real(
+            scipy.special.lambertw( - (y_gross * (1 - omega_base) / income_aggregate_scale) )
+            )
+        Omega = 1.0 - (y_damaged / y_gross)
+    else:
+        Omega = omega_base
 
     #========================================================================================
     # Calculate downstream economic variables
@@ -144,38 +160,47 @@ def calculate_tendencies(state, params, income_dist_scale_factor, store_detailed
     # Eq 1.3: Production after climate damage
     Climate_Damage = Omega * Y_gross
     Y_damaged = Y_gross - Climate_Damage
+    y_damaged = Y_damaged / L if L > 0 else 0.0  # per capita damaged income
 
-    # Savings
-    Savings = s * Y_damaged
+    AbateCost = f * fract_gdp * Y_damaged
+    Consumption = (1-s) * Y_damaged - AbateCost
+    c_mean = Consumption / L if L > 0 else 0.0  # per capita consumption
 
-    # Abatement cost allocation
-    Lambda = f * fract_gdp
-    AbateCost = Lambda * Y_damaged
+    # Work in discrete income distribution for damage, tax, redistribution calculations
+    F_boundaries = np.linspace(0.0, 1.0, n_discrete + 1)
 
-    # Net production
-    Y_net = Y_damaged - AbateCost
-    y_net = Y_net / L if L > 0 else 0.0  # per capita net income
-
-    # Consumption
-    Consumption = Y_net - Savings
-    c = Consumption / L if L > 0 else 0.0 # per capita consumption
-
-    # Redistribution calculation
-    if Gini_climate > EPSILON and fract_gdp < 1.0:
-        # Maximum redistributable fraction (to achieve Gini=0)
-        redist_max_fraction = ((2 * Gini_climate) / (1 + Gini_climate)) * \
-                            ((1 - Gini_climate) / (1 + Gini_climate))**((1 - Gini_climate) / (2 * Gini_climate))
-        fmin_redist = 1.0 - redist_max_fraction / fract_gdp if fract_gdp > 0 else 0.0
-        Redistribution = (1 - max(f, fmin_redist)) * fract_gdp * Y_damaged
+    # Calculate climate damage distribution based on previous time step's income distribution
+    if income_dependent_damage_distribution:
+        climate_damage_distribution = np.exp(- (income_distribution_discrete /np.mean(income_distribution_discrete))* c_mean / y_damage_distribution_scale)
+        climate_damage_distribution = climate_damage_distribution / np.sum(climate_damage_distribution)
+        climate_damage_distribution = climate_damage_distribution - np.mean(climate_damage_distribution) 
     else:
-        # No inequality or no redistribution budget
+        climate_damage_distribution = 0.0
+
+    # start by distributing income according to the Gini index and mean income
+    gini_cumulative_income_at_boundary = c_mean * (1.0 - (1.0 - F_boundaries)**(1.0 - 1.0/a_from_G(gini)))
+    income_distribution_discrete_gini = n_discrete * (gini_cumulative_income_at_boundary[1:] - gini_cumulative_income_at_boundary[:-1])
+
+
+
+
+    if income_redistribution and Gini_climate > EPSILON:
+        # Maximum redistributable fraction (to achieve Gini=0)
+        #redist_max_fraction = ((2 * Gini_climate) / (1 + Gini_climate)) * \
+        #                    ((1 - Gini_climate) / (1 + Gini_climate))**((1 - Gini_climate) / (2 * Gini_climate))
+        #fmin_redist = 1.0 - redist_max_fraction / fract_gdp if fract_gdp > 0 else 0.0
+        #Redistribution = (1 - max(f, fmin_redist)) * fract_gdp * Y_damaged
+        Redistribution = (1 - f) * fract_gdp * Y_damaged
+    else:
+        # No redistribution enabled or no inequality or no redistribution budget
         Redistribution = 0.0
 
     redistribution = Redistribution / L if L > 0 else 0.0  # per capita redistribution
 
-    # Total taxation
-    Taxation = AbateCost + Redistribution
-    taxation = Taxation / L if L > 0 else 0.0  # per capita taxation
+    if income_dependent_tax_policy:
+        # Total taxation
+        Taxation = AbateCost + Redistribution
+        taxation = Taxation / L if L > 0 else 0.0  # per capita taxation
 
     # Eq 2.1: Potential emissions (unabated)
     Epot = sigma * Y_gross
@@ -187,6 +212,16 @@ def calculate_tendencies(state, params, income_dist_scale_factor, store_detailed
         mu = 0.0
 
     # Eq 3.5: Mean utility and calculation of distribution of consumption
+    # To minimize the amount of numerical solution, we will divide the income spectrum into three categories:
+    # 1. Those who pay tax (if income_dependent_tax_policy is True)
+    # 2. Those who receive redistribution (if income_dependent_redistribution_policy is True)
+    # 3. Everyone else
+
+    # First we will tax and redistribute, and then we will distribute climate damage based on the 
+    # post-tax-redistribution income distribution,
+
+    if income_redistribution and income_dependent_redistribution_policy:
+
     if y_net > 0 and 0 <= G_eff <= 1.0:
         if np.abs(eta - 1.0) < EPSILON:
             U = np.log(y_net) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
@@ -280,7 +315,7 @@ def calculate_tendencies(state, params, income_dist_scale_factor, store_detailed
         'delta_Gini_step_change': delta_Gini_step_change,
     })
 
-    # Always return current income distribution for use as income_dist_scale_factor in next time step
+    # Always return current income distribution for use as previous_step_values in next time step
     # Use G_eff (effective Gini after damage/redistribution) and y_net (net per-capita income)
     results['current_income_dist'] = {
         'y_mean': y_net,
@@ -389,7 +424,7 @@ def integrate_model(config, store_detailed_output=True):
         'delta_Gini': 0.0  # Initialize perturbation to zero
     }
 
-    # Initialize income_dist_scale_factor for first time step
+    # Initialize previous_step_values for first time step
     # Use initial gross income and background Gini as starting point
     L0 = config.time_functions['L'](t_start)
     A0 = config.time_functions['A'](t_start)
@@ -399,7 +434,7 @@ def integrate_model(config, store_detailed_output=True):
     y_gross_initial = Y_gross_initial / L0 if L0 > 0 else 0.0
     Gini_initial = config.time_functions['Gini_background'](t_start)
 
-    income_dist_scale_factor = {
+    previous_step_values = {
         'y_mean': y_gross_initial,
         'gini': Gini_initial,
     }
@@ -458,8 +493,8 @@ def integrate_model(config, store_detailed_output=True):
         params = evaluate_params_at_time(t, config)
 
         # Calculate all variables and tendencies at current time
-        # Pass income_dist_scale_factor to avoid circular dependency in damage calculations
-        outputs = calculate_tendencies(state, params, income_dist_scale_factor, store_detailed_output)
+        # Pass previous_step_values to avoid circular dependency in damage calculations
+        outputs = calculate_tendencies(state, params, previous_step_values, store_detailed_output)
 
         # Always store variables needed for objective function
         results['U'][i] = outputs['U']
@@ -513,7 +548,7 @@ def integrate_model(config, store_detailed_output=True):
             # delta_Gini update includes both continuous change and discontinuous step
             state['delta_Gini'] = state['delta_Gini'] + dt * outputs['d_delta_Gini_dt'] + outputs['delta_Gini_step_change']
 
-            # Update income_dist_scale_factor for next time step
-            income_dist_scale_factor = outputs['current_income_dist']
+            # Update previous_step_values for next time step
+            previous_step_values = outputs['current_income_dist']
 
     return results

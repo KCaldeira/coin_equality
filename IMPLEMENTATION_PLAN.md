@@ -137,7 +137,20 @@ How the costs of climate policy (abatement) are distributed across the populatio
 
 How revenues or benefits from climate policy are distributed back to the population.
 
+### 3.1 Redistribution Enable/Disable
+
+**Switch: `income_redistribution`** (boolean)
+
+| Value | Description |
+|-------|-------------|
+| `false` | No redistribution - all revenues from carbon pricing go to abatement only |
+| `true` | Enable redistribution - revenues can be redistributed according to policy |
+
+### 3.2 Redistribution Distribution Policy
+
 **Switch: `income_dependent_redistribution_policy`** (boolean)
+
+*Only applies when `income_redistribution=true`*
 
 | Value | Description |
 |-------|-------------|
@@ -169,8 +182,14 @@ These switches should be added to the `scalar_parameters` section of config file
     "income_dependent_tax_policy": false,
     "_income_dependent_tax_policy": "If true, progressive tax (tax richest); if false, uniform fractional tax",
 
+    "income_redistribution": true,
+    "_income_redistribution": "If true, enable redistribution; if false, no redistribution (all revenues to abatement)",
+
     "income_dependent_redistribution_policy": false,
-    "_income_dependent_redistribution_policy": "If true, targeted to lowest income; if false, uniform dividend"
+    "_income_dependent_redistribution_policy": "If true, targeted to lowest income; if false, uniform dividend (only applies when income_redistribution=true)",
+
+    "n_discrete": 1000,
+    "_n_discrete": "Number of discrete segments for numerical integration over income distribution (integer)"
 }
 ```
 
@@ -178,7 +197,7 @@ These switches should be added to the `scalar_parameters` section of config file
 
 1. **economic_model.py**: Core logic for damage, tax, and redistribution calculations
 2. **policy_functions.py**: New module with utility functions for policy-dependent calculations (Section 5)
-3. **climate_damage_distribution.py**: Update to use income_dist_scale_factor with critical ranks
+3. **climate_damage_distribution.py**: Update to use previous_step_values with critical ranks
 4. **parameters.py**: Add new parameter handling
 5. **output.py**: Ensure new variables are captured in output (including F_crit values)
 6. **README.md**: Document new configuration options
@@ -269,7 +288,7 @@ These functions are called with different temporal contexts:
 1. **Damage calculation** (using previous time step):
    ```python
    Omega = integrated_damage_scaling(
-       income_dist_scale_factor,  # t-1 distribution
+       previous_step_values,  # t-1 distribution
        damage_params,
        prev_tax_params,   # t-1 tax decisions
        prev_redistribution_params  # t-1 redistribution decisions
@@ -318,7 +337,12 @@ This module will be called by:
 ### 5.5 Analytical vs. Numerical Integration
 
 - **Preferred approach**: Analytical solutions using hypergeometric functions (following existing pattern)
-- **Fallback**: Numerical integration with `scipy.integrate.quad` for complex cases
+- **Fallback**: Numerical integration for complex cases
+  - Use discrete approximation: divide rank interval [0,1] into `n_discrete` segments
+  - Parameter `n_discrete` (default: 1000) controls accuracy vs. performance tradeoff
+  - For each segment i: F_i = i/n_discrete, width = 1/n_discrete
+  - Approximate integral: Σ f(F_i) * (1/n_discrete)
+- **Alternative**: `scipy.integrate.quad` for adaptive quadrature when needed
 - **Documentation**: Each function should document whether it uses analytical or numerical methods
 
 ---
@@ -408,7 +432,7 @@ params = {
 **Option B: Add new argument to `calculate_tendencies()`**
 
 ```python
-def calculate_tendencies(state, params, income_dist_scale_factor):
+def calculate_tendencies(state, params, previous_step_values):
     """
     Parameters
     ----------
@@ -416,7 +440,7 @@ def calculate_tendencies(state, params, income_dist_scale_factor):
         Current state variables
     params : dict
         Model parameters (static)
-    income_dist_scale_factor : dict
+    previous_step_values : dict
         Income distribution and policy decisions from previous time step:
         {
             'y_mean': float,
@@ -433,9 +457,9 @@ def calculate_tendencies(state, params, income_dist_scale_factor):
 **Recommended: Option B** - The explicit argument makes the temporal dependency clear and separates static parameters from time-varying state information.
 
 **Status: IMPLEMENTED** - Option B has been implemented in `economic_model.py`:
-- `calculate_tendencies()` now takes `income_dist_scale_factor` as a required argument
+- `calculate_tendencies()` now takes `previous_step_values` as a required argument
 - `calculate_tendencies()` returns `current_income_dist` in its results dictionary (needs update to include F_crit values)
-- `integrate_model()` initializes `income_dist_scale_factor` from initial conditions and updates it each time step
+- `integrate_model()` initializes `previous_step_values` from initial conditions and updates it each time step
 
 ### Initialization
 
@@ -447,19 +471,19 @@ Y_gross_initial = A0 * (K0 ** alpha) * (L0 ** (1 - alpha))
 y_gross_initial = Y_gross_initial / L0
 Gini_initial = config.time_functions['Gini_background'](t_start)
 
-income_dist_scale_factor = {
+previous_step_values = {
     'y_mean': y_gross_initial,
     'gini': Gini_initial,
 }
 
 # Initialize critical ranks if needed
 if params['income_dependent_tax_policy']:
-    income_dist_scale_factor['F_crit_tax'] = calculate_F_crit_tax(
+    previous_step_values['F_crit_tax'] = calculate_F_crit_tax(
         y_gross_initial, Gini_initial, params['fract_gdp'], params
     )
 
 if params['income_dependent_redistribution_policy']:
-    income_dist_scale_factor['F_crit_redistribution'] = calculate_F_crit_redistribution(
+    previous_step_values['F_crit_redistribution'] = calculate_F_crit_redistribution(
         y_gross_initial, Gini_initial, params['fract_gdp'], params['f'], params
     )
 ```
@@ -471,24 +495,24 @@ Climate damage is calculated using the previous time step's income distribution 
 ```python
 # Calculate damage using previous time step's complete state
 Omega, Gini_climate = calculate_climate_damage_from_prev_distribution(
-    delta_T, income_dist_scale_factor, params
+    delta_T, previous_step_values, params
 )
 ```
 
 Inside `calculate_climate_damage_from_prev_distribution()`:
 
 ```python
-y_mean = income_dist_scale_factor['y_mean']
-gini = income_dist_scale_factor['gini']
+y_mean = previous_step_values['y_mean']
+gini = previous_step_values['gini']
 
 # Get critical ranks if policies are income-dependent
 if params['income_dependent_tax_policy']:
-    F_crit_tax = income_dist_scale_factor['F_crit_tax']
+    F_crit_tax = previous_step_values['F_crit_tax']
 else:
     F_crit_tax = 1.0  # No one is taxed
 
 if params['income_dependent_redistribution_policy']:
-    F_crit_redistribution = income_dist_scale_factor['F_crit_redistribution']
+    F_crit_redistribution = previous_step_values['F_crit_redistribution']
 else:
     F_crit_redistribution = 0.0  # No one receives redistribution
 

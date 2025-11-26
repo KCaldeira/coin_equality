@@ -40,8 +40,12 @@
         "_income_dependent_damage_distribution": "If true, damage weighted towards low-income (uses y_damage_distribution_scale)",
         "income_dependent_tax_policy": false,
         "_income_dependent_tax_policy": "If true, progressive tax (tax richest); if false, uniform fractional tax",
+        "income_redistribution": true,
+        "_income_redistribution": "If true, enable redistribution; if false, no redistribution (all revenues to abatement)",
         "income_dependent_redistribution_policy": false,
-        "_income_dependent_redistribution_policy": "If true, targeted to lowest income; if false, uniform dividend"
+        "_income_dependent_redistribution_policy": "If true, targeted to lowest income; if false, uniform dividend",
+        "n_discrete": 1000,
+        "_n_discrete": "Number of discrete segments for numerical integration over income distribution (integer)"
     },
     "time_functions": {
         "_description": "Time-dependent exogenous functions",
