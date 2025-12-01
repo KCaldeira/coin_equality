@@ -94,3 +94,81 @@ def calculate_Gini_effective_redistribute_abate(f, deltaL, Gini_climate):
     # Solve for Pareto-equivalent G2_eff
     G2_eff, rem_eff = G2_from_deltaL(deltaL_eff, Gini_climate)
     return G2_eff, rem_eff
+
+
+# --- Income at rank F after damage ---
+
+def y_of_F_after_damage(F, Fmin, Fmax, s, y_mean_before_damage, omega_base, y_damage_distribution_scale, uniform_redistribution, gini, branch=0):
+    """
+    Compute c(F) from the implicit equation
+
+        c(F) = (1-s) * y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution - omega_base * exp(-c(F) / y_damage_distribution_scale),
+
+    where the Lorenz curve is Pareto with Gini index gini:
+
+        L(F) = 1 - (1-F)^(1 - 1/a),
+        a    = (1 + 1/gini)/2,
+        dL/dF(F) = (1 - 1/a) * (1 - F)^(-1/a).
+
+    The closed-form solution is:
+
+        A(F) = (1-s) * y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution
+
+        c(F) = A(F) + y_damage_distribution_scale * W(
+                     - (omega_base / y_damage_distribution_scale) * exp(-A(F) / y_damage_distribution_scale)
+               )
+
+    where W is the Lambert W function (principal branch by default).
+
+    Parameters
+    ----------
+    F : float or array-like
+        Population rank(s) in [0,1].
+    Fmin : float
+        Minimum population rank for income in [0,1].
+    Fmax : float
+        Maximum population rank for income in [0,1].
+    s : float
+        Savings rate.
+    y_mean_before_damage : float
+        Mean income.
+    omega_base : float
+        Maximum damage scale.
+    y_damage_distribution_scale : float
+        Damage scale parameter in exp(-c/y_damage_distribution_scale).
+    uniform_redistribution : float
+        Additive constant in A(F).
+    gini : float
+        Gini index (0 < gini < 1).
+    branch : int, optional
+        Lambert W branch index (default 0 = principal).
+
+    Returns
+    -------
+    c : float or ndarray
+        c(F) evaluated at the given F values (real part).
+    """
+    import numpy as np
+    from scipy.special import lambertw
+
+    F = np.clip(np.asarray(F), Fmin, Fmax)
+
+    # Pareto-Lorenz shape parameter from Gini
+    a = (1.0 + 1.0 / gini) / 2.0
+
+    # dL/dF(F) for Pareto-Lorenz
+    dLdF = (1.0 - 1.0 / a) * (1.0 - F) ** (-1.0 / a)
+
+    # A(F)
+    A = (1.0 - s) * y_mean_before_damage * dLdF + uniform_redistribution
+
+    # Argument to Lambert W
+    z = - (omega_base / y_damage_distribution_scale) * np.exp(-A / y_damage_distribution_scale)
+
+    # Lambert W (may be complex in general; we usually take the real part)
+    W_vals = lambertw(z, k=branch)
+
+    # c(F)
+    c_vals = A + y_damage_distribution_scale * W_vals
+
+    return np.real(c_vals)

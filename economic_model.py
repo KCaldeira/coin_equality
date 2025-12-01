@@ -6,7 +6,7 @@ and emissions abatement costs.
 """
 
 import numpy as np
-from income_distribution import calculate_Gini_effective_redistribute_abate
+from income_distribution import calculate_Gini_effective_redistribute_abate, y_of_F_after_damage
 from parameters import evaluate_params_at_time
 from climate_damage_distribution import (
     calculate_climate_damage_and_gini_effect,
@@ -144,7 +144,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
     # Initialize Omega using base damage as starting guess
     Omega_old = omega_base
-    redistribution_old = 0.0  # per capita redistribution, will get updated in loop
+    uniform_redistribution_old = 0.0  # uniform per capita redistribution, will get updated in loop
     Fmin_old = 0.0  # minimum income boundary for redistribution, will get updated in loop
     Fmax_old = 1.0  # maximum income boundary for redistribution, will get updated in loop
     converged = False
@@ -159,12 +159,12 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
                 f"(tolerance: {LOOSE_EPSILON:.2e})"
             )
 
-        # adjust base damage for income-dependent aggregate damage
-        # note that aggregate damage is calculated before on gross production net of climate damage only
-        # whereas the income-dependent damage distribution is calculated on consumption
-        # after savings, climate damage, taxation, and redistribution
-        if income_dependent_aggregate_damage and income_dependent_damage_distribution:
-            # Assume at this point we 
+        # NOTE: For development purposes, we are going to assume that all switches are turned on, and the only switch we need to
+        # consider is whether redistribution is income-dependent or not.
+
+        # We want to calculate y_damaged as a function of income rank, F.
+        
+            # Assume at this point we already have everything we need to calculate this from the previous iteration
             # Wealthier societies experience less aggregate damage
             # we want to solve for:
             # y_damaged = y_gross * ( 1 - omega_base ) * np.exp(- y_damaged / income_aggregate_scale)
