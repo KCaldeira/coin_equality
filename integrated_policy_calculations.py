@@ -114,17 +114,17 @@ def calculate_integrated_economy(
     - Parts of calculate_tendencies()
     """
     # Extract previous time step info
-    y_mean_prev = prev_income_dist['y_mean']
-    gini_prev = prev_income_dist['gini']
+    y_mean_prev = previous_step_values['y_mean']
+    gini_prev = previous_step_values['gini']
 
     # Get critical ranks from previous time step if applicable
-    if income_dependent_tax_policy and 'F_crit_tax' in prev_income_dist:
-        F_crit_tax_prev = prev_income_dist['F_crit_tax']
+    if income_dependent_tax_policy and 'F_crit_tax' in previous_step_values:
+        F_crit_tax_prev = previous_step_values['F_crit_tax']
     else:
         F_crit_tax_prev = 1.0  # Everyone pays same tax rate
 
-    if income_dependent_redistribution_policy and 'F_crit_redistribution' in prev_income_dist:
-        F_crit_redistribution_prev = prev_income_dist['F_crit_redistribution']
+    if income_dependent_redistribution_policy and 'F_crit_redistribution' in previous_step_values:
+        F_crit_redistribution_prev = previous_step_values['F_crit_redistribution']
     else:
         F_crit_redistribution_prev = 0.0  # Everyone receives the same redistribution amount
 
@@ -132,7 +132,8 @@ def calculate_integrated_economy(
     # STEP 1: Calculate climate damage using previous time step's distribution
     #===================================================================================
 
-
+    # Calculate base aggregate climate damage
+    omega_base = psi1 * delta_T + psi2 * delta_T**2
 
     # TODO: Implement aggregate damage calculation with income dependence
     # For now, use simple aggregate damage

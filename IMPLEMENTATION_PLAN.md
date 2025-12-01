@@ -347,6 +347,101 @@ This module will be called by:
 
 ---
 
+## 6. Algorithm for calculate_tendencies()
+
+### Overview
+
+The `calculate_tendencies()` function in `economic_model.py` implements an iterative algorithm to achieve consistency between climate damage calculations and the resulting income distribution. This is necessary because:
+
+- Climate damage depends on the income distribution
+- The income distribution depends on climate damage (especially when `income_dependent_damage_distribution=true`)
+- Tax and redistribution policies create critical ranks (Fmin, Fmax) that segment the income distribution
+- Each segment must be treated separately for accurate damage and utility calculations
+
+### Iterative Processing Flow
+
+The algorithm follows these steps:
+
+**1. Initialize climate damage assumption**
+   - Start with an initial estimate of climate damage (e.g., from previous time step or a reasonable guess)
+
+**2. Compute post-damage income**
+   - Calculate gross income: `Y_gross = A * K^α * L^(1-α)`
+   - Apply climate damage: `Y_after_damage = Y_gross * (1 - Omega)`
+   - Apply abatement costs: `Y_after_abatement = Y_after_damage * (1 - Lambda)`
+   - Apply savings: `Y_net = Y_after_abatement * (1 - s)`
+
+**3. Compute critical ranks (Fmin and Fmax)**
+   - **Fmin** (`F_crit_redistribution`): Below this rank, individuals receive redistribution
+     - Only computed if `income_redistribution=true` and `income_dependent_redistribution_policy=true`
+     - Constraint: Total redistribution to F < Fmin equals `fract_gdp * (1-f) * Y_damaged`
+   - **Fmax** (`F_crit_tax`): Above this rank, individuals pay taxes
+     - Only computed if `income_dependent_tax_policy=true`
+     - Constraint: Total tax revenue from F > Fmax equals `fract_gdp * f * Y_damaged`
+
+**4. Segment-wise calculations**
+
+   Divide the income distribution into three segments and compute separately for each:
+   - **Segment 1**: [0, Fmin) - Receives redistribution
+   - **Segment 2**: [Fmin, Fmax) - Neither taxed nor receives redistribution
+   - **Segment 3**: [Fmax, 1] - Pays taxes
+
+   For each segment, compute:
+
+   **4.1 Climate damage as a function of F and in aggregate**
+   - `damage(F)`: Damage at rank F depends on:
+     - Base temperature-dependent damage: `omega_base = psi1 * delta_T + psi2 * delta_T^2`
+     - Income-dependent aggregate scaling (if `income_dependent_aggregate_damage=true`)
+     - Income-dependent damage distribution (if `income_dependent_damage_distribution=true`)
+   - Aggregate damage for segment: `∫_segment damage(F) * income(F) dF`
+
+   **4.2 Utility as a function of F and in aggregate**
+   - `utility(F)`: Utility at rank F using `u(c) = c^(1-η)/(1-η)`
+   - Aggregate utility for segment: `∫_segment u(income(F)) dF`
+
+**5. Convergence check**
+   - Compare new climate damage estimate with previous iteration
+   - **If converged**: Stop and return results
+   - **If not converged**: Update damage estimate and return to step 2
+
+### Integration Methods
+
+For each segment, the integrals in step 4 can be computed using:
+- **Analytical solutions**: Preferred when available (using hypergeometric functions)
+- **Numerical integration**: When analytical solutions are not feasible
+  - Discrete approximation with `n_discrete` segments
+  - Adaptive quadrature using `scipy.integrate.quad`
+
+### Convergence Criteria
+
+The iteration converges when:
+```
+|Omega_new - Omega_old| < tolerance
+```
+
+Where `tolerance` is a configurable parameter (e.g., `1e-6`).
+
+### Implementation Notes
+
+- The utility functions from Section 5 (`income_at_rank()`, `integrated_damage_scaling()`, `integrated_utility()`) are the building blocks for this algorithm
+- Each segment requires separate integration because:
+  - Income levels differ across segments (redistribution adds, taxation removes)
+  - Damage may be income-dependent
+  - Utility is nonlinear
+- The algorithm must handle degenerate cases:
+  - `Fmin = 0`: No one receives redistribution
+  - `Fmax = 1`: No one pays taxes
+  - `Fmin = Fmax`: Single segment (uniform policy)
+
+### Relationship to Previous Time Step
+
+The algorithm uses `previous_step_values` (from Section 4) for:
+- Initial damage estimate (warm start for iteration)
+- Baseline income distribution before current-period policies
+- Previous critical ranks (for comparison/validation)
+
+---
+
 ## Priority Order
 
 0. **Phase 0**: Add new configuration keywords to parameter loading code (parameters.py)
@@ -359,9 +454,13 @@ This module will be called by:
    - `integrated_utility()`: Mean utility accounting for policies
    - `calculate_F_crit_tax()`: Critical rank for progressive taxation
    - `calculate_F_crit_redistribution()`: Critical rank for targeted redistribution
-5. **Phase 5**: Implement tax policy (uniform vs. progressive)
-6. **Phase 6**: Implement redistribution policy (uniform dividend vs. targeted)
-7. **Phase 7**: Testing and validation across all policy combinations
+5. **Phase 5**: Implement iterative algorithm in `calculate_tendencies()` (Section 6)
+   - Implement convergence loop for climate damage
+   - Add segment-wise integration for damage and utility
+   - Add convergence criteria and tolerance parameter
+6. **Phase 6**: Implement tax policy (uniform vs. progressive)
+7. **Phase 7**: Implement redistribution policy (uniform dividend vs. targeted)
+8. **Phase 8**: Testing and validation across all policy combinations
 
 ---
 

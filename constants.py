@@ -45,6 +45,8 @@ OBJECTIVE_SCALE = 1e-13
 # - Detecting when parameters should trigger special case handling
 INVERSE_EPSILON = 1.0 / EPSILON
 
-# Maximum iterations for initial capital stock convergence
-# Used in integrate_model() to ensure convergence of K0 with climate damage
-MAX_INITIAL_CAPITAL_ITERATIONS = 100
+# Maximum iterations for convergence loops
+# Used for:
+# - Initial capital stock convergence in integrate_model()
+# - Climate damage convergence in calculate_tendencies()
+MAX_ITERATIONS = 100
