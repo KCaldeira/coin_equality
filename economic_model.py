@@ -12,6 +12,7 @@ from climate_damage_distribution import (
     calculate_climate_damage_and_gini_effect,
     calculate_climate_damage_ratio_from_prev_distribution
 )
+from utility_integrals import crra_utility_integral, crra_utility_interval
 from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_INITIAL_CAPITAL_ITERATIONS
 
 
