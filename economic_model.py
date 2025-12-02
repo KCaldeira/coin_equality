@@ -130,7 +130,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     income_redistribution = params['income_redistribution']
     income_dependent_redistribution_policy = params['income_dependent_redistribution_policy']
 
-    income_distribution_discrete_prev = previous_step_values["income_distribution_discrete"]
     #========================================================================================
     # Calculate quantities that don't require iteration
 
@@ -178,7 +177,9 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         # consider is whether redistribution is income-dependent or not.
 
         # total redistribution amount
-        redistribution_amount = (1 - f) * fract_gdp * y_gross * (1 - Omega)  # total redistribution amount
+        available_for_redistribution_and_abatement = fract_gdp * y_gross * (1 - Omega)
+
+        redistribution_amount = (1 - f) * available_for_redistribution_and_abatement  # total redistribution amount
         # Now we calculate Fmin and uniform_redistribution amount, which is the minimum income rank that covers abatement or redistribution costs
         if income_dependent_redistribution_policy:
             uniform_redistribution_amount = 0.0 # income dependent redistribution
@@ -201,7 +202,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
         # Now we calculate Fmax, which is the minimum income rank that covers abatement or redistribution costs
         if income_dependent_tax_policy:
-            tax_amount = fract_gdp * y_gross * (1 - Omega)  # total tax amount available for redistribution and abatement
+            tax_amount = available_for_redistribution_and_abatement  # total tax amount available for redistribution and abatement
             """
             def find_Fmax(Fmin,
               y_mean_before_damage,
@@ -232,14 +233,15 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         aggregate_utility = 0.0
 
         # This is the folks who are receiving income-dependent redistribution
+
         if Fmin > EPSILON:
             """
             def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, Omega_base, y_damage_distribution_scale, uniform_redistribution, gini, branch=0):
             """
             min_income_before_savings_and_taxes = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross, Omega_base, y_damage_distribution_scale, uniform_redistribution_amount, gini)
             min_income = min_income_before_savings_and_taxes * (1 - s) * (1 - uniform_tax_rate)
-            damage_per_capita = Omega_base * np.exp(- min_income / y_damage_distribution_scale)
-            aggregate_damage = aggregate_damage + Fmin * damage_per_capita 
+            damage_per_capita = Omega_base * np.exp(- min_income / y_damage_distribution_scale) # everyone below Fmin has the same income
+            aggregate_damage = aggregate_damage + Fmin * damage_per_capita # so we can just multiply that damage by Fmin
             aggregate_utility = aggregate_utility + crra_utility_interval(0, Fmin, min_income, eta)
 
         # This is the folks in the middle who may receive uniform redistribution and pay uniform tax
