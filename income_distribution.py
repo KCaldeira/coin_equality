@@ -70,11 +70,11 @@ def G2_from_deltaL(deltaL, Gini_initial):
 
 # --- Income at rank F after damage ---
 
-def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_scale, uniform_redistribution, gini, branch=0):
+def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_coeff, uniform_redistribution, gini, branch=0):
     """
     Compute c(F) from the implicit equation
 
-        c(F) = (1-s) * y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution - omega_base * exp(-c(F) / y_damage_distribution_scale),
+        c(F) = (1-s) * y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution - omega_base * exp(-c(F) * y_damage_distribution_coeff),
 
     where the Lorenz curve is Pareto with Gini index gini:
 
@@ -86,9 +86,9 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
 
         A(F) = y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution
 
-        c(F) = A(F) + y_damage_distribution_scale * W(
-                     - (omega_base / y_damage_distribution_scale) * exp(-A(F) / y_damage_distribution_scale)
-               )
+        c(F) = A(F) + W(
+                     - omega_base * y_damage_distribution_coeff * exp(-A(F) * y_damage_distribution_coeff)
+               ) / y_damage_distribution_coeff
 
     where W is the Lambert W function (principal branch by default).
 
@@ -104,8 +104,8 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
         Mean income.
     omega_base : float
         Maximum damage scale.
-    y_damage_distribution_scale : float
-        Damage scale parameter in exp(-c/y_damage_distribution_scale).
+    y_damage_distribution_coeff : float
+        Damage distribution coefficient in exp(-c * y_damage_distribution_coeff).
     uniform_redistribution : float
         Additive constant in A(F).
     gini : float
@@ -133,13 +133,19 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
     A =  y_mean_before_damage * dLdF + uniform_redistribution
 
     # Argument to Lambert W
-    z = - (omega_base / y_damage_distribution_scale) * np.exp(-A / y_damage_distribution_scale)
+    z = - (omega_base * y_damage_distribution_coeff) * np.exp(-A * y_damage_distribution_coeff)
 
     # Lambert W (may be complex in general; we usually take the real part)
     W_vals = lambertw(z, k=branch)
 
-    # c(F)
-    y_of_F_vals = A + y_damage_distribution_scale * W_vals
+    # c(F) - handle y_damage_distribution_coeff ≈ 0 case
+    # When y_damage_distribution_coeff → 0, the implicit equation becomes linear: c(F) = A(F) - omega_base
+    # Otherwise use Lambert W solution: c(F) = A(F) + W(z) / y_damage_distribution_coeff
+    y_of_F_vals = np.where(
+        np.abs(y_damage_distribution_coeff) < EPSILON,
+        A - omega_base,
+        A + W_vals / y_damage_distribution_coeff
+    )
 
     return np.real(y_of_F_vals)
 
@@ -152,7 +158,7 @@ def segment_integral_with_cut(
     Fmax_for_clip,
     y_mean_before_damage,
     omega_base,
-    y_damage_distribution_scale,
+    y_damage_distribution_coeff,
     uniform_redistribution,
     gini,
     xi,
@@ -182,8 +188,8 @@ def segment_integral_with_cut(
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_scale : float
-        Damage distribution scale parameter.
+    y_damage_distribution_coeff : float
+        Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
     gini : float
@@ -213,7 +219,7 @@ def segment_integral_with_cut(
         Fmax_for_clip,
         y_mean_before_damage,
         omega_base,
-        y_damage_distribution_scale,
+        y_damage_distribution_coeff,
         uniform_redistribution,
         gini,
         branch=branch,
@@ -226,7 +232,7 @@ def segment_integral_with_cut(
         Fmax_for_clip,
         y_mean_before_damage,
         omega_base,
-        y_damage_distribution_scale,
+        y_damage_distribution_coeff,
         uniform_redistribution,
         gini,
         branch=branch,
@@ -243,7 +249,7 @@ def total_tax_top(
     Fmin,
     y_mean_before_damage,
     omega_base,
-    y_damage_distribution_scale,
+    y_damage_distribution_coeff,
     uniform_redistribution,
     gini,
     xi,
@@ -266,8 +272,8 @@ def total_tax_top(
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_scale : float
-        Damage distribution scale parameter.
+    y_damage_distribution_coeff : float
+        Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
     gini : float
@@ -294,7 +300,7 @@ def total_tax_top(
         Fmax_for_clip=1.0,  # we want F clipped to [Fmin, 1]
         y_mean_before_damage=y_mean_before_damage,
         omega_base=omega_base,
-        y_damage_distribution_scale=y_damage_distribution_scale,
+        y_damage_distribution_coeff=y_damage_distribution_coeff,
         uniform_redistribution=uniform_redistribution,
         gini=gini,
         xi=xi,
@@ -310,7 +316,7 @@ def total_tax_bottom(
     Fmin,
     y_mean_before_damage,
     omega_base,
-    y_damage_distribution_scale,
+    y_damage_distribution_coeff,
     uniform_redistribution,
     gini,
     xi,
@@ -331,8 +337,8 @@ def total_tax_bottom(
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_scale : float
-        Damage distribution scale parameter.
+    y_damage_distribution_coeff : float
+        Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
     gini : float
@@ -359,7 +365,7 @@ def total_tax_bottom(
         Fmax_for_clip=Fmin,    # clip inside [0, Fmin]
         y_mean_before_damage=y_mean_before_damage,
         omega_base=omega_base,
-        y_damage_distribution_scale=y_damage_distribution_scale,
+        y_damage_distribution_coeff=y_damage_distribution_coeff,
         uniform_redistribution=uniform_redistribution,
         gini=gini,
         xi=xi,
@@ -374,7 +380,7 @@ def total_tax_bottom(
 def find_Fmax(Fmin,
               y_mean_before_damage,
               omega_base,
-              y_damage_distribution_scale,
+              y_damage_distribution_coeff,
               uniform_redistribution,
               gini,
               xi,
@@ -395,8 +401,8 @@ def find_Fmax(Fmin,
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_scale : float
-        Damage distribution scale parameter.
+    y_damage_distribution_coeff : float
+        Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
     gini : float
@@ -424,7 +430,7 @@ def find_Fmax(Fmin,
             Fmin,
             y_mean_before_damage,
             omega_base,
-            y_damage_distribution_scale,
+            y_damage_distribution_coeff,
             uniform_redistribution,
             gini,
             xi,
@@ -454,7 +460,7 @@ def find_Fmax(Fmin,
 
 def find_Fmin(y_mean_before_damage,
               omega_base,
-              y_damage_distribution_scale,
+              y_damage_distribution_coeff,
               uniform_redistribution,
               gini,
               xi,
@@ -473,8 +479,8 @@ def find_Fmin(y_mean_before_damage,
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_scale : float
-        Damage distribution scale parameter.
+    y_damage_distribution_coeff : float
+        Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
     gini : float
@@ -501,7 +507,7 @@ def find_Fmin(y_mean_before_damage,
             Fmin,
             y_mean_before_damage,
             omega_base,
-            y_damage_distribution_scale,
+            y_damage_distribution_coeff,
             uniform_redistribution,
             gini,
             xi,

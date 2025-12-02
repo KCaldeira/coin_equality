@@ -32,7 +32,7 @@ def crra_utility_integral_with_damage(
     Fmax_for_clip,
     y_mean_before_damage,
     omega_base,
-    y_damage_distribution_scale,
+    y_damage_distribution_coeff,
     uniform_redistribution,
     gini,
     eta,
@@ -60,8 +60,8 @@ def crra_utility_integral_with_damage(
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_scale : float
-        Damage distribution scale parameter.
+    y_damage_distribution_coeff : float
+        Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
     gini : float
@@ -114,7 +114,7 @@ def crra_utility_integral_with_damage(
         Fmax_for_clip,
         y_mean_before_damage,
         omega_base,
-        y_damage_distribution_scale,
+        y_damage_distribution_coeff,
         uniform_redistribution,
         gini,
         branch=branch,
@@ -145,7 +145,7 @@ def climate_damage_integral(
     Fmax_for_clip,
     y_mean_before_damage,
     omega_base,
-    y_damage_distribution_scale,
+    y_damage_distribution_coeff,
     uniform_redistribution,
     gini,
     xi,
@@ -172,8 +172,8 @@ def climate_damage_integral(
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_scale : float
-        Damage distribution scale parameter.
+    y_damage_distribution_coeff : float
+        Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
     gini : float
@@ -193,7 +193,7 @@ def climate_damage_integral(
     Notes
     -----
     Climate damage at each rank:
-        damage(F) = omega_base * exp(-income(F) / y_damage_distribution_scale)
+        damage(F) = omega_base * exp(-income(F) * y_damage_distribution_coeff)
 
     Income at each rank is computed using y_of_F_after_damage() which accounts for:
     - Pareto-Lorenz income distribution
@@ -222,15 +222,15 @@ def climate_damage_integral(
         Fmax_for_clip,
         y_mean_before_damage,
         omega_base,
-        y_damage_distribution_scale,
+        y_damage_distribution_coeff,
         uniform_redistribution,
         gini,
         branch=branch,
     )
 
     # Compute damage at each node
-    # damage(F) = omega_base * exp(-income(F) / y_damage_distribution_scale)
-    damage_vals = omega_base * np.exp(-income_vals / y_damage_distribution_scale)
+    # damage(F) = omega_base * exp(-income(F) * y_damage_distribution_coeff)
+    damage_vals = omega_base * np.exp(-income_vals * y_damage_distribution_coeff)
 
     # Weighted sum scaled by interval length
     integral = F_half * np.dot(wi, damage_vals)
