@@ -68,35 +68,6 @@ def G2_from_deltaL(deltaL, Gini_initial):
 
 # --- the two-step “Pareto-preserving” effective Gini ---
 
-def calculate_Gini_effective_redistribute_abate(f, deltaL, Gini_climate):
-    """
-    Step 1: find G2 (full redistribution) from ΔL and Gini_climate.
-    Step 2: keep the same crossing F*, compute ΔL_eff for partial allocation,
-            then solve for G2_eff from ΔL_eff in the Pareto family.
-    Returns (G2_eff, remainder_from_cap).
-    """
-    if not (0 <= f <= 1):
-        raise ValueError("f must be in [0,1].")
-    # Step 1: full redistribution target in Pareto family
-    G2_full, rem = G2_from_deltaL(deltaL, Gini_climate)
-    if rem > 0:
-        # You already hit the G2=0 cap with full ΔL; partial will remain at/above 0.
-        return 0.0, rem
-
-    # Crossing rank for (Gini_climate -> G2_full)
-    Fstar = crossing_rank_from_G(Gini_climate, G2_full)
-    L1_star = L_pareto(Fstar, Gini_climate)
-
-    # Step 2: partial allocation: ΔL_eff at the same F*
-    # L_new(F*) = [ L1_star + (1-f)ΔL ] / (1 - fΔL)
-    # ΔL_eff = L_new(F*) - L1_star
-    deltaL_eff = deltaL * ((1.0 - f) + f * L1_star) / (1.0 - f * deltaL)
-
-    # Solve for Pareto-equivalent G2_eff
-    G2_eff, rem_eff = G2_from_deltaL(deltaL_eff, Gini_climate)
-    return G2_eff, rem_eff
-
-
 # --- Income at rank F after damage ---
 
 def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_scale, uniform_redistribution, gini, branch=0):

@@ -78,26 +78,42 @@ where:
 
 ### Calculation Order
 
-For the differential equation solver, variables are calculated in this order:
+The differential equation solver uses an iterative convergence algorithm to resolve the circular dependency between climate damage and income distribution. Variables are calculated in this order:
 
+**Pre-iteration Setup:**
 1. **Y_gross** from K, L, A, α (Eq 1.1: Cobb-Douglas production)
 2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions)
 3. **y_gross** from Y_gross, L (mean per-capita gross income before climate damage)
-4. **Ω, G_climate** from ΔT, Gini, y_gross, damage params (Eq 1.2: income-dependent climate damage and distributional effect; when f_gdp >= 1, uses uniform damage approximation)
-5. **Y_damaged** from Y_gross, Ω (Eq 1.3: production after climate damage)
-6. **y** from Y_damaged, L, s (Eq 1.4: mean per-capita income after climate damage)
-7. **c_redist** from y, f_gdp (Eq 4.3: per-capita amount redistributable)
-8. **E_pot** from σ, Y_gross (Eq 2.1: potential emissions)
-9. **AbateCost** from f, c_redist, L (Eq 1.5: abatement expenditure)
-10. **μ** from AbateCost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated, capped at μ_max)
-11. **Λ** from AbateCost, Y_damaged (Eq 1.7: abatement cost fraction)
-12. **Y_net** from Y_damaged, Λ (Eq 1.8: production after abatement costs)
-13. **y_net** from y, AbateCost, L (Eq 1.9: effective per-capita income)
-14. **G_eff** from f, f_gdp, G_climate (Eq 4.4: effective Gini after redistribution/abatement; when f_gdp >= 1, G_eff = G_climate with no redistribution effect)
-15. **U** from y_net, G_eff, η (Eq 3.5: mean utility)
-16. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
-17. **dK/dt** from s, Y_net, δ, K (Eq 1.10: capital tendency)
-18. **d(delta_Gini)/dt, delta_Gini_step_change** from Gini dynamics (delta_Gini tendency and step change)
+4. **Omega_base** from ΔT, psi1, psi2 (base climate damage from temperature)
+5. **Gauss-Legendre quadrature nodes** (xi, wi) for numerical integration (N_QUAD points)
+
+**Iterative Convergence Loop** (until |Omega - Omega_prev| < LOOSE_EPSILON):
+6. **redistribution_amount** from fract_gdp, f, y_gross, Omega (total per-capita redistribution)
+7. **Fmin, uniform_redistribution_amount** from income_dependent_redistribution_policy:
+   - If income-dependent: find_Fmin() computes critical rank, uniform_redistribution = 0
+   - If uniform: Fmin = 0, uniform_redistribution = redistribution_amount
+8. **Fmax, uniform_tax_rate** from income_dependent_tax_policy:
+   - If income-dependent: find_Fmax() computes critical rank, uniform_tax_rate = 0
+   - If uniform: Fmax = 1.0, uniform_tax_rate = fract_gdp * (1 - Omega)
+9. **Segment-wise integration** over income distribution [0, Fmin), [Fmin, Fmax), [Fmax, 1]:
+   - **aggregate_damage** from climate_damage_integral() and crra_utility_interval()
+   - **aggregate_utility** from crra_utility_integral_with_damage() and crra_utility_interval()
+10. **Omega** from aggregate_damage / y_gross (new aggregate damage estimate)
+11. **Omega_base adjustment** if not income_dependent_aggregate_damage (scale to match target)
+12. **Convergence check**: if |Omega - Omega_prev| < LOOSE_EPSILON, exit loop
+
+**Post-convergence Calculations:**
+13. **Y_damaged** from Y_gross, Omega (Eq 1.3: production after climate damage)
+14. **y_damaged** from y_gross, Omega (per-capita gross production after climate damage)
+15. **AbateCost** from f, fract_gdp, Y_damaged (Eq 1.5: abatement expenditure)
+16. **Y_net** from Y_damaged, AbateCost (Eq 1.8: production after abatement costs)
+17. **y_net** from y_damaged, abateCost_mean (Eq 1.9: effective per-capita income)
+18. **E_pot** from σ, Y_gross (Eq 2.1: potential emissions)
+19. **μ** from AbateCost, θ₁, θ₂, E_pot (Eq 1.6: fraction of emissions abated, capped at μ_max)
+20. **E** from σ, μ, Y_gross (Eq 2.3: actual emissions after abatement)
+21. **U** from aggregate_utility (mean utility from integration)
+22. **dK/dt** from s, Y_net, δ, K (Eq 1.10: capital tendency)
+23. **current_income_dist** with y_mean = y_net (for next time step's damage calculation)
 
 ### Core Components
 
@@ -301,20 +317,6 @@ c_redist = y · f_gdp
 ```
 where `y` is mean per-capita income.
 
-**Eq. (4.4) - Effective Gini Index:**
-
-When fraction `f` of redistributable resources goes to abatement instead of redistribution, the effective Gini index is calculated using a two-step Pareto-preserving approach (see `income_distribution.calculate_Gini_effective_redistribute_abate`).
-
-For reference, the formula is:
-```
-G_eff(f) = (1-f_gdp)/(1-f·f_gdp) · [1 - (1 - G₁)^((1-f_gdp(1-F*))/(1-f_gdp))]
-```
-
-where:
-- `f = 0`: all resources go to redistribution → `G_eff(0)` = minimum (most equal)
-- `f = 1`: all resources go to abatement → `G_eff(1)` = maximum Gini given removal
-- `0 < f < 1`: mixed allocation
-
 **Fraction of Emissions Abated:**
 
 See Eq. (1.6) above. The abatement fraction is determined by the amount society allocates to abatement relative to potential emissions and the marginal abatement cost.
@@ -324,25 +326,23 @@ See Eq. (1.6) above. The abatement fraction is determined by the amount society 
 The model now supports `f_gdp >= 1` with special handling that disables redistribution and allows pure abatement optimization.
 
 **Current Behavior (f_gdp < 1):**
-- Redistribution operates within the Pareto family of distributions
-- Income transfers preserve the general shape of the distribution
-- The Gini coefficient changes, but the underlying distribution remains Pareto
-- Climate damage calculations assume a fixed Pareto distribution with parameter `a` derived from current Gini
+- Redistribution operates via income-dependent or uniform policies
 - Control variable `f` determines allocation between abatement and redistribution
+- Climate damage calculations integrate over the income distribution using Lambert W function
+- Critical income ranks (Fmin, Fmax) define segments for progressive taxation/redistribution
 
-**Implemented Behavior (f_gdp >= 1):**
-When `f_gdp >= 1`, the model disables redistribution and enables pure abatement optimization:
+**Implementation Details:**
+The model uses an iterative convergence algorithm to consistently compute:
 
-1. **Redistribution Disabled** (`economic_model.py:164-167`):
-   - Effective Gini is set equal to climate-damaged Gini: `G_eff = Gini_climate`
-   - No redistribution effect on inequality (bypasses `calculate_Gini_effective_redistribute_abate`)
-   - Gini evolves only through climate damage and restoration dynamics
+1. **Climate Damage with Income Distribution**:
+   - Uses previous time step's income distribution to avoid circular dependency
+   - Integrates damage over three income segments: [0, Fmin), [Fmin, Fmax), [Fmax, 1]
+   - Converges to self-consistent Omega value that accounts for redistribution effects
 
-2. **Climate Damage Calculation** (`climate_damage_distribution.py:156`):
-   - Triggers uniform damage approximation: `Omega = omega_max`
-   - Preserves Gini unchanged: `Gini_climate = Gini_current`
-   - Rationale: Structural redistribution (`delta_L >= 1`) invalidates Pareto distribution assumption
-   - Falls back to simple uniform damage rather than attempting income-dependent calculation
+2. **Critical Income Ranks**:
+   - **Fmin**: Maximum rank receiving income-dependent redistribution (if enabled)
+   - **Fmax**: Minimum rank paying income-dependent tax (if enabled)
+   - Computed via root-finding to match budget constraints
 
 3. **Abatement Budget Mechanics**:
    - Available budget: `redistribution = y * delta_L` (Line 136 of `economic_model.py`)
@@ -446,11 +446,15 @@ The system begins at the background inequality level.
 
 **Climate Damage Interaction:**
 
-Climate damage affects inequality through the intermediate variable `G_climate`:
+Climate damage is computed iteratively using the income distribution from the previous time step to avoid circular dependencies. The algorithm integrates damage over the income distribution accounting for:
+- Income-dependent damage function: damage(y) = omega_base * exp(-y / y_damage_distribution_scale)
+- Progressive taxation and targeted redistribution via critical ranks (Fmin, Fmax)
+- Lambert W function to solve implicit income equations
+
+The effective income distribution evolves through:
 ```
-Gini = Gini_background + delta_Gini → (climate damage) → G_climate → (redistribution/abatement) → G_eff
+previous y_net → (damage + tax + redistribution) → current y_net → (save for next timestep)
 ```
-where `G_climate > Gini` due to regressive climate damage impacts (lower incomes suffer proportionally more).
 
 ## Key Parameters
 
@@ -576,41 +580,40 @@ The `income_distribution.py` module provides the core mathematical functions for
 
 - **`G2_from_deltaL(deltaL, Gini_initial)`** - **Solves the inverse problem**: given an initial Gini `Gini_initial` and a desired redistribution amount `f_gdp`, numerically finds the target Gini `G2` that would result from full redistribution. Uses `scipy.optimize.root_scalar` with Brent's method. Returns `(G2, remainder)` where remainder is non-zero if `f_gdp` exceeds the maximum possible for the Pareto family (caps at G2=0).
 
-### Effective Gini Calculation
+### Climate Damage and Income Distribution Functions
 
-- **`calculate_Gini_effective_redistribute_abate(f, deltaL, Gini_initial)`** - **Main function** that calculates the effective Gini index when fraction `f` of redistributable resources is allocated to emissions abatement instead of redistribution.
+**Income After Damage:**
+- **`y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_scale, uniform_redistribution, gini, branch=0)`** - Computes income at rank F accounting for climate damage. Uses Lambert W function to solve the implicit equation where damage depends on income which depends on damage. Returns array of incomes corresponding to input ranks.
 
-  **Algorithm:**
-  1. Solves for full-redistribution target `G2` from `f_gdp` and `Gini_initial`
-  2. Computes crossing rank `F*` for the `(Gini_initial → G2)` transition
-  3. Calculates effective redistribution amount `f_gdp_eff` at the same `F*` for partial allocation
-  4. Solves for Pareto-equivalent `G2_eff` from `f_gdp_eff`
+**Critical Rank Finding:**
+- **`find_Fmax(y_mean_before_damage, Omega_base, y_damage_distribution_scale, uniform_redistribution, gini, xi, wi, target_tax, branch=0, tol=LOOSE_EPSILON)`** - Finds the minimum income rank that pays progressive taxation. Uses root finding to match the target tax revenue by integrating over ranks [Fmax, 1]. Returns Fmax ∈ [0, 1].
 
-  **Parameters:**
-  - `f = 0`: All resources to redistribution → minimum Gini (maximum equality)
-  - `f = 1`: All resources to abatement → maximum Gini given removal
-  - `0 < f < 1`: Mixed allocation
+- **`find_Fmin(y_mean_before_damage, Omega_base, y_damage_distribution_scale, uniform_redistribution, gini, xi, wi, target_subsidy, branch=0, tol=LOOSE_EPSILON)`** - Finds the maximum income rank that receives targeted redistribution. Uses root finding to match the target subsidy amount by integrating over ranks [0, Fmin]. Returns Fmin ∈ [0, 1].
 
-  **Returns:** `(G2_eff, remainder)` tuple
+**Numerical Integration:**
+- **`crra_utility_integral_with_damage(F0, F1, Fmin, Fmax_for_clip, y_mean_before_damage, omega_base, y_damage_distribution_scale, uniform_redistribution, gini, eta, xi, wi, branch=0)`** - Integrates CRRA utility over income ranks [F0, F1] using Gauss-Legendre quadrature. Accounts for climate damage via y_of_F_after_damage().
+
+- **`climate_damage_integral(F0, F1, Fmin, Fmax_for_clip, y_mean_before_damage, omega_base, y_damage_distribution_scale, uniform_redistribution, gini, xi, wi, branch=0)`** - Integrates climate damage over income ranks [F0, F1] using Gauss-Legendre quadrature. Damage function: omega_base * exp(-income / y_damage_distribution_scale).
+
+- **`crra_utility_interval(F0, F1, c_mean, eta)`** - Utility of constant consumption c over interval [F0, F1]. Used for flat segments (below Fmin or above Fmax) where all individuals have same income.
 
 ### Usage Example
 
 ```python
-from income_distribution import calculate_Gini_effective_redistribute_abate
+from income_distribution import y_of_F_after_damage, find_Fmax, find_Fmin
+from utility_integrals import crra_utility_integral_with_damage
+from scipy.special import roots_legendre
 
-# Initial Gini index
-Gini_initial = 0.4
+# Setup quadrature
+xi, wi = roots_legendre(100)
 
-# Fraction of income to be redistributed (e.g., 5% of total income)
-deltaL = 0.05
+# Find critical ranks
+Fmax = find_Fmax(y_mean, Omega_base, y_scale, uniform_redist, gini, xi, wi, target_tax=1000.0)
+Fmin = find_Fmin(y_mean, Omega_base, y_scale, uniform_redist, gini, xi, wi, target_subsidy=500.0)
 
-# Fraction allocated to abatement vs redistribution
-f = 0.5  # 50% to abatement, 50% to redistribution
-
-# Calculate effective Gini index
-G_eff, remainder = calculate_Gini_effective_redistribute_abate(f, deltaL, Gini_initial)
-
-print(f"Effective Gini: {G_eff:.4f}")
+# Compute utility in middle segment
+U_middle = crra_utility_integral_with_damage(Fmin, Fmax, Fmin, Fmax, y_mean,
+                                            Omega_base, y_scale, uniform_redist, gini, eta, xi, wi)
 ```
 
 ## Parameter Organization
@@ -783,20 +786,25 @@ The project includes unit tests that validate the analytical solutions for key m
 
 ### Unit Test for Equation (1.2): Climate Damage
 
-The file `unit_test_eq1.2.py` validates the analytical solution for aggregate climate damage (Ω) and post-damage Gini coefficient (G_climate).
+**Note:** The file `unit_test_eq1.2.py` validated an earlier analytical solution for climate damage using hypergeometric functions. This approach has been replaced by a more comprehensive iterative numerical integration method that accounts for:
+- Income-dependent damage via Lambert W function
+- Progressive taxation and targeted redistribution
+- Convergence to self-consistent damage and income distribution
 
-**What it tests:**
+**Previous Analytical Approach (Deprecated):**
 
-The analytical solution uses hypergeometric functions to compute:
+The old analytical solution used hypergeometric functions:
 ```
 Ω = ω_max · (y_damage_distribution_scale/ȳ) · ₂F₁(1, a, a+1, -b)
 ```
-where `b = y_damage_distribution_scale · a / (ȳ · (a-1))`
 
-This is compared against high-precision numerical integration of the original integral:
+**Current Numerical Approach:**
+
+Climate damage is now computed by integrating over three income segments using Gauss-Legendre quadrature:
 ```
-Ω = (1/ȳ) · ∫₀¹ ω(y(F)) · y(F) · dF
+Ω = (1/ȳ) · ∫₀¹ ω(y(F)) · dF
 ```
+where y(F) is computed via `y_of_F_after_damage()` using Lambert W function
 
 **Running the test:**
 
@@ -1264,43 +1272,63 @@ The clamp is applied during integration rather than modifying E itself, allowing
 
 The model includes several optimizations for computational efficiency while maintaining numerical accuracy:
 
-**1. Income-Dependent Climate Damage Iteration (economic_model.py)**
+**1. Climate Damage Convergence Loop (economic_model.py)**
 
-Climate damage depends on effective per-capita income (y_net), which itself depends on climate damage, creating a circular dependency. This is resolved iteratively:
-
-```python
-# Convergence criterion using LOOSE_EPSILON (1e-10)
-converged = np.abs(y_net - y_net_prev) < LOOSE_EPSILON
-```
-
-- **RELAXATION_FACTOR = 1.0**: No relaxation (direct substitution) provides fastest convergence
-- **Typical iterations**: 5-6 per timestep (down from ~45 with relaxation)
-- **Initial guess**: Analytical approximation using current state adapts better than using previous timestep
-- **Convergence tolerance**: LOOSE_EPSILON (1e-10) balances speed and precision
-
-**2. Hypergeometric Function Evaluation (climate_damage_distribution.py)**
-
-The analytical climate damage solution requires evaluating the Gauss hypergeometric function ₂F₁:
+Climate damage depends on income distribution, which itself depends on climate damage (through tax/redistribution and damage effects), creating a circular dependency. This is resolved via an iterative convergence loop:
 
 ```python
-from scipy.special import hyp2f1
-H1 = hyp2f1(1.0, a, a + 1.0, -b)  # Mean damage factor
-H2 = hyp2f1(1.0, 2.0 * a, 2.0 * a + 1.0, -b)  # Inequality adjustment
+# Convergence criterion using LOOSE_EPSILON (1e-8)
+converged = abs(Omega - Omega_prev) < LOOSE_EPSILON
 ```
 
-- **scipy.special.hyp2f1**: ~200x faster than arbitrary-precision libraries
-- **Accuracy**: Machine precision (~1e-16 relative error)
-- **Performance**: Evaluated twice per timestep per y_net iteration
+**Algorithm Overview:**
+1. Initialize Omega using base climate damage (Omega_base = psi1 * delta_T + psi2 * delta_T^2)
+2. Compute critical income ranks (Fmin, Fmax) for redistribution and taxation using previous time step's distribution
+3. Integrate climate damage and utility over three segments: [0, Fmin), [Fmin, Fmax), [Fmax, 1]
+4. Update Omega from integrated aggregate damage
+5. Repeat until convergence
+
+**Performance Characteristics:**
+- **Convergence tolerance**: LOOSE_EPSILON (1e-8) balances speed and precision
+- **Typical iterations**: 3-5 per timestep
+- **Maximum iterations**: MAX_ITERATIONS (64) before raising RuntimeError
+- **Initial guess**: Omega_base provides good starting point for rapid convergence
+
+**2. Gauss-Legendre Quadrature Integration (utility_integrals.py)**
+
+Numerical integration over income distribution uses Gauss-Legendre quadrature for high accuracy with minimal function evaluations:
+
+```python
+from scipy.special import roots_legendre
+# Precomputed once per timestep, before convergence loop
+xi, wi = roots_legendre(N_QUAD)  # N_QUAD = 100 quadrature points
+```
+
+**Integration Functions:**
+- **climate_damage_integral()**: Integrates climate damage over income ranks [F0, F1]
+- **crra_utility_integral_with_damage()**: Integrates CRRA utility accounting for climate damage
+- **y_of_F_after_damage()**: Computes income at rank F using Lambert W function to solve implicit damage equation
+
+**Performance:**
+- **N_QUAD = 100**: Provides excellent accuracy (~1e-10 relative error) for smooth integrands
+- **Quadrature nodes precomputed**: xi, wi computed once per timestep, reused across all integrations
+- **Accuracy**: Machine precision for polynomial and exponential integrands
 
 **3. Numerical Constants (constants.py)**
 
-Two precision levels for different purposes:
+Multiple precision levels and iteration parameters:
 
 - **EPSILON = 1e-12**: Strict tolerance for mathematical comparisons (Gini bounds, float comparisons)
-- **LOOSE_EPSILON = 1e-10**: Practical tolerance for iterative solvers and optimization convergence
-  - Used for y_net convergence in economic_model.py
+- **LOOSE_EPSILON = 1e-8**: Practical tolerance for iterative solvers and optimization convergence
+  - Used for Omega convergence in climate damage loop
+  - Used in find_Fmin() and find_Fmax() root finding
   - Default value for xtol_abs in optimization (control parameter convergence)
-  - Appropriate for variables in [0, 1] range
+- **MAX_ITERATIONS = 64**: Maximum iterations for convergence loops
+  - Climate damage convergence in calculate_tendencies()
+  - Initial capital stock convergence in integrate_model()
+- **N_QUAD = 100**: Number of Gauss-Legendre quadrature points for numerical integration
+  - Used in climate_damage_integral() and crra_utility_integral_with_damage()
+  - Provides ~1e-10 relative error for smooth integrands
 
 **Cumulative Speedup:**
 
@@ -1314,12 +1342,27 @@ The results dictionary contains arrays for:
 - **Time**: `t`
 - **State variables**: `K`, `Ecum`, `delta_Gini`
 - **Time-dependent inputs**: `A`, `L`, `sigma`, `theta1`, `f`, `s`, `Gini_background`
-- **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_net`
-- **Climate variables**: `delta_T`, `Omega`, `E`, `Climate_Damage`
-- **Abatement variables**: `mu`, `Lambda`, `AbateCost`, `redistribution`, `marginal_abatement_cost`
+- **Economic variables**: `Y_gross`, `Y_damaged`, `Y_net`, `y`, `y_net`, `y_damaged`
+- **Climate variables**: `delta_T`, `Omega`, `Omega_base`, `E`, `Climate_Damage`, `climate_damage`
+- **Abatement variables**: `mu`, `Lambda`, `AbateCost`, `marginal_abatement_cost`
+- **Redistribution variables**: `redistribution`, `redistribution_amount`, `Redistribution_amount`, `uniform_redistribution_amount`, `uniform_tax_rate`
+- **Income distribution segments**: `Fmin`, `Fmax`, `n_damage_iterations`
+- **Aggregate integrals**: `aggregate_damage`, `aggregate_utility`
 - **Investment/Consumption**: `Savings`, `Consumption`
 - **Inequality/utility**: `Gini`, `G_eff`, `Gini_climate`, `U`, `discounted_utility`
 - **Tendencies**: `dK_dt`, `dEcum_dt`, `d_delta_Gini_dt`, `delta_Gini_step_change`
+
+**New Variables (from iterative convergence algorithm):**
+- **Omega_base**: Base climate damage from temperature before income adjustment
+- **y_damaged**: Per-capita gross production after climate damage
+- **climate_damage**: Per-capita climate damage
+- **Fmin**: Maximum income rank receiving targeted redistribution
+- **Fmax**: Minimum income rank paying progressive taxation
+- **n_damage_iterations**: Number of iterations to convergence
+- **aggregate_damage**: Total climate damage from numerical integration
+- **aggregate_utility**: Total utility from numerical integration
+- **uniform_redistribution_amount**: Per-capita uniform redistribution
+- **uniform_tax_rate**: Uniform tax rate (if not progressive)
 
 All arrays have the same length corresponding to time points from `t_start` to `t_end` in steps of `dt`.
 

@@ -8,7 +8,6 @@ and emissions abatement costs.
 import numpy as np
 from scipy.special import roots_legendre
 from income_distribution import (
-    calculate_Gini_effective_redistribute_abate,
     y_of_F_after_damage,
     segment_integral_with_cut,
     total_tax_top,
@@ -19,12 +18,7 @@ from income_distribution import (
     L_pareto_derivative
 )
 from parameters import evaluate_params_at_time
-from climate_damage_distribution import (
-    calculate_climate_damage_and_gini_effect,
-    calculate_climate_damage_ratio_from_prev_distribution
-)
 from utility_integrals import (
-    crra_utility_integral,
     crra_utility_interval,
     crra_utility_integral_with_damage,
     climate_damage_integral
