@@ -36,6 +36,7 @@ def crra_utility_integral_with_damage(
     uniform_redistribution,
     gini,
     eta,
+    s,
     xi,
     wi,
     branch=0,
@@ -68,6 +69,8 @@ def crra_utility_integral_with_damage(
         Gini coefficient.
     eta : float
         CRRA coefficient (eta = 1 is log utility, eta != 1 is power utility).
+    s : float
+        Savings rate (0 <= s < 1). Income after savings is (1-s)*income.
     xi : ndarray
         Gauss-Legendre quadrature nodes on [-1, 1].
     wi : ndarray
@@ -108,7 +111,7 @@ def crra_utility_integral_with_damage(
     F_nodes = F_half * xi + F_mid
 
     # Evaluate income at quadrature nodes (accounting for climate damage)
-    income_vals = y_of_F_after_damage(
+    income_before_savings = y_of_F_after_damage(
         F_nodes,
         Fmin,
         Fmax_for_clip,
@@ -119,6 +122,9 @@ def crra_utility_integral_with_damage(
         gini,
         branch=branch,
     )
+
+    # Apply savings rate to get consumption
+    income_vals = income_before_savings * (1.0 - s)
 
     # Compute utility at each node
     if abs(eta - 1.0) < LOOSE_EPSILON:

@@ -176,11 +176,11 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     while not converged:
         n_damage_iterations += 1
         if n_damage_iterations > MAX_ITERATIONS:
-
+            omega_base_diff = abs(Omega_base - Omega_base_prev) if 'Omega_base_prev' in locals() else 0.0
             raise RuntimeError(
                 f"Climate damage calculation failed to converge after {MAX_ITERATIONS} iterations. "
-                f"Omega_old = {Omega_prev:.10f}, difference = {abs(Omega - Omega_prev):.2e} "
-                f"(tolerance: {LOOSE_EPSILON:.2e})"
+                f"Omega_old = {Omega_prev:.10f}, Omega_diff = {abs(Omega - Omega_prev):.2e}, "
+                f"Omega_base_diff = {omega_base_diff:.2e} (tolerance: {LOOSE_EPSILON:.2e})"
             )
 
         # NOTE: For development purposes, we are going to assume that all switches are turned on, and the only switch we need to
@@ -210,7 +210,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             uniform_tax_rate = 0.0 # income dependent tax
             Fmax = find_Fmax(Fmin, y_gross, Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini,xi,wi,target_tax = tax_amount)
         else:
-            uniform_tax_rate = abateCost_amount + redistribution_amount /(y_gross * (1 - Omega))  # uniform tax rate; be able to handle case when redistribution is not allowed but abatement is limited
+            uniform_tax_rate = (abateCost_amount + redistribution_amount) / (y_gross * (1 - Omega))  # uniform tax rate; be able to handle case when redistribution is not allowed but abatement is limited
             Fmax = 1.0
 
         # Now we know the taxes and redistribution amounts, we can calculate the climate damage as a function of income rank F,
@@ -233,12 +233,12 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             aggregate_utility = aggregate_utility + crra_utility_interval(0, Fmin, min_income_after_savings, eta)
 
         if Fmax - Fmin > EPSILON:  #  Middle-income: This is the folks in the middle who may receive uniform redistribution and pay uniform tax
-            aggregate_damage = aggregate_damage + climate_damage_integral(Fmin, Fmax, y_gross* (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, uniform_tax_rate, s, eta)
-            aggregate_utility = aggregate_utility + crra_utility_integral_with_damage(Fmin, Fmax, y_gross* (1 - uniform_tax_rate), eta, Omega_base, y_damage_distribution_coeff)
+            aggregate_damage = aggregate_damage + climate_damage_integral(Fmin, Fmax, Fmin, Fmax, y_gross * (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini, xi, wi)
+            aggregate_utility = aggregate_utility + crra_utility_integral_with_damage(Fmin, Fmax, Fmin, Fmax, y_gross * (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini, eta, s, xi, wi)
 
         if 1.0 - Fmax > EPSILON: # High-income: This is the folks who are paying income-dependent tax
             max_income_before_savings = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross* (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
-            max_income_after_savings = max_income_before_savings * (1 - s) * (1 - uniform_tax_rate)
+            max_income_after_savings = max_income_before_savings * (1 - s)
             damage_per_capita = Omega_base * np.exp(- max_income_before_savings * y_damage_distribution_coeff)
             aggregate_damage = aggregate_damage + (1 - Fmax) * damage_per_capita
             aggregate_utility = aggregate_utility + crra_utility_interval(Fmax, 1.0, max_income_after_savings, eta)

@@ -298,20 +298,12 @@ class ScalarParameters:
         Income scale for climate damage distribution ($)
         Controls how damage is distributed across income levels
         Only used when income_dependent_damage_distribution=True
-    y_damage_aggregate_scale : float
-        Income scale for aggregate damage saturation ($)
-        Controls how aggregate damage decreases as society gets wealthier
-        Only used when income_dependent_aggregate_damage=True
     k_climate : float
         Temperature sensitivity to cumulative emissions (°C tCO2^-1)
     eta : float
         Coefficient of relative risk aversion (CRRA utility parameter)
     rho : float
         Pure rate of time preference (yr^-1)
-    Gini_fract : float
-        Fraction of effective Gini change as instantaneous step (0 <= Gini_fract <= 1)
-    Gini_restore : float
-        Rate at which Gini restores to background value (yr^-1, 0=no restoration)
     fract_gdp : float
         Fraction of GDP available for redistribution and abatement
     theta2 : float
@@ -341,21 +333,15 @@ class ScalarParameters:
         If True, targeted redistribution (benefits to lowest income)
         If False, uniform dividend (equal per-capita payment)
         Only applies when income_redistribution=True
-    n_discrete : int
-        Number of discrete segments for numerical integration over income distribution
-        Used when analytical solutions are not available
     """
     alpha: float
     delta: float
     psi1: float
     psi2: float
     y_damage_distribution_scale: float
-    y_damage_aggregate_scale: float
     k_climate: float
     eta: float
     rho: float
-    Gini_fract: float
-    Gini_restore: float
     fract_gdp: float
     theta2: float
     K_initial: float
@@ -364,7 +350,6 @@ class ScalarParameters:
     income_dependent_tax_policy: bool
     income_redistribution: bool
     income_dependent_redistribution_policy: bool
-    n_discrete: int
     mu_max: float = None  # Will be set to INVERSE_EPSILON in __post_init__ if None
     Ecum_initial: float = 0.0  # Default to zero (no prior emissions)
 
@@ -669,16 +654,14 @@ def evaluate_params_at_time(t, config):
         'psi1': sp.psi1,
         'psi2': sp.psi2,
         'y_damage_distribution_scale': sp.y_damage_distribution_scale,
-        'y_damage_aggregate_scale': sp.y_damage_aggregate_scale,
         'income_dependent_aggregate_damage': sp.income_dependent_aggregate_damage,
         'income_dependent_damage_distribution': sp.income_dependent_damage_distribution,
         'income_dependent_tax_policy': sp.income_dependent_tax_policy,
+        'income_redistribution': sp.income_redistribution,
         'income_dependent_redistribution_policy': sp.income_dependent_redistribution_policy,
         'k_climate': sp.k_climate,
         'eta': sp.eta,
         'rho': sp.rho,
-        'Gini_fract': sp.Gini_fract,
-        'Gini_restore': sp.Gini_restore,
         'fract_gdp': sp.fract_gdp,
         'theta2': sp.theta2,
         'mu_max': sp.mu_max,
