@@ -6,14 +6,30 @@ and emissions abatement costs.
 """
 
 import numpy as np
-from income_distribution import calculate_Gini_effective_redistribute_abate, y_of_F_after_damage
+from scipy.special import roots_legendre
+from income_distribution import (
+    calculate_Gini_effective_redistribute_abate,
+    y_of_F_after_damage,
+    segment_integral_with_cut,
+    total_tax_top,
+    total_tax_bottom,
+    find_Fmax,
+    find_Fmin,
+    L_pareto,
+    L_pareto_derivative
+)
 from parameters import evaluate_params_at_time
 from climate_damage_distribution import (
     calculate_climate_damage_and_gini_effect,
     calculate_climate_damage_ratio_from_prev_distribution
 )
-from utility_integrals import crra_utility_integral, crra_utility_interval
-from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_ITERATIONS
+from utility_integrals import (
+    crra_utility_integral,
+    crra_utility_interval,
+    crra_utility_integral_with_damage,
+    climate_damage_integral
+)
+from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_ITERATIONS, N_QUAD
 
 
 def calculate_tendencies(state, params, previous_step_values, store_detailed_output=True):
@@ -136,23 +152,28 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     delta_T = k_climate * Ecum
 
     # Base damage from temperature
-    omega_base = psi1 * delta_T + psi2 * (delta_T ** 2)
+    Omega_base = psi1 * delta_T + psi2 * (delta_T ** 2)
 
     #========================================================================================
     # Iterative convergence loop for climate damage (Section 6 of IMPLEMENTATION_PLAN.md)
     # We iterate to achieve consistency between climate damage and income distribution
 
+    # Precompute Gauss-Legendre quadrature nodes and weights for numerical integration
+    xi, wi = roots_legendre(N_QUAD)
+
     # Initialize Omega using base damage as starting guess
-    Omega_old = omega_base
-    uniform_redistribution_old = 0.0  # uniform per capita redistribution, will get updated in loop
-    Fmin_old = 0.0  # minimum income boundary for redistribution, will get updated in loop
-    Fmax_old = 1.0  # maximum income boundary for redistribution, will get updated in loop
+    Omega = Omega_base
+    uniform_redistribution_amount = 0.0  # uniform per capita redistribution, will get updated in loop
+    uniform_tax_rate = 0.0  # uniform tax rate, will get updated in loop
+    Fmin = 0.0  # minimum income boundary for redistribution, will get updated in loop
+    Fmax = 1.0  # maximum income boundary for redistribution, will get updated in loop
     converged = False
     n_damage_iterations = 0
 
     while not converged:
         n_damage_iterations += 1
         if n_damage_iterations > MAX_ITERATIONS:
+
             raise RuntimeError(
                 f"Climate damage calculation failed to converge after {MAX_ITERATIONS} iterations. "
                 f"Omega_old = {Omega_old:.10f}, difference = {abs(Omega - Omega_old):.2e} "
@@ -162,174 +183,136 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         # NOTE: For development purposes, we are going to assume that all switches are turned on, and the only switch we need to
         # consider is whether redistribution is income-dependent or not.
 
-        # We want to calculate y_damaged as a function of income rank, F.
-        
-            # Assume at this point we already have everything we need to calculate this from the previous iteration
-            # Wealthier societies experience less aggregate damage
-            # we want to solve for:
-            # y_damaged = y_gross * ( 1 - omega_base ) * np.exp(- y_damaged / income_aggregate_scale)
-            # The solution to this is:
-            # y_damaged = - income_aggregate_scale * W( - (y_gross * (1 - omega_base) / income_aggregate_scale) )
-            y_damaged = - income_aggregate_scale * np.real(
-                scipy.special.lambertw( - (y_gross * (1 - omega_base) / income_aggregate_scale) )
-                )
-            Omega = 1.0 - (y_damaged / y_gross)
-        else:
-            Omega = omega_base
+        # total redistribution amount
+        redistribution_amount = (1 - f) * fract_gdp * y_gross * (1 - Omega)  # total redistribution amount
+        # Now we calculate Fmin and uniform_redistribution amount, which is the minimum income rank that covers abatement or redistribution costs
+        if income_dependent_redistribution_policy:
+            uniform_redistribution_amount = 0.0 # income dependent redistribution
+            """
+            def find_Fmin(y_mean_before_damage,
+              Omega_base,
+              y_damage_distribution_scale,
+              uniform_redistribution,
+              gini,
+              xi,
+              wi,
+              target_subsidy=0.0,
+              branch=0,
+              tol=LOOSE_EPSILON):
+            """
+            Fmin = find_Fmin(y_gross , Omega_base, y_damage_distribution_scale, uniform_redistribution_amount, gini,xi,wi,target_subsidy = redistribution_amount)
+        else: # uniform redistribution
+            uniform_redistribution_amount = redistribution_amount   # per capita uniform redistribution amount
+            Fmin = 0.0
 
-        #========================================================================================
-        # Calculate downstream economic variables
-
-        # Eq 1.3: Production after climate damage
-        Climate_Damage = Omega * Y_gross
-        Y_damaged = Y_gross - Climate_Damage
-        y_damaged = Y_damaged / L if L > 0 else 0.0  # per capita damaged income
-
-        AbateCost = f * fract_gdp * Y_damaged
-        abateCost_mean = AbateCost / L if L > 0 else 0.0  # per capita abatement cost
-
-        C_mean = (1-s) * Y_damaged - AbateCost
-        c_mean = C_mean / L if L > 0 else 0.0  # per capita consumption
-
-        if income_redistribution and Gini_climate > EPSILON:
-            # Maximum redistributable fraction (to achieve Gini=0)
-            #redist_max_fraction = ((2 * Gini_climate) / (1 + Gini_climate)) * \
-            #                    ((1 - Gini_climate) / (1 + Gini_climate))**((1 - Gini_climate) / (2 * Gini_climate))
-            #fmin_redist = 1.0 - redist_max_fraction / fract_gdp if fract_gdp > 0 else 0.0
-            #Redistribution = (1 - max(f, fmin_redist)) * fract_gdp * Y_damaged
-            Redistribution = (1 - f) * fract_gdp * Y_damaged
-        else:
-            # No redistribution enabled or no inequality or no redistribution budget
-            Redistribution = 0.0
-
-        if income_dependent_damage_distribution:
-
-            if income_dependent_redistribution_policy:
-                if income_dependent_tax_policy:
-                    # income-dependent damage distribution, income-dependent redistribution, income-dependent tax
-                    pass
-                else: # no income-dependent tax
-                    # income-dependent damage distribution, income-dependent redistribution, uniform tax
-                    pass
-            else: # no income-dependent redistribution
-                if income_dependent_tax_policy:
-                    # income-dependent damage distribution, uniform redistribution, income-dependent tax
-                    pass
-                else: # no income-dependent tax
-                    # income-dependent damage distribution, uniform redistribution, uniform tax
-                    pass
-
-        else: # no income-dependent damage distribution
-
-            if income_dependent_redistribution_policy:
-                if income_dependent_tax_policy:
-                    # income-dependent damage distribution, income-dependent redistribution, income-dependent tax
-                    pass
-                else: # no income-dependent tax
-                    # income-dependent damage distribution, income-dependent redistribution, uniform tax
-                    pass
-            else: # no income-dependent redistribution
-                if income_dependent_tax_policy:
-                    # no income-dependent damage distribution, uniform redistribution, income-dependent tax
-                    # simplest case, all policies uniform, just use gini
-                    Tax = AbateCost + Redistribution # total tax amount
-                    # find
-                    tax_rate = Tax / Y_damaged # uniform tax rate
-                    Utility = crra_utility_integral(0.0, 1.0, c_mean * (1 - tax_rate), a_from_G(gini),eta,redistribution)
-                else: # no income-dependent tax
-                    # no income-dependent damage distribution, uniform redistribution, uniform tax
-                    # simplest case, all policies uniform, just use gini
-                    Tax = AbateCost + Redistribution # total taxation
-                    tax_rate = Tax / Y_damaged # uniform tax rate
-                    Utility = crra_utility_integral(0.0, 1.0, c_mean * (1 - tax_rate), a_from_G(gini),eta,redistribution)
-
-
-
-        # Work in discrete income distribution for damage, tax, redistribution calculations
-
-
-        # Calculate climate damage distribution based on previous time step's income distribution
-        if income_dependent_damage_distribution:
-            climate_damage_distribution = np.exp(- (income_distribution_discrete /np.mean(income_distribution_discrete))* c_mean / y_damage_distribution_scale)
-            climate_damage_distribution = climate_damage_distribution / np.sum(climate_damage_distribution)
-            climate_damage_distribution = climate_damage_distribution - np.mean(climate_damage_distribution)
-        else:
-            climate_damage_distribution = 0.0
-
-        # start by distributing income according to the Gini index and mean income
-        gini_cumulative_income_at_boundary = c_mean * (1.0 - (1.0 - F_boundaries)**(1.0 - 1.0/a_from_G(gini)))
-        income_distribution_discrete_gini = n_discrete * (gini_cumulative_income_at_boundary[1:] - gini_cumulative_income_at_boundary[:-1])
-
-
-
-
-        if income_redistribution and Gini_climate > EPSILON:
-            # Maximum redistributable fraction (to achieve Gini=0)
-            #redist_max_fraction = ((2 * Gini_climate) / (1 + Gini_climate)) * \
-            #                    ((1 - Gini_climate) / (1 + Gini_climate))**((1 - Gini_climate) / (2 * Gini_climate))
-            #fmin_redist = 1.0 - redist_max_fraction / fract_gdp if fract_gdp > 0 else 0.0
-            #Redistribution = (1 - max(f, fmin_redist)) * fract_gdp * Y_damaged
-            Redistribution = (1 - f) * fract_gdp * Y_damaged
-        else:
-            # No redistribution enabled or no redistribution budget
-            Redistribution = 0.0
-
-        redistribution = Redistribution / L if L > 0 else 0.0  # per capita redistribution
-
+        # Now we calculate Fmax, which is the minimum income rank that covers abatement or redistribution costs
         if income_dependent_tax_policy:
-            # Total taxation
-            Taxation = AbateCost + Redistribution
-            taxation = Taxation / L if L > 0 else 0.0  # per capita taxation
-
-        # Eq 2.1: Potential emissions (unabated)
-        Epot = sigma * Y_gross
-
-        # Eq 1.6: Abatement fraction
-        if Epot > 0 and AbateCost > 0:
-            mu = min(mu_max, (AbateCost * theta2 / (Epot * theta1)) ** (1 / theta2))
+            tax_amount = fract_gdp * y_gross * (1 - Omega)  # total tax amount available for redistribution and abatement
+            """
+            def find_Fmax(Fmin,
+              y_mean_before_damage,
+              Omega_base,
+              y_damage_distribution_scale,
+              uniform_redistribution,
+              gini,
+              xi,
+              wi,
+              target_tax=0.0,
+              branch=0,
+              tol=1e-6):
+            """
+            uniform_tax_rate = 0.0 # income dependent tax
+            Fmax = find_Fmax(y_gross, Omega_base, y_damage_distribution_scale, uniform_redistribution_amount, gini,xi,wi,target_tax = tax_amount)
         else:
-            mu = 0.0
+            uniform_tax_rate = fract_gdp * (1 - Omega)  # uniform tax rate
+            Fmax = 1.0
 
-        # Eq 3.5: Mean utility and calculation of distribution of consumption
-        # To minimize the amount of numerical solution, we will divide the income spectrum into three categories:
-        # 1. Those who pay tax (if income_dependent_tax_policy is True)
-        # 2. Those who receive redistribution (if income_dependent_redistribution_policy is True)
-        # 3. Everyone else
+        # Now we know the taxes and redistribution amounts, we can calculate the climate damage as a function of income rank F,
+        # and from that calculate the new Omega, and also aggregate utility and the utilty distribution
 
-        # First we will tax and redistribute, and then we will distribute climate damage based on the
-        # post-tax-redistribution income distribution,
+        # we will divide this calculation into three segments:
+        # 0 to Fmin: bottom income earners who receive income-dependent redistribution and maybe uniform redistribution and uniform tax
+        # Fmin to Fmax: middle income earners who may receive uniform distribution and pay uniform tax
+        # Fmax to 1: top income earners who may pay income-dependent tax and maybe uniform tax and maybe  uniform redistribution
+        aggregate_damage = 0.0
+        aggregate_utility = 0.0
 
-        if income_redistribution and income_dependent_redistribution_policy:
-            pass
+        # This is the folks who are receiving income-dependent redistribution
+        if Fmin > EPSILON:
+            """
+            def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, Omega_base, y_damage_distribution_scale, uniform_redistribution, gini, branch=0):
+            """
+            min_income_before_savings_and_taxes = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross, Omega_base, y_damage_distribution_scale, uniform_redistribution_amount, gini)
+            min_income = min_income_before_savings_and_taxes * (1 - s) * (1 - uniform_tax_rate)
+            damage_per_capita = Omega_base * np.exp(- min_income / y_damage_distribution_scale)
+            aggregate_damage = aggregate_damage + Fmin * damage_per_capita 
+            aggregate_utility = aggregate_utility + crra_utility_interval(0, Fmin, min_income, eta)
 
-        if y_net > 0 and 0 <= G_eff <= 1.0:
-            if np.abs(eta - 1.0) < EPSILON:
-                U = np.log(y_net) + np.log((1 - G_eff) / (1 + G_eff)) + 2 * G_eff / (1 + G_eff)
-            else:
-                term1 = (y_net ** (1 - eta)) / (1 - eta)
-                numerator = ((1 + G_eff) ** eta) * ((1 - G_eff) ** (1 - eta))
-                denominator = 1 + G_eff * (2 * eta - 1)
-                U = term1 * (numerator / denominator)
-        else:
-            U = NEG_BIGNUM
+        # This is the folks in the middle who may receive uniform redistribution and pay uniform tax
+        if Fmax - Fmin > EPSILON:
+            aggregate_damage = aggregate_damage + climate_damage_integral(Fmin, Fmax, y_gross, Omega_base, y_damage_distribution_scale, uniform_redistribution_amount, uniform_tax_rate, s, eta)
+            aggregate_utility = aggregate_utility + crra_utility_integral_with_damage(Fmin, Fmax, mean_income_before_savings_and_taxes, eta, Omega_base, y_damage_distribution_scale)
 
-        # Eq 2.3: Actual emissions (after abatement)
-        E = sigma * (1 - mu) * Y_gross
+        # This is the folks who are paying income-dependent tax
+        if 1.0 - Fmax > EPSILON:
+            max_income_before_savings_and_taxes = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross, Omega_base, y_damage_distribution_scale, uniform_redistribution_amount, gini)
+            max_income = max_income_before_savings_and_taxes * (1 - s) * (1 - uniform_tax_rate)
+            damage_per_capita = Omega_base * np.exp(- max_income / y_damage_distribution_scale)
+            aggregate_damage = aggregate_damage + (1 - Fmax) * damage_per_capita 
+            aggregate_utility = aggregate_utility + crra_utility_interval(Fmax, 1.0, max_income, eta)
 
-        # Eq 1.10: Capital tendency
-        dK_dt = s * Y_net - delta * K
+        # if income_dependent_aggregate_damage is enabled, we calculate Omega from the aggregate damage calculated above
+        # otherwise we scale omega base to try to match the aggregate damage
+        Omega_prev = Omega
+        Omega = aggregate_damage / y_gross
 
-        # Gini dynamics
-        d_delta_Gini_dt = -Gini_restore * delta_Gini
-        delta_Gini_step_change = Gini_fract * (G_eff - Gini)
+        if not income_dependent_aggregate_damage:
+            # if we do not have income_dependent aggregate damage we want to scale omega base to match the aggregate damage
+            Omega_base = Omega_base * (Omega_target / Omega)
 
-        # Check convergence of Omega
-        if abs(Omega - Omega_old) < LOOSE_EPSILON:
+        if abs(Omega - Omega_prev) < LOOSE_EPSILON:
             converged = True
-        else:
-            Omega_old = Omega
 
-    # End of convergence loop
+
+    #========================================================================================
+    # Calculate downstream economic variables
+
+    # Eq 1.3: Production after climate damage
+    Climate_Damage = Omega * Y_gross
+    Y_damaged = Y_gross - Climate_Damage
+
+    climate_damage = Omega * y_gross # per capita climate damage
+    y_damaged = y_gross * (1 - Omega)  # per capita gross production after climate damage
+
+    AbateCost = f * fract_gdp * Y_damaged
+    abateCost_mean = AbateCost / L if L > 0 else 0.0  # per capita abatement cost
+
+    Y_net = Y_damaged - AbateCost # Eq 1.8: Net production after abatement cost
+    y_net = y_damaged - abateCost_mean  # Eq 1.9: per capita income after abatement cost
+
+    C_mean = (1-s) * Y_net
+    c_mean = (1-s) * y_net  # per capita consumption
+
+    Redistribution_amount = redistribution_amount * L  # total redistribution amount
+
+    # Eq 2.1: Potential emissions (unabated)
+    Epot = sigma * Y_gross
+
+    # Eq 1.6: Abatement fraction
+    if Epot > 0 and AbateCost > 0:
+        mu = min(mu_max, (AbateCost * theta2 / (Epot * theta1)) ** (1 / theta2))
+    else:
+        mu = 0.0
+
+    # Eq 2.3: Actual emissions (after abatement)
+    E = sigma * (1 - mu) * Y_gross
+
+    # Eq 1.10: Capital tendency
+    dK_dt = s * Y_net - delta * K
+
+    # aggregate utility
+    U = aggregate_utility
+
     #========================================================================================
 
     # Handle edge cases where economy has collapsed
@@ -375,11 +358,23 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             'Y_gross': Y_gross,
             'delta_T': delta_T,
             'Omega': Omega,
+            'Omega_base': Omega_base,  # Base damage from temperature before income adjustment
             'Gini_climate': Gini_climate,
             'Y_damaged': Y_damaged,
             'Y_net': Y_net,
             'y': y,
+            'y_damaged': y_damaged,  # Per capita gross production after climate damage
+            'climate_damage': climate_damage,  # Per capita climate damage
             'redistribution': redistribution,
+            'redistribution_amount': redistribution_amount,  # Per capita redistribution amount
+            'Redistribution_amount': Redistribution_amount,  # Total redistribution amount
+            'uniform_redistribution_amount': uniform_redistribution_amount,  # Per capita uniform redistribution
+            'uniform_tax_rate': uniform_tax_rate,  # Uniform tax rate
+            'Fmin': Fmin,  # Minimum income rank boundary
+            'Fmax': Fmax,  # Maximum income rank boundary
+            'n_damage_iterations': n_damage_iterations,  # Number of convergence iterations
+            'aggregate_damage': aggregate_damage,  # Aggregate damage from integration
+            'aggregate_utility': aggregate_utility,  # Aggregate utility from integration
             'mu': mu,
             'Lambda': Lambda,
             'AbateCost': AbateCost,
@@ -407,8 +402,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     # Always return current income distribution for use as previous_step_values in next time step
     # Use G_eff (effective Gini after damage/redistribution) and y_net (net per-capita income)
     results['current_income_dist'] = {
-        'y_mean': y_net,
-        'gini': G_eff,
+        'y_mean': y_net
     }
 
     return results
@@ -541,13 +535,25 @@ def integrate_model(config, store_detailed_output=True):
             'Y_gross': np.zeros(n_steps),
             'delta_T': np.zeros(n_steps),
             'Omega': np.zeros(n_steps),
+            'Omega_base': np.zeros(n_steps),
             'Gini': np.zeros(n_steps),  # Total Gini (background + perturbation)
             'Gini_background': np.zeros(n_steps),  # Background Gini
             'Gini_climate': np.zeros(n_steps),
             'Y_damaged': np.zeros(n_steps),
             'Y_net': np.zeros(n_steps),
             'y': np.zeros(n_steps),
+            'y_damaged': np.zeros(n_steps),
+            'climate_damage': np.zeros(n_steps),
             'redistribution': np.zeros(n_steps),
+            'redistribution_amount': np.zeros(n_steps),
+            'Redistribution_amount': np.zeros(n_steps),
+            'uniform_redistribution_amount': np.zeros(n_steps),
+            'uniform_tax_rate': np.zeros(n_steps),
+            'Fmin': np.zeros(n_steps),
+            'Fmax': np.zeros(n_steps),
+            'n_damage_iterations': np.zeros(n_steps),
+            'aggregate_damage': np.zeros(n_steps),
+            'aggregate_utility': np.zeros(n_steps),
             'mu': np.zeros(n_steps),
             'Lambda': np.zeros(n_steps),
             'AbateCost': np.zeros(n_steps),
@@ -605,13 +611,25 @@ def integrate_model(config, store_detailed_output=True):
             results['Y_gross'][i] = outputs['Y_gross']
             results['delta_T'][i] = outputs['delta_T']
             results['Omega'][i] = outputs['Omega']
+            results['Omega_base'][i] = outputs['Omega_base']
             results['Gini'][i] = outputs['Gini']  # Total Gini
             results['Gini_background'][i] = outputs['Gini_background']  # Background Gini
             results['Gini_climate'][i] = outputs['Gini_climate']
             results['Y_damaged'][i] = outputs['Y_damaged']
             results['Y_net'][i] = outputs['Y_net']
             results['y'][i] = outputs['y']
+            results['y_damaged'][i] = outputs['y_damaged']
+            results['climate_damage'][i] = outputs['climate_damage']
             results['redistribution'][i] = outputs['redistribution']
+            results['redistribution_amount'][i] = outputs['redistribution_amount']
+            results['Redistribution_amount'][i] = outputs['Redistribution_amount']
+            results['uniform_redistribution_amount'][i] = outputs['uniform_redistribution_amount']
+            results['uniform_tax_rate'][i] = outputs['uniform_tax_rate']
+            results['Fmin'][i] = outputs['Fmin']
+            results['Fmax'][i] = outputs['Fmax']
+            results['n_damage_iterations'][i] = outputs['n_damage_iterations']
+            results['aggregate_damage'][i] = outputs['aggregate_damage']
+            results['aggregate_utility'][i] = outputs['aggregate_utility']
             results['mu'][i] = outputs['mu']
             results['Lambda'][i] = outputs['Lambda']
             results['AbateCost'][i] = outputs['AbateCost']

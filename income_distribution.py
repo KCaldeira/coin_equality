@@ -1,6 +1,7 @@
 import math
+import numpy as np
 from scipy.optimize import root_scalar
-from constants import EPSILON
+from constants import EPSILON, LOOSE_EPSILON
 
 # --- basic maps ---
 
@@ -98,7 +99,7 @@ def calculate_Gini_effective_redistribute_abate(f, deltaL, Gini_climate):
 
 # --- Income at rank F after damage ---
 
-def y_of_F_after_damage(F, Fmin, Fmax, s, y_mean_before_damage, omega_base, y_damage_distribution_scale, uniform_redistribution, gini, branch=0):
+def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_scale, uniform_redistribution, gini, branch=0):
     """
     Compute c(F) from the implicit equation
 
@@ -112,7 +113,7 @@ def y_of_F_after_damage(F, Fmin, Fmax, s, y_mean_before_damage, omega_base, y_da
 
     The closed-form solution is:
 
-        A(F) = (1-s) * y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution
+        A(F) = y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution
 
         c(F) = A(F) + y_damage_distribution_scale * W(
                      - (omega_base / y_damage_distribution_scale) * exp(-A(F) / y_damage_distribution_scale)
@@ -128,8 +129,6 @@ def y_of_F_after_damage(F, Fmin, Fmax, s, y_mean_before_damage, omega_base, y_da
         Minimum population rank for income in [0,1].
     Fmax : float
         Maximum population rank for income in [0,1].
-    s : float
-        Savings rate.
     y_mean_before_damage : float
         Mean income.
     omega_base : float
@@ -145,8 +144,8 @@ def y_of_F_after_damage(F, Fmin, Fmax, s, y_mean_before_damage, omega_base, y_da
 
     Returns
     -------
-    c : float or ndarray
-        c(F) evaluated at the given F values (real part).
+    y_of_F : float or ndarray
+        y_of_F(F) evaluated at the given F values (real part).
     """
     import numpy as np
     from scipy.special import lambertw
@@ -160,7 +159,7 @@ def y_of_F_after_damage(F, Fmin, Fmax, s, y_mean_before_damage, omega_base, y_da
     dLdF = (1.0 - 1.0 / a) * (1.0 - F) ** (-1.0 / a)
 
     # A(F)
-    A = (1.0 - s) * y_mean_before_damage * dLdF + uniform_redistribution
+    A =  y_mean_before_damage * dLdF + uniform_redistribution
 
     # Argument to Lambert W
     z = - (omega_base / y_damage_distribution_scale) * np.exp(-A / y_damage_distribution_scale)
@@ -169,6 +168,391 @@ def y_of_F_after_damage(F, Fmin, Fmax, s, y_mean_before_damage, omega_base, y_da
     W_vals = lambertw(z, k=branch)
 
     # c(F)
-    c_vals = A + y_damage_distribution_scale * W_vals
+    y_of_F_vals = A + y_damage_distribution_scale * W_vals
 
-    return np.real(c_vals)
+    return np.real(y_of_F_vals)
+
+
+def segment_integral_with_cut(
+    Flo,
+    Fhi,
+    Fcut,
+    Fmin,
+    Fmax_for_clip,
+    y_mean_before_damage,
+    omega_base,
+    y_damage_distribution_scale,
+    uniform_redistribution,
+    gini,
+    xi,
+    wi,
+    branch=0,
+    cut_at="upper",
+):
+    """
+    Compute ∫_{Flo}^{Fhi} [ y(F; Fmin, Fmax_for_clip, ...) - y(Fcut; Fmin, Fmax_for_clip, ...) ] dF
+
+    Generic function for computing integrals over income distribution segments with a reference cut.
+    Used for both taxation (upper tail) and redistribution (lower tail) calculations.
+
+    Parameters
+    ----------
+    Flo : float
+        Lower integration bound.
+    Fhi : float
+        Upper integration bound.
+    Fcut : float
+        Rank where reference income y(Fcut) is evaluated.
+    Fmin : float
+        Minimum rank for clipping in y_of_F_after_damage.
+    Fmax_for_clip : float
+        Maximum rank for clipping in y_of_F_after_damage.
+    y_mean_before_damage : float
+        Mean income before damage.
+    omega_base : float
+        Base climate damage parameter.
+    y_damage_distribution_scale : float
+        Damage distribution scale parameter.
+    uniform_redistribution : float
+        Uniform per-capita redistribution amount.
+    gini : float
+        Gini coefficient.
+    xi : ndarray
+        Gauss-Legendre quadrature nodes on [-1, 1].
+    wi : ndarray
+        Gauss-Legendre quadrature weights.
+    branch : int, optional
+        Lambert W branch (default 0).
+    cut_at : str, optional
+        Semantic label: "upper" for taxation, "lower" for redistribution (default "upper").
+
+    Returns
+    -------
+    float
+        Integral value.
+    """
+    # Map Gauss-Legendre nodes from [-1, 1] to [Flo, Fhi]
+    F_nodes = 0.5 * (Fhi - Flo) * xi + 0.5 * (Fhi + Flo)
+    w_nodes = 0.5 * (Fhi - Flo) * wi
+
+    # y(F) over the segment, using same Fmin and Fmax_for_clip
+    y_vals = y_of_F_after_damage(
+        F_nodes,
+        Fmin,
+        Fmax_for_clip,
+        y_mean_before_damage,
+        omega_base,
+        y_damage_distribution_scale,
+        uniform_redistribution,
+        gini,
+        branch=branch,
+    )
+
+    # reference value y(Fcut)
+    y_cut = y_of_F_after_damage(
+        Fcut,
+        Fmin,
+        Fmax_for_clip,
+        y_mean_before_damage,
+        omega_base,
+        y_damage_distribution_scale,
+        uniform_redistribution,
+        gini,
+        branch=branch,
+    )
+
+    integrand = y_vals - y_cut
+    integral_val = np.dot(w_nodes, integrand)
+
+    return integral_val
+
+
+def total_tax_top(
+    Fmax,
+    Fmin,
+    y_mean_before_damage,
+    omega_base,
+    y_damage_distribution_scale,
+    uniform_redistribution,
+    gini,
+    xi,
+    wi,
+    target_tax=0.0,
+    branch=0,
+):
+    """
+    Compute ∫_{Fmax}^{1} [ y(F; Fmin, 1, ...) - y(Fmax; Fmin, Fmax, ...) ] dF - target_tax
+
+    This is the function we will set to zero in root finding for taxation.
+
+    Parameters
+    ----------
+    Fmax : float
+        Upper boundary for taxation (income ranks above Fmax are taxed).
+    Fmin : float
+        Lower boundary for income distribution.
+    y_mean_before_damage : float
+        Mean income before damage.
+    omega_base : float
+        Base climate damage parameter.
+    y_damage_distribution_scale : float
+        Damage distribution scale parameter.
+    uniform_redistribution : float
+        Uniform per-capita redistribution amount.
+    gini : float
+        Gini coefficient.
+    xi : ndarray
+        Gauss-Legendre quadrature nodes on [-1, 1].
+    wi : ndarray
+        Gauss-Legendre quadrature weights.
+    target_tax : float, optional
+        Target tax amount to subtract (default 0.0).
+    branch : int, optional
+        Lambert W branch (default 0).
+
+    Returns
+    -------
+    float
+        Integral value minus target_tax (for root finding).
+    """
+    integral_val = segment_integral_with_cut(
+        Flo=Fmax,
+        Fhi=1.0,
+        Fcut=Fmax,
+        Fmin=Fmin,
+        Fmax_for_clip=1.0,  # we want F clipped to [Fmin, 1]
+        y_mean_before_damage=y_mean_before_damage,
+        omega_base=omega_base,
+        y_damage_distribution_scale=y_damage_distribution_scale,
+        uniform_redistribution=uniform_redistribution,
+        gini=gini,
+        xi=xi,
+        wi=wi,
+        branch=branch,
+        cut_at="upper",
+    )
+
+    return integral_val - target_tax
+
+
+def total_tax_bottom(
+    Fmin,
+    y_mean_before_damage,
+    omega_base,
+    y_damage_distribution_scale,
+    uniform_redistribution,
+    gini,
+    xi,
+    wi,
+    target_subsidy=0.0,
+    branch=0,
+):
+    """
+    Compute ∫_{0}^{Fmin} [ y(Fmin; 0, Fmin, ...) - y(F; 0, Fmin, ...) ] dF - target_subsidy
+
+    This is the function we will set to zero in root finding for redistribution.
+
+    Parameters
+    ----------
+    Fmin : float
+        Lower boundary for redistribution (income ranks below Fmin receive redistribution).
+    y_mean_before_damage : float
+        Mean income before damage.
+    omega_base : float
+        Base climate damage parameter.
+    y_damage_distribution_scale : float
+        Damage distribution scale parameter.
+    uniform_redistribution : float
+        Uniform per-capita redistribution amount.
+    gini : float
+        Gini coefficient.
+    xi : ndarray
+        Gauss-Legendre quadrature nodes on [-1, 1].
+    wi : ndarray
+        Gauss-Legendre quadrature weights.
+    target_subsidy : float, optional
+        Target subsidy amount to subtract (default 0.0).
+    branch : int, optional
+        Lambert W branch (default 0).
+
+    Returns
+    -------
+    float
+        Integral value minus target_subsidy (for root finding).
+    """
+    integral_val = segment_integral_with_cut(
+        Flo=0.0,
+        Fhi=Fmin,
+        Fcut=Fmin,
+        Fmin=0.0,              # model Fmin as bottom of support
+        Fmax_for_clip=Fmin,    # clip inside [0, Fmin]
+        y_mean_before_damage=y_mean_before_damage,
+        omega_base=omega_base,
+        y_damage_distribution_scale=y_damage_distribution_scale,
+        uniform_redistribution=uniform_redistribution,
+        gini=gini,
+        xi=xi,
+        wi=wi,
+        branch=branch,
+        cut_at="lower",
+    )
+
+    return integral_val - target_subsidy
+
+
+def find_Fmax(Fmin,
+              y_mean_before_damage,
+              omega_base,
+              y_damage_distribution_scale,
+              uniform_redistribution,
+              gini,
+              xi,
+              wi,
+              target_tax=0.0,
+              branch=0,
+              tol=LOOSE_EPSILON):
+    """
+    Find Fmax in [Fmin, 1) such that total_tax_top(Fmax) = target_tax.
+
+    Uses a bracketing root-finder.
+
+    Parameters
+    ----------
+    Fmin : float
+        Lower boundary for income distribution.
+    y_mean_before_damage : float
+        Mean income before damage.
+    omega_base : float
+        Base climate damage parameter.
+    y_damage_distribution_scale : float
+        Damage distribution scale parameter.
+    uniform_redistribution : float
+        Uniform per-capita redistribution amount.
+    gini : float
+        Gini coefficient.
+    xi : ndarray
+        Gauss-Legendre quadrature nodes on [-1, 1].
+    wi : ndarray
+        Gauss-Legendre quadrature weights.
+    target_tax : float, optional
+        Target tax amount (default 0.0).
+    branch : int, optional
+        Lambert W branch (default 0).
+    tol : float, optional
+        Tolerance for root finding (default LOOSE_EPSILON = 1e-8).
+
+    Returns
+    -------
+    float
+        Fmax value such that total_tax_top(Fmax) = target_tax.
+    """
+    # Define a wrapper with all parameters bound
+    def f(Fmax):
+        return total_tax_top(
+            Fmax,
+            Fmin,
+            y_mean_before_damage,
+            omega_base,
+            y_damage_distribution_scale,
+            uniform_redistribution,
+            gini,
+            xi,
+            wi,
+            target_tax=target_tax,
+            branch=branch,
+        )
+
+    # Bracket Fmax between Fmin and something close to 1
+    left = Fmin
+    right = 0.999999
+
+    f_left = f(left)
+    f_right = f(right)
+
+    if f_left * f_right > 0:
+        raise RuntimeError(
+            f"Root not bracketed: total_tax_top(Fmin)={f_left}, total_tax_top(0.999999)={f_right}"
+        )
+
+    sol = root_scalar(f, bracket=[left, right], method="brentq", xtol=tol)
+    if not sol.converged:
+        raise RuntimeError("root_scalar did not converge for find_Fmax")
+
+    return sol.root
+
+
+def find_Fmin(y_mean_before_damage,
+              omega_base,
+              y_damage_distribution_scale,
+              uniform_redistribution,
+              gini,
+              xi,
+              wi,
+              target_subsidy=0.0,
+              branch=0,
+              tol=LOOSE_EPSILON):
+    """
+    Find Fmin in (0, 1) such that total_tax_bottom(Fmin) = target_subsidy.
+
+    Uses a bracketing root-finder.
+
+    Parameters
+    ----------
+    y_mean_before_damage : float
+        Mean income before damage.
+    omega_base : float
+        Base climate damage parameter.
+    y_damage_distribution_scale : float
+        Damage distribution scale parameter.
+    uniform_redistribution : float
+        Uniform per-capita redistribution amount.
+    gini : float
+        Gini coefficient.
+    xi : ndarray
+        Gauss-Legendre quadrature nodes on [-1, 1].
+    wi : ndarray
+        Gauss-Legendre quadrature weights.
+    target_subsidy : float, optional
+        Target subsidy amount (default 0.0).
+    branch : int, optional
+        Lambert W branch (default 0).
+    tol : float, optional
+        Tolerance for root finding (default LOOSE_EPSILON = 1e-8).
+
+    Returns
+    -------
+    float
+        Fmin value such that total_tax_bottom(Fmin) = target_subsidy.
+    """
+    # Define a wrapper with all parameters bound
+    def f(Fmin):
+        return total_tax_bottom(
+            Fmin,
+            y_mean_before_damage,
+            omega_base,
+            y_damage_distribution_scale,
+            uniform_redistribution,
+            gini,
+            xi,
+            wi,
+            target_subsidy=target_subsidy,
+            branch=branch,
+        )
+
+    # Bracket Fmin between something close to 0 and something less than 1
+    left = 0.000001
+    right = 0.999999
+
+    f_left = f(left)
+    f_right = f(right)
+
+    if f_left * f_right > 0:
+        raise RuntimeError(
+            f"Root not bracketed: total_tax_bottom(0.000001)={f_left}, total_tax_bottom(0.999999)={f_right}"
+        )
+
+    sol = root_scalar(f, bracket=[left, right], method="brentq", xtol=tol)
+    if not sol.converged:
+        raise RuntimeError("root_scalar did not converge for find_Fmin")
+
+    return sol.root
