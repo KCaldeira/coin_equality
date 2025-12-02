@@ -36,7 +36,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         State variables:
         - 'K': Capital stock ($)
         - 'Ecum': Cumulative CO2 emissions (tCO2)
-        - 'Gini': Current Gini index
     params : dict
         Model parameters (all must be provided):
         - 'alpha': Output elasticity of capital
@@ -70,7 +69,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     -------
     dict
         Dictionary containing:
-        - Tendencies: 'dK_dt', 'dEcum_dt', 'd_delta_Gini_dt', 'delta_Gini_step_change'
+        - Tendencies: 'dK_dt', 'dEcum_dt'
         - Income distribution: 'current_income_dist' with {'y_mean': float, 'gini': float}
           for use as previous_step_values in the next time step
         - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y, redistribution,
@@ -96,12 +95,10 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     15. U from y_net, G_eff, η (Eq 3.5)
     16. E from σ, μ, Y_gross (Eq 2.3)
     17. dK/dt from s, Y_net, δ, K (Eq 1.10)
-    18. d(delta_Gini)/dt, Gini_step from Gini dynamics
     """
     # Extract state variables
     K = state['K']
     Ecum = state['Ecum']
-    delta_Gini = state['delta_Gini']
 
     # Extract parameters
     alpha = params['alpha']
@@ -155,6 +152,8 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     else:
         y_damage_distribution_coeff = 0.0
 
+    # Current Gini coefficient from background
+    gini = Gini_background
 
     #========================================================================================
     # Iterative convergence loop for climate damage (Section 6 of IMPLEMENTATION_PLAN.md)
@@ -188,22 +187,16 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         # total redistribution amount
         available_for_redistribution_and_abatement = fract_gdp * y_gross * (1 - Omega)
 
-        redistribution_amount = (1 - f) * available_for_redistribution_and_abatement  # total redistribution amount
+        if income_redistribution:
+            redistribution_amount = (1 - f) * available_for_redistribution_and_abatement  # total redistribution amount
+        else:
+            redistribution_amount = 0.0
+
+        abateCost_amount = f * available_for_redistribution_and_abatement  # total abatement cost amount
+
         # Now we calculate Fmin and uniform_redistribution amount, which is the minimum income rank that covers abatement or redistribution costs
-        if income_dependent_redistribution_policy:
+        if income_redistribution and income_dependent_redistribution_policy:
             uniform_redistribution_amount = 0.0 # income dependent redistribution
-            """
-            def find_Fmin(y_mean_before_damage,
-              Omega_base,
-              y_damage_distribution_coeff,
-              uniform_redistribution,
-              gini,
-              xi,
-              wi,
-              target_subsidy=0.0,
-              branch=0,
-              tol=LOOSE_EPSILON):
-            """
             Fmin = find_Fmin(y_gross , Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini,xi,wi,target_subsidy = redistribution_amount)
         else: # uniform redistribution
             uniform_redistribution_amount = redistribution_amount   # per capita uniform redistribution amount
@@ -211,24 +204,11 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
         # Now we calculate Fmax, which is the minimum income rank that covers abatement or redistribution costs
         if income_dependent_tax_policy:
-            tax_amount = available_for_redistribution_and_abatement  # total tax amount available for redistribution and abatement
-            """
-            def find_Fmax(Fmin,
-              y_mean_before_damage,
-              Omega_base,
-              y_damage_distribution_coeff,
-              uniform_redistribution,
-              gini,
-              xi,
-              wi,
-              target_tax=0.0,
-              branch=0,
-              tol=1e-6):
-            """
+            tax_amount = abateCost_amount + redistribution_amount  # total tax amount available for redistribution and abatement; be able to handle case when redistribution is not allowed but abatement is limited
             uniform_tax_rate = 0.0 # income dependent tax
             Fmax = find_Fmax(Fmin, y_gross, Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini,xi,wi,target_tax = tax_amount)
         else:
-            uniform_tax_rate = fract_gdp * (1 - Omega)  # uniform tax rate
+            uniform_tax_rate = abateCost_amount + redistribution_amount /(y_gross * (1 - Omega))  # uniform tax rate; be able to handle case when redistribution is not allowed but abatement is limited
             Fmax = 1.0
 
         # Now we know the taxes and redistribution amounts, we can calculate the climate damage as a function of income rank F,
@@ -244,9 +224,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         # This is the folks who are receiving income-dependent redistribution
 
         if Fmin > EPSILON:
-            """
-            def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, Omega_base, y_damage_distribution_coeff, uniform_redistribution, gini, branch=0):
-            """
             min_income_before_savings_and_taxes = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross, Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
             min_income = min_income_before_savings_and_taxes * (1 - s) * (1 - uniform_tax_rate)
             damage_per_capita = Omega_base * np.exp(- min_income * y_damage_distribution_coeff) # everyone below Fmin has the same income
@@ -289,8 +266,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     climate_damage = Omega * y_gross # per capita climate damage
     y_damaged = y_gross * (1 - Omega)  # per capita gross production after climate damage
 
-    AbateCost = f * fract_gdp * Y_damaged
-    abateCost_mean = AbateCost / L if L > 0 else 0.0  # per capita abatement cost
+    AbateCost = abateCost_amount * L  # total abatement cost
 
     Y_net = Y_damaged - AbateCost # Eq 1.8: Net production after abatement cost
     y_net = y_damaged - abateCost_mean  # Eq 1.9: per capita income after abatement cost
@@ -323,7 +299,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     # Handle edge cases where economy has collapsed
     if y_gross <= 0 or Y_gross <= 0:
         Omega = 0.0
-        Gini_climate = Gini
+        Gini_climate = gini
         Climate_Damage = 0.0
         Y_damaged = 0.0
         Savings = 0.0
@@ -335,13 +311,11 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         y = 0.0
         y_net = 0.0
         redistribution = 0.0
-        G_eff = Gini
+        G_eff = gini
         mu = 0.0
         U = NEG_BIGNUM
         E = 0.0
         dK_dt = -delta * K
-        d_delta_Gini_dt = -Gini_restore * delta_Gini
-        delta_Gini_step_change = Gini_fract * (G_eff - Gini)
         
     # Prepare output
     results = {}
@@ -356,9 +330,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         results.update({
             'dK_dt': dK_dt,
             'dEcum_dt': E,
-            'd_delta_Gini_dt': d_delta_Gini_dt,
-            'delta_Gini_step_change': delta_Gini_step_change,
-            'Gini': Gini,  # Total Gini (background + perturbation) for plotting
+            'Gini': gini,  # Current Gini for plotting
             'Gini_background': Gini_background,  # Background Gini for reference
             'Y_gross': Y_gross,
             'delta_T': delta_T,
@@ -400,8 +372,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         'U': U,
         'dK_dt': dK_dt,
         'dEcum_dt': E,
-        'd_delta_Gini_dt': d_delta_Gini_dt,
-        'delta_Gini_step_change': delta_Gini_step_change,
     })
 
     # Always return current income distribution for use as previous_step_values in next time step
@@ -436,13 +406,11 @@ def integrate_model(config, store_detailed_output=True):
         If store_detailed_output=True, also includes:
         - 'K': array of capital stock values
         - 'Ecum': array of cumulative emissions values
-        - 'delta_Gini': array of Gini perturbation values
-        - 'Gini': array of total Gini index values (background + perturbation)
+        - 'Gini': array of Gini index values (from background)
         - 'Gini_background': array of background Gini index values
         - 'A', 'sigma', 'theta1', 'f': time-dependent inputs
         - All derived variables: Y_gross, delta_T, Omega, Gini_climate, Y_damaged, Y_net,
           y, redistribution, mu, Lambda, AbateCost, marginal_abatement_cost, y_net, G_eff, E
-        - 'd_delta_Gini_dt', 'delta_Gini_step_change': perturbation tendencies
 
     Notes
     -----
@@ -451,8 +419,7 @@ def integrate_model(config, store_detailed_output=True):
 
     Initial conditions are computed automatically:
     - Ecum(0) = Ecum_initial (initial cumulative emissions from configuration)
-    - K(0) = (s·A(0)/δ)^(1/(1-α))·L(0) (steady-state capital)
-    - Gini(0) = Gini_background(t_start) (background Gini from time function at start)
+    - K(0) = K_initial (from configuration)
     """
     # Extract integration parameters
     t_start = config.integration_params.t_start
@@ -509,7 +476,6 @@ def integrate_model(config, store_detailed_output=True):
     state = {
         'K': config.scalar_params.K_initial,
         'Ecum': config.scalar_params.Ecum_initial,
-        'delta_Gini': 0.0  # Initialize perturbation to zero
     }
 
     # Initialize previous_step_values for first time step
@@ -568,8 +534,6 @@ def integrate_model(config, store_detailed_output=True):
             'E': np.zeros(n_steps),
             'dK_dt': np.zeros(n_steps),
             'dEcum_dt': np.zeros(n_steps),
-            'd_delta_Gini_dt': np.zeros(n_steps),
-            'delta_Gini_step_change': np.zeros(n_steps),
             'Climate_Damage': np.zeros(n_steps),
             'Savings': np.zeros(n_steps),
             'Consumption': np.zeros(n_steps),
@@ -582,7 +546,6 @@ def integrate_model(config, store_detailed_output=True):
         't': t_array,
         'K': np.zeros(n_steps),
         'Ecum': np.zeros(n_steps),
-        'delta_Gini': np.zeros(n_steps),
         'U': np.zeros(n_steps),
         'L': np.zeros(n_steps),  # Needed for objective function
     })
@@ -604,7 +567,6 @@ def integrate_model(config, store_detailed_output=True):
             # Store state variables
             results['K'][i] = state['K']
             results['Ecum'][i] = state['Ecum']
-            results['delta_Gini'][i] = state['delta_Gini']
 
             # Store time-dependent inputs
             results['A'][i] = params['A']
@@ -644,8 +606,6 @@ def integrate_model(config, store_detailed_output=True):
             results['E'][i] = outputs['E']
             results['dK_dt'][i] = outputs['dK_dt']
             results['dEcum_dt'][i] = outputs['dEcum_dt']
-            results['d_delta_Gini_dt'][i] = outputs['d_delta_Gini_dt']
-            results['delta_Gini_step_change'][i] = outputs['delta_Gini_step_change']
             results['Climate_Damage'][i] = outputs['Climate_Damage']
             results['Savings'][i] = outputs['Savings']
             results['Consumption'][i] = outputs['Consumption']
@@ -657,8 +617,6 @@ def integrate_model(config, store_detailed_output=True):
             state['K'] = state['K'] + dt * outputs['dK_dt']
             # do not allow cumulative emissions to go negative, making it colder than the initial condition
             state['Ecum'] = max(0.0, state['Ecum'] + dt * outputs['dEcum_dt'])
-            # delta_Gini update includes both continuous change and discontinuous step
-            state['delta_Gini'] = state['delta_Gini'] + dt * outputs['d_delta_Gini_dt'] + outputs['delta_Gini_step_change']
 
             # Update previous_step_values for next time step
             previous_step_values = outputs['current_income_dist']

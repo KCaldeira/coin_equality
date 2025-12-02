@@ -45,9 +45,8 @@ VARIABLE_METADATA = {
     'Consumption': {'description': 'Total Consumption', 'units': '$/yr', 'group': 'economic'},
     'Savings': {'description': 'Gross Investment', 'units': '$/yr', 'group': 'economic'},
     's': {'description': 'Savings Rate', 'units': '', 'group': 'policy'},
-    'delta_Gini': {'description': 'Gini Perturbation from Background', 'units': '', 'group': 'inequality'},
     'Gini_background': {'description': 'Background Gini Index', 'units': '', 'group': 'inequality'},
-    'Gini': {'description': 'Total Gini Index', 'units': '', 'group': 'inequality'}
+    'Gini': {'description': 'Gini Index', 'units': '', 'group': 'inequality'}
 }
 
 # Variable grouping for organized layout with combined charts
@@ -57,7 +56,6 @@ VARIABLE_GROUPS = {
         {'type': 'combined', 'title': 'Control Variables', 'variables': ['f', 's'], 'units': 'fraction'},
         {'type': 'single', 'variables': ['mu']},
         {'type': 'combined', 'title': 'Economic Impact Fractions', 'variables': ['Omega', 'Lambda'], 'units': 'fraction'},
-        {'type': 'combined', 'title': 'Gini Components', 'variables': ['delta_Gini', 'Gini_background', 'Gini'], 'units': ''},
         {'type': 'combined', 'title': 'Inequality Measures', 'variables': ['Gini', 'Gini_climate', 'G_eff'], 'units': ''},
         {'type': 'single', 'variables': ['U']}
     ],
@@ -330,9 +328,8 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         's',  # Savings rate
         # State variables
         'K',  # Capital stock
-        'delta_Gini',  # Perturbation from background Gini
         'Gini_background',  # Background Gini index
-        'Gini',  # Total Gini index (background + perturbation)
+        'Gini',  # Gini index
         'Ecum',  # Cumulative emissions
         # Related to Ecum
         'dEcum_dt',  # Rate of cumulative emissions change
@@ -362,8 +359,6 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'E',  # CO2 emissions
         'dK_dt',  # Net capital accumulation
         'y',  # Per-capita Consumption Plus Abatement
-        'd_delta_Gini_dt',  # Continuous delta_Gini change rate
-        'delta_Gini_step_change',  # Discontinuous delta_Gini step change
         'marginal_abatement_cost',  # Marginal abatement cost (social cost of carbon)
     ]
 
@@ -392,13 +387,10 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'Consumption': ('Total Consumption', '$/yr'),
         'dK_dt': ('Net capital accumulation', '$/yr'),
         'y': ('Per-capita Consumption Plus Abatement', '$/person/yr'),
-        'delta_Gini': ('Perturbation from background Gini index', 'dimensionless'),
-        'Gini': ('Total Gini index (background + perturbation)', 'dimensionless'),
+        'Gini': ('Gini index', 'dimensionless'),
         'Gini_background': ('Background Gini index', 'dimensionless'),
         'Gini_climate': ('Gini index after climate damage', 'dimensionless'),
         'G_eff': ('Gini index after redistribution', 'dimensionless'),
-        'd_delta_Gini_dt': ('Continuous delta_Gini change rate', '1/yr'),
-        'delta_Gini_step_change': ('Discontinuous delta_Gini step change', 'dimensionless'),
         'U': ('Mean utility per capita', 'dimensionless'),
         'discounted_utility': ('Discounted utility per capita', 'dimensionless'),
         's': ('Savings rate', 'dimensionless'),
