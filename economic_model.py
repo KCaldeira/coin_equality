@@ -116,8 +116,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     mu_max = params['mu_max']
     fract_gdp = params['fract_gdp']
     Gini_background = params['Gini_background']
-    Gini_fract = params['Gini_fract']
-    Gini_restore = params['Gini_restore']
     f = params['f']
     y_damage_distribution_scale = params['y_damage_distribution_scale']
     psi1 = params['psi1']
@@ -151,6 +149,10 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         y_damage_distribution_coeff = 1.0 / y_damage_distribution_scale
     else:
         y_damage_distribution_coeff = 0.0
+
+    # Target Omega not income-dependent aggregate damage
+    if not income_dependent_aggregate_damage:
+        Omega_target = Omega_base
 
     # Current Gini coefficient from background
     gini = Gini_background
@@ -221,27 +223,25 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         aggregate_damage = 0.0
         aggregate_utility = 0.0
 
-        # This is the folks who are receiving income-dependent redistribution
+        
 
-        if Fmin > EPSILON:
-            min_income_before_savings_and_taxes = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross, Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
-            min_income = min_income_before_savings_and_taxes * (1 - s) * (1 - uniform_tax_rate)
-            damage_per_capita = Omega_base * np.exp(- min_income * y_damage_distribution_coeff) # everyone below Fmin has the same income
+        if Fmin > EPSILON: #  Low-income: This is the folks who are receiving income-dependent redistribution
+            min_income_before_savings = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross * (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
+            min_income_after_savings = min_income_before_savings * (1 - s)
+            damage_per_capita = Omega_base * np.exp(- min_income_before_savings * y_damage_distribution_coeff) # everyone below Fmin has the same income
             aggregate_damage = aggregate_damage + Fmin * damage_per_capita # so we can just multiply that damage by Fmin
-            aggregate_utility = aggregate_utility + crra_utility_interval(0, Fmin, min_income, eta)
+            aggregate_utility = aggregate_utility + crra_utility_interval(0, Fmin, min_income_after_savings, eta)
 
-        # This is the folks in the middle who may receive uniform redistribution and pay uniform tax
-        if Fmax - Fmin > EPSILON:
-            aggregate_damage = aggregate_damage + climate_damage_integral(Fmin, Fmax, y_gross, Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, uniform_tax_rate, s, eta)
-            aggregate_utility = aggregate_utility + crra_utility_integral_with_damage(Fmin, Fmax, mean_income_before_savings_and_taxes, eta, Omega_base, y_damage_distribution_coeff)
+        if Fmax - Fmin > EPSILON:  #  Middle-income: This is the folks in the middle who may receive uniform redistribution and pay uniform tax
+            aggregate_damage = aggregate_damage + climate_damage_integral(Fmin, Fmax, y_gross* (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, uniform_tax_rate, s, eta)
+            aggregate_utility = aggregate_utility + crra_utility_integral_with_damage(Fmin, Fmax, y_gross* (1 - uniform_tax_rate), eta, Omega_base, y_damage_distribution_coeff)
 
-        # This is the folks who are paying income-dependent tax
-        if 1.0 - Fmax > EPSILON:
-            max_income_before_savings_and_taxes = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross, Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
-            max_income = max_income_before_savings_and_taxes * (1 - s) * (1 - uniform_tax_rate)
-            damage_per_capita = Omega_base * np.exp(- max_income * y_damage_distribution_coeff)
+        if 1.0 - Fmax > EPSILON: # High-income: This is the folks who are paying income-dependent tax
+            max_income_before_savings = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross* (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
+            max_income_after_savings = max_income_before_savings * (1 - s) * (1 - uniform_tax_rate)
+            damage_per_capita = Omega_base * np.exp(- max_income_before_savings * y_damage_distribution_coeff)
             aggregate_damage = aggregate_damage + (1 - Fmax) * damage_per_capita
-            aggregate_utility = aggregate_utility + crra_utility_interval(Fmax, 1.0, max_income, eta)
+            aggregate_utility = aggregate_utility + crra_utility_interval(Fmax, 1.0, max_income_after_savings, eta)
 
         # if income_dependent_aggregate_damage is enabled, we calculate Omega from the aggregate damage calculated above
         # otherwise we scale omega base to try to match the aggregate damage
@@ -250,9 +250,10 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
         if not income_dependent_aggregate_damage:
             # if we do not have income_dependent aggregate damage we want to scale omega base to match the aggregate damage
+            Omega_base_prev = Omega_base
             Omega_base = Omega_base * (Omega_target / Omega)
 
-        if abs(Omega - Omega_prev) < LOOSE_EPSILON:
+        if abs(Omega - Omega_prev) < LOOSE_EPSILON and abs(Omega_base - Omega_base_prev) < LOOSE_EPSILON:
             converged = True
 
 
@@ -261,9 +262,9 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
     # Eq 1.3: Production after climate damage
     Climate_Damage = Omega * Y_gross
-    Y_damaged = Y_gross - Climate_Damage
-
     climate_damage = Omega * y_gross # per capita climate damage
+    
+    Y_damaged = Y_gross *(1 - Omega)
     y_damaged = y_gross * (1 - Omega)  # per capita gross production after climate damage
 
     AbateCost = abateCost_amount * L  # total abatement cost
@@ -306,7 +307,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         Lambda = 0.0
         AbateCost = 0.0
         Y_net = 0.0
-        Redistribution = 0.0
+        Redistribution_amount = 0.0
         Consumption = 0.0
         y = 0.0
         y_net = 0.0

@@ -72,9 +72,9 @@ def G2_from_deltaL(deltaL, Gini_initial):
 
 def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_coeff, uniform_redistribution, gini, branch=0):
     """
-    Compute c(F) from the implicit equation
+    Compute y(F) from the implicit equation
 
-        c(F) = (1-s) * y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution - omega_base * exp(-c(F) * y_damage_distribution_coeff),
+        y(F) = y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution - omega_base * exp(-y(F) * y_damage_distribution_coeff),
 
     where the Lorenz curve is Pareto with Gini index gini:
 
