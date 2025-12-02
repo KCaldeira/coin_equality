@@ -55,4 +55,4 @@ MAX_ITERATIONS = 64
 # Used for:
 # - Integrating income distributions over rank F
 # - Computing tax and redistribution amounts
-N_QUAD = 64
+N_QUAD = 32
