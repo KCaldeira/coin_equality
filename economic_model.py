@@ -179,7 +179,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
             raise RuntimeError(
                 f"Climate damage calculation failed to converge after {MAX_ITERATIONS} iterations. "
-                f"Omega_old = {Omega_old:.10f}, difference = {abs(Omega - Omega_old):.2e} "
+                f"Omega_old = {Omega_prev:.10f}, difference = {abs(Omega - Omega_prev):.2e} "
                 f"(tolerance: {LOOSE_EPSILON:.2e})"
             )
 
@@ -270,7 +270,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     AbateCost = abateCost_amount * L  # total abatement cost
 
     Y_net = Y_damaged - AbateCost # Eq 1.8: Net production after abatement cost
-    y_net = y_damaged - abateCost_mean  # Eq 1.9: per capita income after abatement cost
+    y_net = y_damaged - abateCost_amount  # Eq 1.9: per capita income after abatement cost
 
     C_mean = (1-s) * Y_net
     c_mean = (1-s) * y_net  # per capita consumption
