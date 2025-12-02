@@ -173,10 +173,28 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     converged = False
     n_damage_iterations = 0
 
+    # Track convergence history for diagnostics
+    omega_history = []
+    omega_base_history = []
+
     while not converged:
         n_damage_iterations += 1
         if n_damage_iterations > MAX_ITERATIONS:
             omega_base_diff = abs(Omega_base - Omega_base_prev) if 'Omega_base_prev' in locals() else 0.0
+            # Print convergence history for analysis
+            print(f"\nConvergence failure diagnostics:")
+            print(f"  Iteration | Omega          | Omega_base     | Omega_diff     | Omega_base_diff")
+            print(f"  ----------|----------------|----------------|----------------|----------------")
+            for i in range(min(10, len(omega_history))):
+                omega_diff_i = abs(omega_history[i] - omega_history[i-1]) if i > 0 else 0.0
+                omega_base_diff_i = abs(omega_base_history[i] - omega_base_history[i-1]) if i > 0 else 0.0
+                print(f"  {i+1:9d} | {omega_history[i]:14.10f} | {omega_base_history[i]:14.10f} | {omega_diff_i:14.2e} | {omega_base_diff_i:14.2e}")
+            if len(omega_history) > 20:
+                print(f"  {'...':>9} | {'...':>14} | {'...':>14} | {'...':>14} | {'...':>14}")
+            for i in range(max(10, len(omega_history) - 10), len(omega_history)):
+                omega_diff_i = abs(omega_history[i] - omega_history[i-1]) if i > 0 else 0.0
+                omega_base_diff_i = abs(omega_base_history[i] - omega_base_history[i-1]) if i > 0 else 0.0
+                print(f"  {i+1:9d} | {omega_history[i]:14.10f} | {omega_base_history[i]:14.10f} | {omega_diff_i:14.2e} | {omega_base_diff_i:14.2e}")
             raise RuntimeError(
                 f"Climate damage calculation failed to converge after {MAX_ITERATIONS} iterations. "
                 f"Omega_old = {Omega_prev:.10f}, Omega_diff = {abs(Omega - Omega_prev):.2e}, "
@@ -251,9 +269,19 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         if not income_dependent_aggregate_damage:
             # if we do not have income_dependent aggregate damage we want to scale omega base to match the aggregate damage
             Omega_base_prev = Omega_base
-            Omega_base = Omega_base * (Omega_target / Omega)
+            # Under-relaxation to prevent oscillation
+            relaxation = 0.5
+            Omega_base_new = Omega_base * (Omega_target / Omega)
+            Omega_base = (1.0 - relaxation) * Omega_base + relaxation * Omega_base_new
 
-        if abs(Omega - Omega_prev) < LOOSE_EPSILON and abs(Omega_base - Omega_base_prev) < LOOSE_EPSILON:
+        # Record convergence history for diagnostics
+        omega_history.append(Omega)
+        omega_base_history.append(Omega_base)
+
+        # Check convergence using fractional change for Omega_base (better for large values)
+        omega_converged = abs(Omega - Omega_prev) < LOOSE_EPSILON
+        omega_base_converged = abs(Omega_base / Omega_base_prev - 1.0) < LOOSE_EPSILON if 'Omega_base_prev' in locals() and Omega_base_prev != 0 else True
+        if omega_converged and omega_base_converged:
             converged = True
 
 
