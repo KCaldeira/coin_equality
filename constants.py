@@ -56,3 +56,11 @@ MAX_ITERATIONS = 64
 # - Integrating income distributions over rank F
 # - Computing tax and redistribution amounts
 N_QUAD = 32
+
+# Maximum allowable temperature change (°C)
+# Used for:
+# - Capping delta_T to prevent unphysical damage values during optimization
+# - Prevents Omega_base from becoming astronomically large when abatement is too low
+# - Physical justification: temperatures beyond ~12°C above preindustrial represent
+#   complete ecological and economic collapse, beyond which the model is not meaningful
+DELTA_T_LIMIT = 12.0

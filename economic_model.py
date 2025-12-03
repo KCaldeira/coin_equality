@@ -23,7 +23,7 @@ from utility_integrals import (
     crra_utility_integral_with_damage,
     climate_damage_integral
 )
-from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_ITERATIONS, N_QUAD
+from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_ITERATIONS, N_QUAD, DELTA_T_LIMIT
 
 
 def calculate_tendencies(state, params, previous_step_values, store_detailed_output=True):
@@ -140,7 +140,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         y_gross = 0.0
 
     # Eq 2.2: Temperature change from cumulative emissions
-    delta_T = k_climate * Ecum
+    delta_T = min(k_climate * Ecum, DELTA_T_LIMIT)
 
     # Base damage from temperature
     Omega_base = psi1 * delta_T + psi2 * (delta_T ** 2)
