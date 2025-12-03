@@ -183,14 +183,15 @@ Omega = psi1 * delta_T + psi2 * (delta_T ** 2)
 
 # AFTER (CORRECT):
 delta_T = k_climate * Ecum
-Omega = min(psi1 * delta_T + psi2 * (delta_T ** 2), 1.0)
+Omega = min(psi1 * delta_T + psi2 * (delta_T ** 2), 1.0 - EPSILON)
 ```
 
 **Impact**:
-- More physically meaningful: damage fraction cannot exceed 100% of GDP
+- More physically meaningful: damage fraction cannot exceed ~100% of GDP
 - Removes arbitrary temperature limit
 - Smoother optimization landscape (damage capped directly, not indirectly through temperature)
 - Eliminated `DELTA_T_LIMIT` constant entirely
+- Cap at `1.0 - EPSILON` prevents division by zero in budget calculations when damage is extreme
 
 **Files Modified**:
 1. `economic_model.py:26` - Removed DELTA_T_LIMIT from imports
@@ -199,9 +200,26 @@ Omega = min(psi1 * delta_T + psi2 * (delta_T ** 2), 1.0)
 4. `constants.py:61-67` - Removed DELTA_T_LIMIT constant and documentation
 5. `README.md:85, 87, 1227, 1300-1303` - Updated documentation to reflect Omega capping
 
+### Bug #3: Variable Naming Inconsistency (UnboundLocalError)
+**File**: `economic_model.py:375-376, 427`
+
+**Root Cause**: Inconsistent variable naming where `C_mean`/`c_mean` were used instead of following the convention (uppercase = aggregate, lowercase = per-capita).
+
+**Error**: When running with `store_detailed_output=True`, line 427 tried to use undefined variable `y`:
+```python
+Consumption = y * L  # Total Consumption  ← y was never defined
+```
+
+**Fix**: Renamed variables to follow naming convention:
+- `C_mean` → `Consumption` (aggregate consumption)
+- `c_mean` → `consumption` (per-capita consumption)
+- Removed line 427 since `Consumption` is already computed on line 375
+
+**Impact**: Fixes crash when saving optimization results with detailed output.
+
 ## Next Actions
 
 The critical bugs are now fixed. Next steps:
-1. Test with optimization to verify convergence behavior improves
+1. Test with optimization to verify it completes successfully
 2. Monitor for any new edge cases during optimization
 3. Consider adding assertions to verify redistribution is zero-sum (mean income unchanged)

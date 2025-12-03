@@ -142,8 +142,8 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     # Eq 2.2: Temperature change from cumulative emissions
     delta_T = k_climate * Ecum
 
-    # Base damage from temperature (capped at 1.0)
-    Omega = min(psi1 * delta_T + psi2 * (delta_T ** 2), 1.0)
+    # Base damage from temperature (capped just below 1.0 to avoid division by zero)
+    Omega = min(psi1 * delta_T + psi2 * (delta_T ** 2), 1.0 - EPSILON)
 
     if income_dependent_damage_distribution and y_damage_distribution_scale > EPSILON:
         y_damage_distribution_coeff = 1.0 / y_damage_distribution_scale
@@ -372,8 +372,8 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     Y_net = Y_damaged - AbateCost # Eq 1.8: Net production after abatement cost
     y_net = y_damaged - abateCost_amount  # Eq 1.9: per capita income after abatement cost
 
-    C_mean = (1-s) * Y_net
-    c_mean = (1-s) * y_net  # per capita consumption
+    Consumption = (1-s) * Y_net
+    consumption = (1-s) * y_net  # per capita consumption
 
     Redistribution_amount = redistribution_amount * L  # total redistribution amount
 
@@ -424,7 +424,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     if store_detailed_output:
         # Additional calculated variables for detailed output only
         marginal_abatement_cost = theta1 * mu ** (theta2 - 1)  # Social cost of carbon
-        Consumption = y * L  # Total Consumption
         discounted_utility = U * np.exp(-rho * t)  # Discounted utility
 
         # Return full diagnostics for CSV/PDF output

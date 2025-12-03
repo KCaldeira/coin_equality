@@ -84,7 +84,7 @@ The differential equation solver uses an iterative convergence algorithm to reso
 1. **Y_gross** from K, L, A, α (Eq 1.1: Cobb-Douglas production)
 2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions)
 3. **y_gross** from Y_gross, L (mean per-capita gross income before climate damage)
-4. **Omega_base** from ΔT, psi1, psi2 (base climate damage from temperature, capped at 1.0)
+4. **Omega_base** from ΔT, psi1, psi2 (base climate damage from temperature, capped at 1.0 - EPSILON)
 5. **Gauss-Legendre quadrature nodes** (xi, wi) for numerical integration (N_QUAD = 32 points)
 
 **Iterative Convergence Loop** (until |Omega - Omega_prev| < LOOSE_EPSILON):
@@ -1224,7 +1224,7 @@ converged = abs(Omega - Omega_prev) < LOOSE_EPSILON
 ```
 
 **Algorithm Overview:**
-1. Initialize Omega using base climate damage (Omega_base = min(psi1 * delta_T + psi2 * delta_T^2, 1.0))
+1. Initialize Omega using base climate damage (Omega_base = min(psi1 * delta_T + psi2 * delta_T^2, 1.0 - EPSILON))
 2. Compute critical income ranks (Fmin, Fmax) for redistribution and taxation using previous time step's distribution
 3. Integrate climate damage and utility over three segments: [0, Fmin), [Fmin, Fmax), [Fmax, 1]
 4. Update Omega from integrated aggregate_damage_fraction (already dimensionless, no division by income)
