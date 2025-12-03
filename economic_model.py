@@ -263,7 +263,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             aggregate_utility = aggregate_utility + crra_utility_integral_with_damage(Fmin, Fmax, Fmin, Fmax, y_gross * (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini, eta, s, xi, wi)
 
         if 1.0 - Fmax > EPSILON: # High-income: This is the folks who are paying income-dependent tax
-            max_income_before_savings = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross* (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
+            max_income_before_savings = y_of_F_after_damage(Fmax, Fmin, Fmax, y_gross* (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
             max_income_after_savings = max_income_before_savings * (1 - s)
             damage_per_capita = Omega_base * np.exp(- max_income_before_savings * y_damage_distribution_coeff)
             aggregate_damage_fraction = aggregate_damage_fraction + (1 - Fmax) * damage_per_capita
