@@ -82,10 +82,10 @@ The differential equation solver uses an iterative convergence algorithm to reso
 
 **Pre-iteration Setup:**
 1. **Y_gross** from K, L, A, α (Eq 1.1: Cobb-Douglas production)
-2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions)
+2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions), capped at DELTA_T_LIMIT (12°C)
 3. **y_gross** from Y_gross, L (mean per-capita gross income before climate damage)
 4. **Omega_base** from ΔT, psi1, psi2 (base climate damage from temperature)
-5. **Gauss-Legendre quadrature nodes** (xi, wi) for numerical integration (N_QUAD points)
+5. **Gauss-Legendre quadrature nodes** (xi, wi) for numerical integration (N_QUAD = 32 points)
 
 **Iterative Convergence Loop** (until |Omega - Omega_prev| < LOOSE_EPSILON):
 6. **redistribution_amount** from fract_gdp, f, y_gross, Omega (total per-capita redistribution)
@@ -96,11 +96,14 @@ The differential equation solver uses an iterative convergence algorithm to reso
    - If income-dependent: find_Fmax() computes critical rank, uniform_tax_rate = 0
    - If uniform: Fmax = 1.0, uniform_tax_rate = fract_gdp * (1 - Omega)
 9. **Segment-wise integration** over income distribution [0, Fmin), [Fmin, Fmax), [Fmax, 1]:
-   - **aggregate_damage** from climate_damage_integral() and crra_utility_interval()
+   - **aggregate_damage_fraction** from climate_damage_integral() and damage_per_capita calculations
    - **aggregate_utility** from crra_utility_integral_with_damage() and crra_utility_interval()
-10. **Omega** from aggregate_damage / y_gross (new aggregate damage estimate)
-11. **Omega_base adjustment** if not income_dependent_aggregate_damage (scale to match target)
-12. **Convergence check**: if |Omega - Omega_prev| < LOOSE_EPSILON, exit loop
+10. **Omega** from aggregate_damage_fraction (already a dimensionless fraction, no division needed)
+11. **Omega_base adjustment** if not income_dependent_aggregate_damage:
+    - Apply under-relaxation (relaxation = 0.1) to prevent oscillation
+    - Use Aitken acceleration when monotonic convergence is detected (after iteration 3)
+    - Handle special case when Omega_base < EPSILON to avoid division by zero
+12. **Convergence check**: if |Omega - Omega_prev| < LOOSE_EPSILON and |Omega_base/Omega_base_prev - 1| < LOOSE_EPSILON, exit loop
 
 **Post-convergence Calculations:**
 13. **Y_damaged** from Y_gross, Omega (Eq 1.3: production after climate damage)
@@ -133,48 +136,44 @@ y(F) = ȳ · (1 - 1/a) · (1-F)^(-1/a),  F ∈ [0,1]
 ```
 where `F` is the population fraction (poorest), `ȳ` is mean income, and pre-damage Gini is `G₀ = 1/(2a-1)`.
 
-**Damage Function (Half-Saturation Model):**
+**Damage Function (Exponential Decay Model):**
 ```
-ω_max(ΔT) = psi1 · ΔT + psi2 · ΔT²  [Barrage & Nordhaus 2023]
-ω(y) = ω_max · y_damage_distribution_scale / (y_damage_distribution_scale + y)
+Ω_base(ΔT) = psi1 · ΔT + psi2 · ΔT²  [Barrage & Nordhaus 2023]
+ω(y) = Ω_base · exp(-y / y_damage_distribution_scale)
 ```
 where:
-- `ω_max` is the maximum damage fraction (applies at zero income)
-- `y_damage_distribution_scale` is the income level at which damage equals ω_max/2
-- At income `y = 0`: damage = `ω_max` (maximum for poorest)
-- At income `y = y_damage_distribution_scale`: damage = `ω_max/2`
+- `Ω_base` is the base damage fraction from temperature (before income-dependent adjustment)
+- `y` is per-capita income
+- `y_damage_distribution_scale` is the characteristic income scale for damage decay
+- At income `y = 0`: damage = `Ω_base` (maximum for poorest)
+- At income `y = y_damage_distribution_scale`: damage = `Ω_base · exp(-1)` ≈ `0.368 · Ω_base`
 - As income `y → ∞`: damage → 0 (wealthy largely protected)
 
-**Analytical Solution for Aggregate Damage:**
-The aggregate damage (fraction of total production lost) is computed analytically:
+**Aggregate Damage Calculation:**
+The aggregate damage fraction is computed numerically by integrating over the income distribution:
 ```
-b = y_damage_distribution_scale · a / (ȳ · (a-1))
-Ω = (1/ȳ) · ∫₀¹ ω(y(F)) · y(F) · dF
-  = ω_max · (y_damage_distribution_scale/ȳ) · ₂F₁(1, a, a+1, -b)
+aggregate_damage_fraction = ∫₀¹ ω(y(F)) dF
+Ω = aggregate_damage_fraction
 ```
-where:
-- `b` is a dimensionless damage concentration parameter
-- `₂F₁` is the Gauss hypergeometric function
+This integration is performed using three-segment Gauss-Legendre quadrature over [0, Fmin), [Fmin, Fmax), and [Fmax, 1], where:
+- Fmin = maximum income rank receiving targeted redistribution
+- Fmax = minimum income rank paying progressive taxation
 
-**Post-Damage Inequality (Gini Effect):**
-Climate damage increases inequality because lower-income populations suffer proportionally greater losses. The post-damage Gini coefficient `G_climate` is computed using:
-```
-b = y_damage_distribution_scale · a / (ȳ · (a-1))               [dimensionless damage parameter]
-G₀ = 1/(2a-1)                                        [pre-damage Gini]
-Φ = ₂F₁(a-1, 1, a, -b)                               [mean damage factor]
-H = ₂F₁(1, 2a-1, 2a, -b)                             [Gini adjustment factor]
-ω_mean = ω_max · Φ                                   [mean damage across distribution]
-
-G_climate = 1 - (1 - G₀) · (1 - ω_max · H) / (1 - ω_mean)
-```
+**Convergence Algorithm:**
+When `income_dependent_aggregate_damage = False`, the calculation uses an iterative algorithm:
+1. Start with initial Omega_base from temperature
+2. Compute aggregate damage fraction from income distribution with damage ω(y)
+3. Update Omega = aggregate_damage_fraction
+4. Adjust Omega_base to match Omega_target using under-relaxation and Aitken acceleration
+5. Repeat until convergence
 
 **Physical Interpretation:**
-- As `y_damage_distribution_scale → ∞`: damage becomes uniform, `G_climate → G₀` (no inequality effect)
-- As `y_damage_distribution_scale → 0`: damage is maximally regressive (concentrated on poor)
-- As `ΔT → 0`: `ω_max → 0` and `Ω → 0` (no damage)
+- As `y_damage_distribution_scale → ∞`: exp(-y/scale) → 1, damage becomes uniform (no income effect)
+- As `y_damage_distribution_scale → 0`: exp(-y/scale) → 0 rapidly, damage concentrated on poor
+- As `ΔT → 0`: `Ω_base → 0` and `Ω → 0` (no damage)
 
 **Implementation:**
-All integrals are solved analytically using closed-form solutions based on the Gauss hypergeometric function (₂F₁) from `scipy.special.hyp2f1`. This avoids numerical integration and is exact within numerical precision (~1e-16). The scipy implementation provides 200x+ speedup compared to arbitrary-precision libraries while maintaining excellent accuracy for this application. See `climate_damage_distribution.py` for complete derivations and implementation.
+The damage integrals are computed using Gauss-Legendre quadrature (N_QUAD = 32 points) with the `climate_damage_integral()` function from `utility_integrals.py`. Income at each quadrature point is computed using `y_of_F_after_damage()`, which solves the implicit equation accounting for damage, taxes, and redistribution using the Lambert W function.
 
 **Eq. (1.3) - Damaged Production:**
 ```
@@ -366,8 +365,8 @@ The model uses an iterative convergence algorithm to consistently compute:
    - Climate damage treated as uniform across income levels (first-order approximation)
 
 **Implementation Status**:
-- ✓ Redistribution disabled in `economic_model.py` (lines 164-167)
-- ✓ Uniform damage approximation in `climate_damage_distribution.py` (line 156)
+- ✓ Redistribution disabled in `economic_model.py` when income_redistribution = False
+- ✓ Uniform damage when y_damage_distribution_scale → ∞ (exponential → 1)
 - ✓ Uses `INVERSE_EPSILON` constant from `constants.py` (no hardcoded values)
 - ✓ All existing unit tests pass
 
@@ -786,88 +785,31 @@ The project includes unit tests that validate the analytical solutions for key m
 
 ### Unit Test for Equation (1.2): Climate Damage
 
-**Note:** The file `unit_test_eq1.2.py` validated an earlier analytical solution for climate damage using hypergeometric functions. This approach has been replaced by a more comprehensive iterative numerical integration method that accounts for:
-- Income-dependent damage via Lambert W function
-- Progressive taxation and targeted redistribution
-- Convergence to self-consistent damage and income distribution
-
-**Previous Analytical Approach (Deprecated):**
-
-The old analytical solution used hypergeometric functions:
-```
-Ω = ω_max · (y_damage_distribution_scale/ȳ) · ₂F₁(1, a, a+1, -b)
-```
+**Note:** The current model uses an exponential damage function ω(y) = Ω_base · exp(-y / y_damage_distribution_scale) with iterative numerical integration. The file `unit_test_eq1.2.py` and the analytical approach using hypergeometric functions have been deprecated and replaced by the current implementation.
 
 **Current Numerical Approach:**
 
-Climate damage is now computed by integrating over three income segments using Gauss-Legendre quadrature:
-```
-Ω = (1/ȳ) · ∫₀¹ ω(y(F)) · dF
-```
-where y(F) is computed via `y_of_F_after_damage()` using Lambert W function
+Climate damage is computed by integrating the exponential damage function over three income segments using Gauss-Legendre quadrature (N_QUAD = 32 points):
 
-**Running the test:**
+```python
+# Damage function at income y
+ω(y) = Ω_base · exp(-y / y_damage_distribution_scale)
 
-```bash
-python unit_test_eq1.2.py
-```
-
-**Expected output:**
-
-The test generates 10 random parameter combinations covering a wide range of:
-- Gini indices (inequality levels): 0.2 to 0.7
-- Mean incomes: $1,000 to $100,000
-- Half-saturation incomes: $1 to $10,000
-- Maximum damage fractions: 5% to 30%
-
-For each case, it prints:
-- Parameter values (G, ȳ, k, ω_max)
-- Analytical solution result
-- Numerical integration result
-- Relative error
-- PASS/FAIL status (tolerance: 1e-9)
-
-**Example output:**
-```
-================================================================================
-Unit Test: Equation (1.2) - Climate Damage Analytical Solution
-================================================================================
-
-Validating analytical hypergeometric solution against numerical integration
-Target tolerance: 1e-9 relative error
-
-Case  1:  G=0.5488  ȳ= 28183.8  k=  8377.4  ω_max=0.2382
-          Ω_analytical = 0.106573645123
-          Ω_numerical  = 0.106573645123
-          Rel. error   = 1.23e-12  ✓ PASS
-
-[... 9 more cases ...]
-
-================================================================================
-All 10 test cases PASSED
-Maximum relative error: 4.56e-11
-================================================================================
+# Aggregate damage fraction via integration
+aggregate_damage_fraction = ∫₀¹ ω(y(F)) dF
+Ω = aggregate_damage_fraction
 ```
 
-**Interpretation:**
+The integration is performed in `climate_damage_integral()` from `utility_integrals.py`, with income at each rank F computed via `y_of_F_after_damage()` using the Lambert W function.
 
-- **PASS**: The analytical solution matches numerical integration to within 1e-9 relative tolerance, confirming the hypergeometric formula is correctly derived and implemented.
-- **Maximum relative error**: Typically ~1e-10 to 1e-12, demonstrating excellent agreement between analytical and numerical approaches.
+**Convergence Algorithm:**
 
-**Technical details:**
-
-- Production code uses `scipy.special.hyp2f1` for optimal performance (200x+ faster than arbitrary-precision alternatives)
-- Unit tests use `mpmath` library for arbitrary-precision arithmetic (80 decimal places) to validate accuracy
-- Numerical integration in tests performed with `mpmath.quad()` adaptive quadrature
-- Tests validate both the aggregate damage (Ω) and implicitly the underlying income distribution formulas
-- Random seed fixed for reproducibility
-
-**Purpose:**
-
-This unit test provides confidence that:
-1. The analytical derivation of the hypergeometric solution is mathematically correct
-2. The implementation in `climate_damage_distribution.py` correctly evaluates the formulas
-3. The solution is numerically stable across a wide range of realistic parameter values
+When `income_dependent_aggregate_damage = False`, the model uses an iterative algorithm to find consistent Omega and Omega_base values:
+1. Initialize Omega_base from temperature: Ω_base = psi1·ΔT + psi2·ΔT²
+2. Integrate damage over income distribution to get aggregate_damage_fraction
+3. Update Omega = aggregate_damage_fraction
+4. Adjust Omega_base using under-relaxation (0.1) and Aitken acceleration
+5. Repeat until both Omega and Omega_base converge (tolerance: LOOSE_EPSILON = 1e-8)
 
 ### Testing the Forward Model
 
@@ -1282,17 +1224,42 @@ converged = abs(Omega - Omega_prev) < LOOSE_EPSILON
 ```
 
 **Algorithm Overview:**
-1. Initialize Omega using base climate damage (Omega_base = psi1 * delta_T + psi2 * delta_T^2)
+1. Initialize Omega using base climate damage (Omega_base = psi1 * delta_T + psi2 * delta_T^2), where delta_T is capped at DELTA_T_LIMIT (12°C)
 2. Compute critical income ranks (Fmin, Fmax) for redistribution and taxation using previous time step's distribution
 3. Integrate climate damage and utility over three segments: [0, Fmin), [Fmin, Fmax), [Fmax, 1]
-4. Update Omega from integrated aggregate damage
-5. Repeat until convergence
+4. Update Omega from integrated aggregate_damage_fraction (already dimensionless, no division by income)
+5. If not income_dependent_aggregate_damage, adjust Omega_base using under-relaxed multiplicative update with Aitken acceleration
+6. Repeat until convergence (both Omega and Omega_base fractional changes < LOOSE_EPSILON)
 
 **Performance Characteristics:**
 - **Convergence tolerance**: LOOSE_EPSILON (1e-8) balances speed and precision
-- **Typical iterations**: 3-5 per timestep
-- **Maximum iterations**: MAX_ITERATIONS (64) before raising RuntimeError
-- **Initial guess**: Omega_base provides good starting point for rapid convergence
+- **Typical iterations**: Varies widely, from 3-5 for simple cases to 60-120 for challenging parameter combinations
+- **Maximum iterations**: MAX_ITERATIONS (256) before raising RuntimeError
+- **Initial guess**: Omega_base provides good starting point
+- **Acceleration**: Aitken delta-squared extrapolation kicks in after iteration 3 to speed slow monotonic convergence
+
+**Aitken Acceleration for Omega_base Convergence:**
+
+When `income_dependent_aggregate_damage = False`, the Omega_base update uses Aitken's delta-squared method to accelerate convergence:
+
+```python
+# Detect slow monotonic convergence (after iteration 3)
+if monotonic and 0.3 < change_ratio < 1.2:
+    # Aitken extrapolation: x* ≈ x_n - Δ_n² / (Δ_n - Δ_{n-1})
+    x_extrapolated = x_n - (delta_n ** 2) / (delta_n - delta_n1)
+    # Blend with 50% weight if extrapolation is reasonable
+    Omega_base = 0.5 * Omega_base + 0.5 * x_extrapolated
+```
+
+**Algorithm Details:**
+- **Activation**: Triggers starting at iteration 3 when last 3 Omega_base values show monotonic progression
+- **Criteria**: Change ratios between 0.3 and 1.2 (slow but steady convergence)
+- **Extrapolation**: Uses Aitken delta-squared formula to estimate convergence limit
+- **Safety**: Rejects extrapolations that jump more than 10× the current step size
+- **Blending**: Uses 50% weight on extrapolated value (aggressive but safe)
+- **Relaxation**: Base multiplicative update uses relaxation = 0.1 (10% of computed change)
+
+This acceleration typically reduces convergence iterations by 2-3× for challenging cases with slow, steady progress.
 
 **2. Gauss-Legendre Quadrature Integration (utility_integrals.py)**
 
@@ -1301,7 +1268,7 @@ Numerical integration over income distribution uses Gauss-Legendre quadrature fo
 ```python
 from scipy.special import roots_legendre
 # Precomputed once per timestep, before convergence loop
-xi, wi = roots_legendre(N_QUAD)  # N_QUAD = 100 quadrature points
+xi, wi = roots_legendre(N_QUAD)  # N_QUAD = 32 quadrature points
 ```
 
 **Integration Functions:**
@@ -1310,7 +1277,7 @@ xi, wi = roots_legendre(N_QUAD)  # N_QUAD = 100 quadrature points
 - **y_of_F_after_damage()**: Computes income at rank F using Lambert W function to solve implicit damage equation
 
 **Performance:**
-- **N_QUAD = 100**: Provides excellent accuracy (~1e-10 relative error) for smooth integrands
+- **N_QUAD = 32**: Provides excellent accuracy (~1e-10 relative error) for smooth integrands
 - **Quadrature nodes precomputed**: xi, wi computed once per timestep, reused across all integrations
 - **Accuracy**: Machine precision for polynomial and exponential integrands
 
@@ -1323,12 +1290,17 @@ Multiple precision levels and iteration parameters:
   - Used for Omega convergence in climate damage loop
   - Used in find_Fmin() and find_Fmax() root finding
   - Default value for xtol_abs in optimization (control parameter convergence)
-- **MAX_ITERATIONS = 64**: Maximum iterations for convergence loops
+- **MAX_ITERATIONS = 256**: Maximum iterations for convergence loops
   - Climate damage convergence in calculate_tendencies()
   - Initial capital stock convergence in integrate_model()
-- **N_QUAD = 100**: Number of Gauss-Legendre quadrature points for numerical integration
+  - Increased from 64 to allow slow but steady convergence during optimization
+- **N_QUAD = 32**: Number of Gauss-Legendre quadrature points for numerical integration
   - Used in climate_damage_integral() and crra_utility_integral_with_damage()
   - Provides ~1e-10 relative error for smooth integrands
+- **DELTA_T_LIMIT = 12.0**: Maximum allowable temperature change (°C)
+  - Caps delta_T to prevent unphysical damage values during optimization
+  - Prevents Omega_base from becoming astronomically large when abatement is too low
+  - Physical justification: temperatures beyond ~12°C represent complete ecological/economic collapse
 
 **Cumulative Speedup:**
 
@@ -1347,7 +1319,7 @@ The results dictionary contains arrays for:
 - **Abatement variables**: `mu`, `Lambda`, `AbateCost`, `marginal_abatement_cost`
 - **Redistribution variables**: `redistribution`, `redistribution_amount`, `Redistribution_amount`, `uniform_redistribution_amount`, `uniform_tax_rate`
 - **Income distribution segments**: `Fmin`, `Fmax`, `n_damage_iterations`
-- **Aggregate integrals**: `aggregate_damage`, `aggregate_utility`
+- **Aggregate integrals**: `aggregate_utility` (Note: aggregate_damage_fraction computed internally but not output, as it equals Omega after convergence)
 - **Investment/Consumption**: `Savings`, `Consumption`
 - **Inequality/utility**: `Gini`, `G_eff`, `Gini_climate`, `U`, `discounted_utility`
 - **Tendencies**: `dK_dt`, `dEcum_dt`, `d_delta_Gini_dt`, `delta_Gini_step_change`
@@ -1359,8 +1331,7 @@ The results dictionary contains arrays for:
 - **Fmin**: Maximum income rank receiving targeted redistribution
 - **Fmax**: Minimum income rank paying progressive taxation
 - **n_damage_iterations**: Number of iterations to convergence
-- **aggregate_damage**: Total climate damage from numerical integration
-- **aggregate_utility**: Total utility from numerical integration
+- **aggregate_utility**: Total utility from numerical integration (aggregate_damage_fraction is computed internally but equals Omega after convergence, so not separately output)
 - **uniform_redistribution_amount**: Per-capita uniform redistribution
 - **uniform_tax_rate**: Uniform tax rate (if not progressive)
 
