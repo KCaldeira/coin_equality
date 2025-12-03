@@ -49,7 +49,8 @@ INVERSE_EPSILON = 1.0 / EPSILON
 # Used for:
 # - Initial capital stock convergence in integrate_model()
 # - Climate damage convergence in calculate_tendencies()
-MAX_ITERATIONS = 64
+# Set to 256 to allow slow but steady convergence during optimization
+MAX_ITERATIONS = 256
 
 # Number of Gauss-Legendre quadrature points for numerical integration
 # Used for:

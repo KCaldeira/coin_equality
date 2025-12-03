@@ -144,11 +144,11 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     delta_T = min(delta_T_uncapped, DELTA_T_LIMIT)
 
     # Base damage from temperature
-    Omega_base = psi1 * delta_T + psi2 * (delta_T ** 2)
+    Omega = psi1 * delta_T + psi2 * (delta_T ** 2)
 
     # Debug output when Omega_base is unexpectedly large
-    if Omega_base > 1.0:
-        print(f"WARNING: Omega_base = {Omega_base:.2e}, delta_T_uncapped = {delta_T_uncapped:.2e}, delta_T = {delta_T:.2e}, Ecum = {Ecum:.2e}, k_climate = {k_climate:.2e}")
+    if Omega > 1.0:
+        print(f"WARNING: Omega_base = {Omega:.2e}, delta_T_uncapped = {delta_T_uncapped:.2e}, delta_T = {delta_T:.2e}, Ecum = {Ecum:.2e}, k_climate = {k_climate:.2e}")
 
     if income_dependent_damage_distribution and y_damage_distribution_scale > EPSILON:
         y_damage_distribution_coeff = 1.0 / y_damage_distribution_scale
@@ -157,7 +157,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
     # Target Omega not income-dependent aggregate damage
     if not income_dependent_aggregate_damage:
-        Omega_target = Omega_base
+        Omega_target = Omega
 
     # Current Gini coefficient from background
     gini = Gini_background
@@ -170,7 +170,12 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     xi, wi = roots_legendre(N_QUAD)
 
     # Initialize Omega using base damage as starting guess
-    Omega = Omega_base
+    Omega_base = Omega
+    # if not income_dependent_aggregate_damage we will be updating Omega_base to match aggregate damage
+    # start with a higher value to help convergence
+    if not income_dependent_aggregate_damage:
+        Omega_base = Omega_target * np.exp(y_damage_distribution_coeff * y_gross )
+
     uniform_redistribution_amount = 0.0  # uniform per capita redistribution, will get updated in loop
     uniform_tax_rate = 0.0  # uniform tax rate, will get updated in loop
     Fmin = 0.0  # minimum income boundary for redistribution, will get updated in loop
@@ -186,6 +191,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         n_damage_iterations += 1
         if n_damage_iterations > MAX_ITERATIONS:
             omega_base_diff = abs(Omega_base - Omega_base_prev) if 'Omega_base_prev' in locals() else 0.0
+            omega_base_frac_diff = abs(Omega_base / Omega_base_prev - 1.0) if 'Omega_base_prev' in locals() and Omega_base_prev != 0 else 0.0
             # Print convergence history for analysis
             print(f"\nConvergence failure diagnostics:")
             print(f"  Iteration | Omega          | Omega_base     | Omega_diff     | Omega_base_diff")
@@ -202,12 +208,9 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
                 print(f"  {i+1:9d} | {omega_history[i]:14.10f} | {omega_base_history[i]:14.10f} | {omega_diff_i:14.2e} | {omega_base_diff_i:14.2e}")
             raise RuntimeError(
                 f"Climate damage calculation failed to converge after {MAX_ITERATIONS} iterations. "
-                f"Omega_old = {Omega_prev:.10f}, Omega_diff = {abs(Omega - Omega_prev):.2e}, "
-                f"Omega_base_diff = {omega_base_diff:.2e} (tolerance: {LOOSE_EPSILON:.2e})"
+                f"Omega_diff = {abs(Omega - Omega_prev):.2e}, "
+                f"Omega_base_frac_diff = {omega_base_frac_diff:.2e} (tolerance: {LOOSE_EPSILON:.2e})"
             )
-
-        # NOTE: For development purposes, we are going to assume that all switches are turned on, and the only switch we need to
-        # consider is whether redistribution is income-dependent or not.
 
         # total redistribution amount
         available_for_redistribution_and_abatement = fract_gdp * y_gross * (1 - Omega)
@@ -273,11 +276,61 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
         if not income_dependent_aggregate_damage:
             # if we do not have income_dependent aggregate damage we want to scale omega base to match the aggregate damage
-            Omega_base_prev = Omega_base
-            # Under-relaxation to prevent oscillation
-            relaxation = 0.5
-            Omega_base_new = Omega_base * (Omega_target / Omega)
-            Omega_base = (1.0 - relaxation) * Omega_base + relaxation * Omega_base_new
+
+            if Omega_base < EPSILON:
+                # No base damage - should have no aggregate damage either
+                if Omega > EPSILON:
+                    raise RuntimeError(f"Logic error: Omega_base = {Omega_base} is near zero but Omega = {Omega} is not")
+                else:
+                    Omega_base_prev = Omega_base
+                    Omega = 0.0
+            else:
+                Omega_base_prev = Omega_base
+                # Under-relaxation to prevent oscillation
+                relaxation = 0.1
+
+                if Omega < LOOSE_EPSILON:
+                    # Omega is very small but non-zero - multiplicative update would be too aggressive
+                    # Use more conservative additive update toward target
+                    Omega_base = Omega_base + relaxation * (Omega_target - Omega_base)
+                else:
+                    # Normal multiplicative update
+                    Omega_base_new = Omega_base * (Omega_target / Omega)
+                    Omega_base = (1.0 - relaxation) * Omega_base + relaxation * Omega_base_new
+
+                    # Aitken acceleration: if convergence is slow and monotonic, extrapolate
+                    # Check if we have enough history and are making slow monotonic progress
+                    if n_damage_iterations >= 3:
+                        # Check last 3 iterations for monotonic convergence pattern
+                        recent_omega_base = omega_base_history[-3:]
+
+                        # Check if Omega_base is monotonically changing (all differences same sign)
+                        diffs = np.diff(recent_omega_base)
+                        if len(diffs) > 1 and (np.all(diffs > 0) or np.all(diffs < 0)):
+                            # Monotonic progress - check if changes are decreasing (converging slowly)
+                            change_ratios = np.abs(diffs[1:] / diffs[:-1])
+                            # Relaxed criteria: allow ratios from 0.3 to 1.2 (some variation but generally converging)
+                            if np.all(change_ratios > 0.3) and np.all(change_ratios < 1.2):
+                                # Slow monotonic convergence detected - use Aitken extrapolation
+                                x_n = recent_omega_base[-1]
+                                x_n1 = recent_omega_base[-2]
+                                x_n2 = recent_omega_base[-3]
+
+                                delta_n = x_n - x_n1
+                                delta_n1 = x_n1 - x_n2
+
+                                if abs(delta_n1) > EPSILON and abs(delta_n - delta_n1) > EPSILON:
+                                    # Aitken delta-squared extrapolation: x* ≈ x_n - Δ_n² / (Δ_n - Δ_{n-1})
+                                    x_extrapolated = x_n - (delta_n ** 2) / (delta_n - delta_n1)
+
+                                    # Protect against wild extrapolations
+                                    # Don't allow extrapolated value to be more than 10x current change away
+                                    max_jump = 10.0 * abs(delta_n)
+                                    if abs(x_extrapolated - x_n) < max_jump:
+                                        # Blend extrapolated value aggressively (50% weight)
+                                        Omega_base_accel = 0.5 * Omega_base + 0.5 * x_extrapolated
+                                        # Apply the acceleration
+                                        Omega_base = Omega_base_accel
 
         # Record convergence history for diagnostics
         omega_history.append(Omega)
