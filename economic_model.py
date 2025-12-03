@@ -140,10 +140,15 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         y_gross = 0.0
 
     # Eq 2.2: Temperature change from cumulative emissions
-    delta_T = min(k_climate * Ecum, DELTA_T_LIMIT)
+    delta_T_uncapped = k_climate * Ecum
+    delta_T = min(delta_T_uncapped, DELTA_T_LIMIT)
 
     # Base damage from temperature
     Omega_base = psi1 * delta_T + psi2 * (delta_T ** 2)
+
+    # Debug output when Omega_base is unexpectedly large
+    if Omega_base > 1.0:
+        print(f"WARNING: Omega_base = {Omega_base:.2e}, delta_T_uncapped = {delta_T_uncapped:.2e}, delta_T = {delta_T:.2e}, Ecum = {Ecum:.2e}, k_climate = {k_climate:.2e}")
 
     if income_dependent_damage_distribution and y_damage_distribution_scale > EPSILON:
         y_damage_distribution_coeff = 1.0 / y_damage_distribution_scale
@@ -174,8 +179,8 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     n_damage_iterations = 0
 
     # Track convergence history for diagnostics
-    omega_history = []
-    omega_base_history = []
+    omega_history = [Omega]
+    omega_base_history = [Omega_base]
 
     while not converged:
         n_damage_iterations += 1
@@ -238,7 +243,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         # 0 to Fmin: bottom income earners who receive income-dependent redistribution and maybe uniform redistribution and uniform tax
         # Fmin to Fmax: middle income earners who may receive uniform distribution and pay uniform tax
         # Fmax to 1: top income earners who may pay income-dependent tax and maybe uniform tax and maybe  uniform redistribution
-        aggregate_damage = 0.0
+        aggregate_damage_fraction = 0.0
         aggregate_utility = 0.0
 
         
@@ -247,24 +252,24 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             min_income_before_savings = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross * (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
             min_income_after_savings = min_income_before_savings * (1 - s)
             damage_per_capita = Omega_base * np.exp(- min_income_before_savings * y_damage_distribution_coeff) # everyone below Fmin has the same income
-            aggregate_damage = aggregate_damage + Fmin * damage_per_capita # so we can just multiply that damage by Fmin
+            aggregate_damage_fraction = aggregate_damage_fraction + Fmin * damage_per_capita # so we can just multiply that damage by Fmin
             aggregate_utility = aggregate_utility + crra_utility_interval(0, Fmin, min_income_after_savings, eta)
 
         if Fmax - Fmin > EPSILON:  #  Middle-income: This is the folks in the middle who may receive uniform redistribution and pay uniform tax
-            aggregate_damage = aggregate_damage + climate_damage_integral(Fmin, Fmax, Fmin, Fmax, y_gross * (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini, xi, wi)
+            aggregate_damage_fraction = aggregate_damage_fraction + climate_damage_integral(Fmin, Fmax, Fmin, Fmax, y_gross * (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini, xi, wi)
             aggregate_utility = aggregate_utility + crra_utility_integral_with_damage(Fmin, Fmax, Fmin, Fmax, y_gross * (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini, eta, s, xi, wi)
 
         if 1.0 - Fmax > EPSILON: # High-income: This is the folks who are paying income-dependent tax
             max_income_before_savings = y_of_F_after_damage(Fmin, Fmin, Fmax, y_gross* (1 - uniform_tax_rate), Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini)
             max_income_after_savings = max_income_before_savings * (1 - s)
             damage_per_capita = Omega_base * np.exp(- max_income_before_savings * y_damage_distribution_coeff)
-            aggregate_damage = aggregate_damage + (1 - Fmax) * damage_per_capita
+            aggregate_damage_fraction = aggregate_damage_fraction + (1 - Fmax) * damage_per_capita
             aggregate_utility = aggregate_utility + crra_utility_interval(Fmax, 1.0, max_income_after_savings, eta)
 
         # if income_dependent_aggregate_damage is enabled, we calculate Omega from the aggregate damage calculated above
         # otherwise we scale omega base to try to match the aggregate damage
         Omega_prev = Omega
-        Omega = aggregate_damage / y_gross
+        Omega = aggregate_damage_fraction
 
         if not income_dependent_aggregate_damage:
             # if we do not have income_dependent aggregate damage we want to scale omega base to match the aggregate damage
@@ -379,7 +384,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             'Fmin': Fmin,  # Minimum income rank boundary
             'Fmax': Fmax,  # Maximum income rank boundary
             'n_damage_iterations': n_damage_iterations,  # Number of convergence iterations
-            'aggregate_damage': aggregate_damage,  # Aggregate damage from integration
             'aggregate_utility': aggregate_utility,  # Aggregate utility from integration
             'mu': mu,
             'Lambda': Lambda,
@@ -552,7 +556,6 @@ def integrate_model(config, store_detailed_output=True):
             'Fmin': np.zeros(n_steps),
             'Fmax': np.zeros(n_steps),
             'n_damage_iterations': np.zeros(n_steps),
-            'aggregate_damage': np.zeros(n_steps),
             'aggregate_utility': np.zeros(n_steps),
             'mu': np.zeros(n_steps),
             'Lambda': np.zeros(n_steps),
@@ -624,7 +627,6 @@ def integrate_model(config, store_detailed_output=True):
             results['Fmin'][i] = outputs['Fmin']
             results['Fmax'][i] = outputs['Fmax']
             results['n_damage_iterations'][i] = outputs['n_damage_iterations']
-            results['aggregate_damage'][i] = outputs['aggregate_damage']
             results['aggregate_utility'][i] = outputs['aggregate_utility']
             results['mu'][i] = outputs['mu']
             results['Lambda'][i] = outputs['Lambda']
