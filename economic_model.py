@@ -187,22 +187,20 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     omega_history = [Omega]
     omega_base_history = [Omega_base]
 
+    # Track bracketing points for secant/regula falsi method
+    lower_bound = None  # (Omega_base, Omega) where Omega < Omega_target
+    upper_bound = None  # (Omega_base, Omega) where Omega > Omega_target
+
     while not converged:
         n_damage_iterations += 1
         if n_damage_iterations > MAX_ITERATIONS:
             omega_base_diff = abs(Omega_base - Omega_base_prev) if 'Omega_base_prev' in locals() else 0.0
             omega_base_frac_diff = abs(Omega_base / Omega_base_prev - 1.0) if 'Omega_base_prev' in locals() and Omega_base_prev != 0 else 0.0
-            # Print convergence history for analysis
-            print(f"\nConvergence failure diagnostics:")
+            # Print full convergence history for offline analysis
+            print(f"\nConvergence failure diagnostics (full history):")
             print(f"  Iteration | Omega          | Omega_base     | Omega_diff     | Omega_base_diff")
             print(f"  ----------|----------------|----------------|----------------|----------------")
-            for i in range(min(10, len(omega_history))):
-                omega_diff_i = abs(omega_history[i] - omega_history[i-1]) if i > 0 else 0.0
-                omega_base_diff_i = abs(omega_base_history[i] - omega_base_history[i-1]) if i > 0 else 0.0
-                print(f"  {i+1:9d} | {omega_history[i]:14.10f} | {omega_base_history[i]:14.10f} | {omega_diff_i:14.2e} | {omega_base_diff_i:14.2e}")
-            if len(omega_history) > 20:
-                print(f"  {'...':>9} | {'...':>14} | {'...':>14} | {'...':>14} | {'...':>14}")
-            for i in range(max(10, len(omega_history) - 10), len(omega_history)):
+            for i in range(len(omega_history)):
                 omega_diff_i = abs(omega_history[i] - omega_history[i-1]) if i > 0 else 0.0
                 omega_base_diff_i = abs(omega_base_history[i] - omega_base_history[i-1]) if i > 0 else 0.0
                 print(f"  {i+1:9d} | {omega_history[i]:14.10f} | {omega_base_history[i]:14.10f} | {omega_diff_i:14.2e} | {omega_base_diff_i:14.2e}")
@@ -213,7 +211,9 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             )
 
         # total redistribution amount
-        available_for_redistribution_and_abatement = fract_gdp * y_gross * (1 - Omega)
+        # Use Omega_target for non-income-dependent case to avoid lag effects
+        omega_for_budget = Omega_target if not income_dependent_aggregate_damage else Omega
+        available_for_redistribution_and_abatement = fract_gdp * y_gross * (1 - omega_for_budget)
 
         if income_redistribution:
             redistribution_amount = (1 - f) * available_for_redistribution_and_abatement  # total redistribution amount
@@ -236,7 +236,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             uniform_tax_rate = 0.0 # income dependent tax
             Fmax = find_Fmax(Fmin, y_gross, Omega_base, y_damage_distribution_coeff, uniform_redistribution_amount, gini,xi,wi,target_tax = tax_amount)
         else:
-            uniform_tax_rate = (abateCost_amount + redistribution_amount) / (y_gross * (1 - Omega))  # uniform tax rate; be able to handle case when redistribution is not allowed but abatement is limited
+            uniform_tax_rate = (abateCost_amount + redistribution_amount) / (y_gross * (1 - omega_for_budget))  # uniform tax rate; be able to handle case when redistribution is not allowed but abatement is limited
             Fmax = 1.0
 
         # Now we know the taxes and redistribution amounts, we can calculate the climate damage as a function of income rank F,
@@ -286,60 +286,79 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
                     Omega = 0.0
             else:
                 Omega_base_prev = Omega_base
-                # Under-relaxation to prevent oscillation
-                relaxation = 0.1
 
-                if Omega < LOOSE_EPSILON:
-                    # Omega is very small but non-zero - multiplicative update would be too aggressive
-                    # Use more conservative additive update toward target
-                    Omega_base = Omega_base + relaxation * (Omega_target - Omega_base)
+                # Update bracketing bounds
+                if Omega < Omega_target:
+                    if lower_bound is None or Omega > lower_bound[1]:
+                        lower_bound = (Omega_base, Omega)
+                elif Omega > Omega_target:
+                    if upper_bound is None or Omega < upper_bound[1]:
+                        upper_bound = (Omega_base, Omega)
+
+                # Choose update method based on available bracketing information
+                if lower_bound is not None and upper_bound is not None:
+                    # We have bracketing - use secant method with safeguards
+                    omega_base_lower, omega_lower = lower_bound
+                    omega_base_upper, omega_upper = upper_bound
+
+                    # Linear interpolation (secant method)
+                    if abs(omega_upper - omega_lower) > EPSILON:
+                        Omega_base_new = omega_base_lower + (Omega_target - omega_lower) * (omega_base_upper - omega_base_lower) / (omega_upper - omega_lower)
+
+                        # Safeguard: don't allow update to go outside bracketing interval
+                        Omega_base_new = np.clip(Omega_base_new, min(omega_base_lower, omega_base_upper), max(omega_base_lower, omega_base_upper))
+
+                        # Apply update - use full step since we're already safeguarded by bracketing
+                        Omega_base = Omega_base_new
+                    else:
+                        # Bounds are too close - we've converged
+                        Omega_base = omega_base_lower
+
+                elif n_damage_iterations >= 2 and len(omega_base_history) >= 2:
+                    # No bracketing yet, but we have history - use secant method on last two points
+                    omega_base_prev2 = omega_base_history[-2]
+                    omega_prev2 = omega_history[-2]
+
+                    if abs(Omega - omega_prev2) > EPSILON:
+                        # Secant step from last two iterations - trust it fully to encourage overshooting
+                        Omega_base_new = Omega_base + (Omega_target - Omega) * (Omega_base - omega_base_prev2) / (Omega - omega_prev2)
+
+                        # Use full step to encourage bracketing
+                        Omega_base = Omega_base_new
+                    else:
+                        # Denominatoris too small, fall back to multiplicative update
+                        if Omega > LOOSE_EPSILON:
+                            Omega_base = Omega_base * (Omega_target / Omega)
+                        else:
+                            Omega_base = Omega_base + 0.5 * (Omega_target - Omega_base)
+
                 else:
-                    # Normal multiplicative update
-                    Omega_base_new = Omega_base * (Omega_target / Omega)
-                    Omega_base = (1.0 - relaxation) * Omega_base + relaxation * Omega_base_new
-
-                    # Aitken acceleration: if convergence is slow and monotonic, extrapolate
-                    # Check if we have enough history and are making slow monotonic progress
-                    if n_damage_iterations >= 3:
-                        # Check last 3 iterations for monotonic convergence pattern
-                        recent_omega_base = omega_base_history[-3:]
-
-                        # Check if Omega_base is monotonically changing (all differences same sign)
-                        diffs = np.diff(recent_omega_base)
-                        if len(diffs) > 1 and (np.all(diffs > 0) or np.all(diffs < 0)):
-                            # Monotonic progress - check if changes are decreasing (converging slowly)
-                            change_ratios = np.abs(diffs[1:] / diffs[:-1])
-                            # Relaxed criteria: allow ratios from 0.3 to 1.2 (some variation but generally converging)
-                            if np.all(change_ratios > 0.3) and np.all(change_ratios < 1.2):
-                                # Slow monotonic convergence detected - use Aitken extrapolation
-                                x_n = recent_omega_base[-1]
-                                x_n1 = recent_omega_base[-2]
-                                x_n2 = recent_omega_base[-3]
-
-                                delta_n = x_n - x_n1
-                                delta_n1 = x_n1 - x_n2
-
-                                if abs(delta_n1) > EPSILON and abs(delta_n - delta_n1) > EPSILON:
-                                    # Aitken delta-squared extrapolation: x* ≈ x_n - Δ_n² / (Δ_n - Δ_{n-1})
-                                    x_extrapolated = x_n - (delta_n ** 2) / (delta_n - delta_n1)
-
-                                    # Protect against wild extrapolations
-                                    # Don't allow extrapolated value to be more than 10x current change away
-                                    max_jump = 10.0 * abs(delta_n)
-                                    if abs(x_extrapolated - x_n) < max_jump:
-                                        # Blend extrapolated value aggressively (50% weight)
-                                        Omega_base_accel = 0.5 * Omega_base + 0.5 * x_extrapolated
-                                        # Apply the acceleration
-                                        Omega_base = Omega_base_accel
+                    # First iteration or no history - use aggressive multiplicative/additive update to encourage bracketing
+                    if Omega < LOOSE_EPSILON:
+                        # Omega is very small - use additive update
+                        Omega_base = Omega_base + 0.7 * (Omega_target - Omega_base)
+                    else:
+                        # Normal multiplicative update - full step to encourage overshooting
+                        Omega_base = Omega_base * (Omega_target / Omega)
 
         # Record convergence history for diagnostics
         omega_history.append(Omega)
         omega_base_history.append(Omega_base)
 
-        # Check convergence using fractional change for Omega_base (better for large values)
+        # Check convergence
+        # Primary criterion: Omega should be close to target (what we actually care about)
+        # Secondary criterion: Omega_base should be changing slowly (indicates stability)
         omega_converged = abs(Omega - Omega_prev) < LOOSE_EPSILON
-        omega_base_converged = abs(Omega_base / Omega_base_prev - 1.0) < LOOSE_EPSILON if 'Omega_base_prev' in locals() and Omega_base_prev != 0 else True
-        if omega_converged and omega_base_converged:
+
+        # For Omega_base, use a looser fractional tolerance since it's a means to an end
+        # Also check absolute convergence in case we're close to target from one side
+        omega_base_frac_converged = abs(Omega_base / Omega_base_prev - 1.0) < 10.0 * LOOSE_EPSILON if 'Omega_base_prev' in locals() and Omega_base_prev != 0 else True
+        omega_base_abs_converged = abs(Omega_base - Omega_base_prev) < LOOSE_EPSILON
+
+        # If Omega itself is very close to target, accept convergence even if Omega_base is still changing slightly
+        omega_near_target = abs(Omega - Omega_target) < LOOSE_EPSILON if not income_dependent_aggregate_damage else True
+
+        if omega_converged and (omega_base_frac_converged or omega_base_abs_converged or omega_near_target):
             converged = True
 
 

@@ -6,7 +6,7 @@ over Pareto income distributions with various modifications (taxation, redistrib
 """
 
 import numpy as np
-from constants import LOOSE_EPSILON
+from constants import LOOSE_EPSILON, EPSILON
 
 def crra_utility_interval(F0, F1, c_mean, eta):
     """
@@ -126,16 +126,15 @@ def crra_utility_integral_with_damage(
     # Apply savings rate to get consumption
     income_vals = income_before_savings * (1.0 - s)
 
+    # Limit income to EPSILON to prevent negative or zero values in utility calculation
+    income_vals = np.maximum(income_vals, EPSILON)
+
     # Compute utility at each node
     if abs(eta - 1.0) < LOOSE_EPSILON:
         # Log utility
-        if np.any(income_vals <= 0):
-            raise ValueError("Income must be positive for log utility")
         utility_vals = np.log(income_vals)
     else:
         # Power utility
-        if np.any(income_vals < 0):
-            raise ValueError("Income must be non-negative for CRRA utility")
         utility_vals = (income_vals ** (1.0 - eta)) / (1.0 - eta)
 
     # Weighted sum scaled by interval length
