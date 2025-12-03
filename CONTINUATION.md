@@ -138,3 +138,70 @@ After the monotonicity fix, it hits the `Omega = 0` edge case on some parameter 
 - Original convergence discussion: iterations 248-257 showed constant tiny steps indicating a very flat curve
 - Monotonicity discovery: same `Omega_base = 164.2975831` produced both `Omega = 0.159089944` and `Omega = 0.260935399`
 - This revealed the lag effect from using previous iteration's `Omega` in budget calculation
+
+---
+
+## CRITICAL BUGS FOUND AND FIXED ✅ (2025-12-03)
+
+### Bug #1: High-Income Segment Using Wrong Income Rank
+**File**: `economic_model.py:266`
+
+**Root Cause**: High-income earners were assigned the income of the **poorest** people instead of the **richest** people.
+
+```python
+# BEFORE (WRONG):
+max_income_before_savings = y_of_F_after_damage(Fmin, Fmin, Fmax, ...)
+# This evaluates income at rank Fmin (lowest income boundary)
+
+# AFTER (CORRECT):
+max_income_before_savings = y_of_F_after_damage(Fmax, Fmin, Fmax, ...)
+# This evaluates income at rank Fmax (high income boundary)
+```
+
+**Impact**: This bug violated the zero-sum constraint of redistribution. By assigning low incomes to high earners, the model created wealth out of thin air, causing:
+- Aggregate damage → 0 regardless of `Omega_base`
+- `Omega_base` to explode exponentially
+- Convergence failure
+
+**Why This Explains the Omega = 0 Bug**:
+When high-income people (1 - Fmax fraction of population) were given low incomes:
+1. They received large income-dependent climate damage (exponential in 1/income)
+2. But their actual tax payments were based on their true high incomes (from `find_Fmax`)
+3. This mismatch meant more tax revenue was collected than damage incurred
+4. The extra "phantom wealth" reduced aggregate damage toward zero
+5. Optimizer tried to compensate by increasing `Omega_base`, but damage stayed at 0
+
+### Bug #2: Temperature Capping Instead of Damage Capping
+**Files**: `economic_model.py:143-146`, `constants.py:67`
+
+**Root Cause**: The model capped temperature at `DELTA_T_LIMIT = 12.0°C` to prevent unphysical damage values, but this created an artificial discontinuity in the optimization landscape.
+
+```python
+# BEFORE (WRONG):
+delta_T = min(k_climate * Ecum, DELTA_T_LIMIT)
+Omega = psi1 * delta_T + psi2 * (delta_T ** 2)
+
+# AFTER (CORRECT):
+delta_T = k_climate * Ecum
+Omega = min(psi1 * delta_T + psi2 * (delta_T ** 2), 1.0)
+```
+
+**Impact**:
+- More physically meaningful: damage fraction cannot exceed 100% of GDP
+- Removes arbitrary temperature limit
+- Smoother optimization landscape (damage capped directly, not indirectly through temperature)
+- Eliminated `DELTA_T_LIMIT` constant entirely
+
+**Files Modified**:
+1. `economic_model.py:26` - Removed DELTA_T_LIMIT from imports
+2. `economic_model.py:143-146` - Changed capping logic from delta_T to Omega
+3. `economic_model.py:148-151` - Removed debug warning (would fire thousands of times during optimization)
+4. `constants.py:61-67` - Removed DELTA_T_LIMIT constant and documentation
+5. `README.md:85, 87, 1227, 1300-1303` - Updated documentation to reflect Omega capping
+
+## Next Actions
+
+The critical bugs are now fixed. Next steps:
+1. Test with optimization to verify convergence behavior improves
+2. Monitor for any new edge cases during optimization
+3. Consider adding assertions to verify redistribution is zero-sum (mean income unchanged)

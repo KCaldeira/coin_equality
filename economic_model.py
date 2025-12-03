@@ -23,7 +23,7 @@ from utility_integrals import (
     crra_utility_integral_with_damage,
     climate_damage_integral
 )
-from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_ITERATIONS, N_QUAD, DELTA_T_LIMIT
+from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_ITERATIONS, N_QUAD
 
 
 def calculate_tendencies(state, params, previous_step_values, store_detailed_output=True):
@@ -140,15 +140,10 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         y_gross = 0.0
 
     # Eq 2.2: Temperature change from cumulative emissions
-    delta_T_uncapped = k_climate * Ecum
-    delta_T = min(delta_T_uncapped, DELTA_T_LIMIT)
+    delta_T = k_climate * Ecum
 
-    # Base damage from temperature
-    Omega = psi1 * delta_T + psi2 * (delta_T ** 2)
-
-    # Debug output when Omega_base is unexpectedly large
-    if Omega > 1.0:
-        print(f"WARNING: Omega_base = {Omega:.2e}, delta_T_uncapped = {delta_T_uncapped:.2e}, delta_T = {delta_T:.2e}, Ecum = {Ecum:.2e}, k_climate = {k_climate:.2e}")
+    # Base damage from temperature (capped at 1.0)
+    Omega = min(psi1 * delta_T + psi2 * (delta_T ** 2), 1.0)
 
     if income_dependent_damage_distribution and y_damage_distribution_scale > EPSILON:
         y_damage_distribution_coeff = 1.0 / y_damage_distribution_scale

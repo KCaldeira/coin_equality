@@ -82,9 +82,9 @@ The differential equation solver uses an iterative convergence algorithm to reso
 
 **Pre-iteration Setup:**
 1. **Y_gross** from K, L, A, α (Eq 1.1: Cobb-Douglas production)
-2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions), capped at DELTA_T_LIMIT (12°C)
+2. **ΔT** from Ecum, k_climate (Eq 2.2: temperature from cumulative emissions)
 3. **y_gross** from Y_gross, L (mean per-capita gross income before climate damage)
-4. **Omega_base** from ΔT, psi1, psi2 (base climate damage from temperature)
+4. **Omega_base** from ΔT, psi1, psi2 (base climate damage from temperature, capped at 1.0)
 5. **Gauss-Legendre quadrature nodes** (xi, wi) for numerical integration (N_QUAD = 32 points)
 
 **Iterative Convergence Loop** (until |Omega - Omega_prev| < LOOSE_EPSILON):
@@ -1224,7 +1224,7 @@ converged = abs(Omega - Omega_prev) < LOOSE_EPSILON
 ```
 
 **Algorithm Overview:**
-1. Initialize Omega using base climate damage (Omega_base = psi1 * delta_T + psi2 * delta_T^2), where delta_T is capped at DELTA_T_LIMIT (12°C)
+1. Initialize Omega using base climate damage (Omega_base = min(psi1 * delta_T + psi2 * delta_T^2, 1.0))
 2. Compute critical income ranks (Fmin, Fmax) for redistribution and taxation using previous time step's distribution
 3. Integrate climate damage and utility over three segments: [0, Fmin), [Fmin, Fmax), [Fmax, 1]
 4. Update Omega from integrated aggregate_damage_fraction (already dimensionless, no division by income)
@@ -1297,10 +1297,6 @@ Multiple precision levels and iteration parameters:
 - **N_QUAD = 32**: Number of Gauss-Legendre quadrature points for numerical integration
   - Used in climate_damage_integral() and crra_utility_integral_with_damage()
   - Provides ~1e-10 relative error for smooth integrands
-- **DELTA_T_LIMIT = 12.0**: Maximum allowable temperature change (°C)
-  - Caps delta_T to prevent unphysical damage values during optimization
-  - Prevents Omega_base from becoming astronomically large when abatement is too low
-  - Physical justification: temperatures beyond ~12°C represent complete ecological/economic collapse
 
 **Cumulative Speedup:**
 
