@@ -522,6 +522,49 @@ The model supports two control variables that can be optimized:
 
 When both `control_function` and `s_control_function` are present, the model operates in **dual optimization mode**, allowing simultaneous optimization of the abatement-redistribution tradeoff and the Consumption-investment tradeoff.
 
+### Policy Switches
+
+The model has 5 boolean switches controlling different policy features. Three are **primary switches** and two are **sub-switches** that are only meaningful when their parent switch is enabled:
+
+#### Primary Switches
+
+1. **`income_dependent_damage_distribution`** (boolean, default: true)
+   - Controls whether climate damage varies by income level
+   - When true: Poor people experience higher damage (exponential in income)
+   - When false: Everyone experiences the same damage (uniform)
+   - Parent switch for: `income_dependent_aggregate_damage`
+
+2. **`income_redistribution`** (boolean, default: true)
+   - Controls whether income redistribution is enabled
+   - When true: Redistributes from high to low income according to `redistribution_amount`
+   - When false: No redistribution occurs
+   - Parent switch for: `income_dependent_redistribution_policy`
+
+3. **`income_dependent_tax_policy`** (boolean, default: false)
+   - Controls whether taxation is progressive or uniform
+   - When true: Progressive tax using `find_Fmax()` to determine tax threshold
+   - When false: Uniform tax rate applied to all income
+
+#### Sub-Switches (Only Meaningful with Parent Enabled)
+
+4. **`income_dependent_aggregate_damage`** (boolean, default: true)
+   - **Parent switch: `income_dependent_damage_distribution`**
+   - **Only meaningful when parent is true**
+   - Controls how aggregate damage is calculated when damage varies by income
+   - When true: Aggregate damage computed directly from income distribution
+   - When false: Iteratively find `Omega_base` that produces target aggregate damage
+   - Code enforces: Only checked when `income_dependent_damage_distribution` is true
+
+5. **`income_dependent_redistribution_policy`** (boolean, default: false)
+   - **Parent switch: `income_redistribution`**
+   - **Only meaningful when parent is true**
+   - Controls whether redistribution is targeted or uniform
+   - When true: Targeted to lowest incomes using `find_Fmin()` to determine threshold
+   - When false: Uniform per-capita redistribution to all
+   - Code enforces: Only checked when `income_redistribution` is true
+
+**Important**: The code automatically enforces these dependencies. Sub-switches are only evaluated when their parent switch is enabled, ensuring logically consistent behavior.
+
 ### Integration Parameters
 
 | Parameter | Description | Units | JSON Key |

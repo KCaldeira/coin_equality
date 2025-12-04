@@ -23,7 +23,7 @@ from utility_integrals import (
     crra_utility_integral_with_damage,
     climate_damage_integral
 )
-from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_ITERATIONS, N_QUAD
+from constants import EPSILON, LOOSE_EPSILON, NEG_BIGNUM, MAX_ITERATIONS, N_QUAD, INVERSE_EPSILON
 
 
 def calculate_tendencies(state, params, previous_step_values, store_detailed_output=True):
@@ -149,9 +149,13 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     else:
         y_damage_distribution_coeff = 0.0
 
-    # Target Omega not income-dependent aggregate damage
-    if not income_dependent_aggregate_damage:
+    # Target Omega: only iterate if we have income-dependent damage distribution
+    # AND income_dependent_aggregate_damage is False
+    if income_dependent_damage_distribution and not income_dependent_aggregate_damage:
         Omega_target = Omega
+    else:
+        # No iteration needed: either damage is uniform, or we use the aggregate directly
+        Omega_target = None  # Signal that we won't iterate
 
     # Current Gini coefficient from background
     gini = Gini_background
@@ -165,9 +169,10 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
     # Initialize Omega using base damage as starting guess
     Omega_base = Omega
-    # if not income_dependent_aggregate_damage we will be updating Omega_base to match aggregate damage
+    # if income_dependent_damage_distribution and not income_dependent_aggregate_damage,
+    # we will be updating Omega_base to match aggregate damage
     # start with a higher value to help convergence
-    if not income_dependent_aggregate_damage:
+    if income_dependent_damage_distribution and not income_dependent_aggregate_damage:
         Omega_base = Omega_target * np.exp(y_damage_distribution_coeff * y_gross )
 
     uniform_redistribution_amount = 0.0  # uniform per capita redistribution, will get updated in loop
@@ -205,8 +210,12 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             )
 
         # total redistribution amount
-        # Use Omega_target for non-income-dependent case to avoid lag effects
-        omega_for_budget = Omega_target if not income_dependent_aggregate_damage else Omega
+        # Use Omega_target for iterative case to avoid lag effects
+        # (only when income_dependent_damage_distribution and not income_dependent_aggregate_damage)
+        if income_dependent_damage_distribution and not income_dependent_aggregate_damage:
+            omega_for_budget = Omega_target
+        else:
+            omega_for_budget = Omega
         available_for_redistribution_and_abatement = fract_gdp * y_gross * (1 - omega_for_budget)
 
         if income_redistribution:
@@ -263,12 +272,13 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             aggregate_damage_fraction = aggregate_damage_fraction + (1 - Fmax) * damage_per_capita
             aggregate_utility = aggregate_utility + crra_utility_interval(Fmax, 1.0, max_income_after_savings, eta)
 
-        # if income_dependent_aggregate_damage is enabled, we calculate Omega from the aggregate damage calculated above
-        # otherwise we scale omega base to try to match the aggregate damage
+        # Update Omega from aggregate damage (cap at physical maximum)
         Omega_prev = Omega
-        Omega = aggregate_damage_fraction
+        Omega = min(aggregate_damage_fraction, 1.0 - EPSILON)
 
-        if not income_dependent_aggregate_damage:
+        # If we have income-dependent damage distribution but NOT income-dependent aggregate damage,
+        # iterate to find Omega_base that produces target aggregate damage
+        if income_dependent_damage_distribution and not income_dependent_aggregate_damage:
             # if we do not have income_dependent aggregate damage we want to scale omega base to match the aggregate damage
 
             if Omega_base < EPSILON:
@@ -280,6 +290,11 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
                     Omega = 0.0
             else:
                 Omega_base_prev = Omega_base
+
+                # If Omega is near catastrophic damage, declare convergence
+                # This is an extreme/pathological case that won't be optimal anyway
+                if Omega >= 1.0 - LOOSE_EPSILON:
+                    break
 
                 # Update bracketing bounds
                 if Omega < Omega_target:
@@ -317,23 +332,23 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
                         # Secant step from last two iterations - trust it fully to encourage overshooting
                         Omega_base_new = Omega_base + (Omega_target - Omega) * (Omega_base - omega_base_prev2) / (Omega - omega_prev2)
 
-                        # Use full step to encourage bracketing
-                        Omega_base = Omega_base_new
+                        # Use full step to encourage bracketing, but cap to prevent overflow
+                        Omega_base = min(Omega_base_new, INVERSE_EPSILON)
                     else:
                         # Denominatoris too small, fall back to multiplicative update
                         if Omega > LOOSE_EPSILON:
-                            Omega_base = Omega_base * (Omega_target / Omega)
+                            Omega_base = min(Omega_base * (Omega_target / Omega), INVERSE_EPSILON)
                         else:
-                            Omega_base = Omega_base + 0.5 * (Omega_target - Omega_base)
+                            Omega_base = min(Omega_base + 0.5 * (Omega_target - Omega_base), INVERSE_EPSILON)
 
                 else:
                     # First iteration or no history - use aggressive multiplicative/additive update to encourage bracketing
                     if Omega < LOOSE_EPSILON:
-                        # Omega is very small - use additive update
-                        Omega_base = Omega_base + 0.7 * (Omega_target - Omega_base)
+                        # Omega is very small - use additive update, but cap to prevent overflow
+                        Omega_base = min(Omega_base + 0.7 * (Omega_target - Omega_base), INVERSE_EPSILON)
                     else:
-                        # Normal multiplicative update - full step to encourage overshooting
-                        Omega_base = Omega_base * (Omega_target / Omega)
+                        # Normal multiplicative update - full step to encourage overshooting, but cap to prevent overflow
+                        Omega_base = min(Omega_base * (Omega_target / Omega), INVERSE_EPSILON)
 
         # Record convergence history for diagnostics
         omega_history.append(Omega)
@@ -346,11 +361,12 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
         # For Omega_base, use a looser fractional tolerance since it's a means to an end
         # Also check absolute convergence in case we're close to target from one side
-        omega_base_frac_converged = abs(Omega_base / Omega_base_prev - 1.0) < 10.0 * LOOSE_EPSILON if 'Omega_base_prev' in locals() and Omega_base_prev != 0 else True
+        omega_base_frac_converged = abs(Omega_base / Omega_base_prev - 1.0) < LOOSE_EPSILON if Omega_base_prev != 0 else True
         omega_base_abs_converged = abs(Omega_base - Omega_base_prev) < LOOSE_EPSILON
 
         # If Omega itself is very close to target, accept convergence even if Omega_base is still changing slightly
-        omega_near_target = abs(Omega - Omega_target) < LOOSE_EPSILON if not income_dependent_aggregate_damage else True
+        # (only relevant when iterating: income_dependent_damage_distribution and not income_dependent_aggregate_damage)
+        omega_near_target = abs(Omega - Omega_target) < LOOSE_EPSILON if (income_dependent_damage_distribution and not income_dependent_aggregate_damage) else True
 
         if omega_converged and (omega_base_frac_converged or omega_base_abs_converged or omega_near_target):
             converged = True

@@ -20,7 +20,7 @@ This project prioritizes elegant, fail-fast code that surfaces errors quickly ra
 - Compute once, use many times - move invariant calculations outside loops and create centralized helper functions
 - No backward compatibility - do not add conditional logic to support deprecated field names or old configurations. Update all code and configurations to use current conventions.
 - Use standard Python packages - prefer established numerical methods from scipy, numpy, etc. rather than implementing custom numerical algorithms
-- **No magic numbers** - all numerical constants must be defined in `constants.py` with clear documentation. Never hardcode constants like `1e-13`, `1e-6`, or other numerical values directly in the code. This ensures:
+- **No magic numbers** - all numerical constants must be defined in `constants.py` with clear documentation. Never hardcode constants like `1e-13`, `1e-6`, or other numerical values directly in the code (except for `0` and `1`, which are acceptable as they represent fundamental mathematical identities). This ensures:
   - Constants are defined in one central location
   - Their purpose and usage are clearly documented
   - Values can be adjusted without searching through multiple files

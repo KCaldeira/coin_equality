@@ -322,6 +322,35 @@ else:
 
 **Impact**: Cleaner output with only meaningful variables. Redistribution amounts are now properly tracked in CSV/PDF output.
 
+### Cleanup: Enforced Policy Switch Hierarchy
+**Files**: `economic_model.py`, `README.md`
+
+**Root Cause**: The codebase has 5 policy switches, but 2 of them are sub-switches that are only meaningful when their parent switch is enabled:
+- `income_dependent_aggregate_damage` is only meaningful when `income_dependent_damage_distribution = true`
+- `income_dependent_redistribution_policy` is only meaningful when `income_redistribution = true`
+
+Previously, `income_dependent_aggregate_damage` was checked without verifying its parent switch was enabled.
+
+**Changes Made**:
+
+1. **economic_model.py** - Added parent switch checks:
+   - Line 154: Changed `if not income_dependent_aggregate_damage:` to `if income_dependent_damage_distribution and not income_dependent_aggregate_damage:`
+   - Line 175: Same change for Omega_base initialization
+   - Lines 215-218: Added explicit check for omega_for_budget calculation
+   - Line 281: Added parent check for convergence iteration
+   - Line 364: Added parent check for convergence criterion
+   - Line 220: Already correctly checking both `income_redistribution and income_dependent_redistribution_policy`
+
+2. **README.md** - Added new "Policy Switches" section (after line 524):
+   - Documents the 3 primary switches
+   - Documents the 2 sub-switches with clear parent relationships
+   - Explains that code enforces these dependencies automatically
+
+**Impact**:
+- Code now properly ignores sub-switches when their parent is disabled
+- Clear documentation prevents configuration errors
+- Logically consistent behavior across all switch combinations
+
 ## Next Actions
 
 The critical bugs are now fixed. Next steps:
