@@ -157,6 +157,14 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         # No iteration needed: either damage is uniform, or we use the aggregate directly
         Omega_target = None  # Signal that we won't iterate
 
+    # Initialize Omega using base damage as starting guess
+    Omega_base = Omega
+    # if income_dependent_damage_distribution and not income_dependent_aggregate_damage,
+    # we will be updating Omega_base to match aggregate damage
+    # start with a higher value to help convergence
+    if income_dependent_damage_distribution and not income_dependent_aggregate_damage:
+        Omega_base = Omega_target * np.exp(y_damage_distribution_coeff * y_gross )
+        
     # Current Gini coefficient from background
     gini = Gini_background
 
@@ -167,19 +175,23 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     # Precompute Gauss-Legendre quadrature nodes and weights for numerical integration
     xi, wi = roots_legendre(N_QUAD)
 
-    # Initialize Omega using base damage as starting guess
-    Omega_base = Omega
-    # if income_dependent_damage_distribution and not income_dependent_aggregate_damage,
-    # we will be updating Omega_base to match aggregate damage
-    # start with a higher value to help convergence
-    if income_dependent_damage_distribution and not income_dependent_aggregate_damage:
-        Omega_base = Omega_target * np.exp(y_damage_distribution_coeff * y_gross )
+
 
     uniform_redistribution_amount = 0.0  # uniform per capita redistribution, will get updated in loop
     uniform_tax_rate = 0.0  # uniform tax rate, will get updated in loop
     Fmin = 0.0  # minimum income boundary for redistribution, will get updated in loop
     Fmax = 1.0  # maximum income boundary for redistribution, will get updated in loop
-    converged = False
+
+    # If y_gross is effectively zero, there's no economy to iterate on - skip the loop
+    if y_gross > EPSILON:
+        converged = False
+    else:
+        converged = True
+        # Predefine variables needed after loop
+        redistribution_amount = 0.0
+        abateCost_amount = 0.0
+        aggregate_utility = NEG_BIGNUM  # Penalty for pathological state
+
     n_damage_iterations = 0
 
     # Track convergence history for diagnostics
@@ -213,9 +225,9 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         # Use Omega_target for iterative case to avoid lag effects
         # (only when income_dependent_damage_distribution and not income_dependent_aggregate_damage)
         if income_dependent_damage_distribution and not income_dependent_aggregate_damage:
-            omega_for_budget = Omega_target
+            omega_for_budget = min(Omega_target, 1.0 - EPSILON)
         else:
-            omega_for_budget = Omega
+            omega_for_budget = min(Omega, 1.0 - EPSILON)
         available_for_redistribution_and_abatement = fract_gdp * y_gross * (1 - omega_for_budget)
 
         if income_redistribution:
