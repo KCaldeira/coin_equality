@@ -431,7 +431,7 @@ def write_results_csv(results, output_dir, filename='results.csv'):
     return csv_path
 
 
-def plot_results_pdf(results, output_dir, run_name, filename='plots.pdf'):
+def plot_results_pdf(results, output_dir, run_name, filename='plots.pdf', config_filename=None):
     """
     Create PDF with time series plots of all variables, organized by topic with combined charts.
 
@@ -445,6 +445,8 @@ def plot_results_pdf(results, output_dir, run_name, filename='plots.pdf'):
         Name of the model run to display in header
     filename : str
         Name of PDF file
+    config_filename : str, optional
+        Name of configuration file to display on each page
 
     Returns
     -------
@@ -494,16 +496,16 @@ def plot_results_pdf(results, output_dir, run_name, filename='plots.pdf'):
                 charts_per_page = 6
                 for page_start in range(0, n_charts, charts_per_page):
                     page_charts = available_charts[page_start:page_start + charts_per_page]
-                    _create_plot_page_new(t, results, page_charts, group_name, run_name, pdf, page_start//charts_per_page + 1)
+                    _create_plot_page_new(t, results, page_charts, group_name, run_name, pdf, page_start//charts_per_page + 1, config_filename=config_filename)
                 continue
 
             # Create single page for this group
-            _create_plot_page_new(t, results, available_charts, group_name, run_name, pdf, layout=(rows, cols), figsize=figsize)
+            _create_plot_page_new(t, results, available_charts, group_name, run_name, pdf, layout=(rows, cols), figsize=figsize, config_filename=config_filename)
 
     return pdf_path
 
 
-def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, page_num=None, layout=None, figsize=None):
+def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, page_num=None, layout=None, figsize=None, config_filename=None):
     """
     Create a single page of plots for a variable group with support for combined charts.
 
@@ -527,6 +529,8 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
         (rows, cols) layout. If None, defaults to (2, 3)
     figsize : tuple, optional
         Figure size. If None, defaults to (15, 10)
+    config_filename : str, optional
+        Name of configuration file to display on page
     """
     if layout is None:
         layout = (2, 3)
@@ -668,12 +672,17 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
                         # Data ends closer to zero - set upper bound to zero
                         ax.set_ylim(ymin, 0)
 
+    # Add config filename at bottom of page if provided
+    if config_filename:
+        fig.text(0.99, 0.01, f'Config: {config_filename}',
+                ha='right', va='bottom', fontsize=6, color='gray', style='italic')
+
     # Save to PDF
     pdf.savefig(fig, dpi=150, bbox_inches='tight')
     plt.close(fig)
 
 
-def save_results(results, run_name, plot_short_horizon=None, output_dir=None):
+def save_results(results, run_name, plot_short_horizon=None, output_dir=None, config_filename=None):
     """
     Save model results to CSV and PDF in timestamped directory.
 
@@ -689,6 +698,8 @@ def save_results(results, run_name, plot_short_horizon=None, output_dir=None):
         If None, creates single plots.pdf with all results.
     output_dir : str or None
         If provided, uses this directory for output. If None, creates new timestamped directory.
+    config_filename : str, optional
+        Name of configuration file to display on each PDF page
 
     Returns
     -------
@@ -723,13 +734,13 @@ def save_results(results, run_name, plot_short_horizon=None, output_dir=None):
         results_short = {key: val[mask] if isinstance(val, np.ndarray) else val
                         for key, val in results.items()}
 
-        pdf_file_full = plot_results_pdf(results, output_dir, run_name, filename='plots_full.pdf')
-        pdf_file_short = plot_results_pdf(results_short, output_dir, run_name, filename='plots_short.pdf')
+        pdf_file_full = plot_results_pdf(results, output_dir, run_name, filename='plots_full.pdf', config_filename=config_filename)
+        pdf_file_short = plot_results_pdf(results_short, output_dir, run_name, filename='plots_short.pdf', config_filename=config_filename)
 
         output_dict['pdf_file'] = pdf_file_full
         output_dict['pdf_file_short'] = pdf_file_short
     else:
-        pdf_file = plot_results_pdf(results, output_dir, run_name, filename='plots.pdf')
+        pdf_file = plot_results_pdf(results, output_dir, run_name, filename='plots.pdf', config_filename=config_filename)
         output_dict['pdf_file'] = pdf_file
 
     return output_dict

@@ -11,6 +11,7 @@ Arguments:
 """
 
 import sys
+import os
 from parameters import load_configuration
 from economic_model import integrate_model
 from output import save_results
@@ -87,7 +88,8 @@ def main():
     print(f'Saving Results')
     print(f'=' * 60)
     plot_short_horizon = config.integration_params.plot_short_horizon
-    output_paths = save_results(results, config.run_name, plot_short_horizon)
+    config_filename_base = os.path.basename(config_file)
+    output_paths = save_results(results, config.run_name, plot_short_horizon, config_filename=config_filename_base)
     print(f'Output directory: {output_paths["output_dir"]}')
     print(f'CSV file:         {output_paths["csv_file"]}')
     print(f'PDF file:         {output_paths["pdf_file"]}')

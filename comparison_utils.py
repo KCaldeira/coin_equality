@@ -590,7 +590,6 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
     results_data_cleaned = {name: clean_column_names(df.copy()) for name, df in results_data.items()}
 
     variable_specs = [
-        ('y', 'Per-Capita Consumption'),
         ('y_net', 'Effective Per-Capita Income'),
         ('K', 'Capital Stock'),
         ('Consumption', 'Total Consumption'),

@@ -10,6 +10,7 @@ This script demonstrates the complete workflow:
 """
 
 import sys
+import os
 import time
 import json
 import argparse
@@ -587,7 +588,8 @@ def main():
     print("\nSaving integration results (CSV and PDF)...")
     plot_short_horizon = config.integration_params.plot_short_horizon
     # Pass the pre-created output_dir to save_results
-    output_paths = save_results(optimal_results, optimal_config.run_name, plot_short_horizon, output_dir)
+    config_filename_base = os.path.basename(config_path)
+    output_paths = save_results(optimal_results, optimal_config.run_name, plot_short_horizon, output_dir, config_filename=config_filename_base)
 
     print(f"  Output directory: {output_paths['output_dir']}")
     print(f"  Results CSV:      {output_paths['csv_file']}")

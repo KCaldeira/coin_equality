@@ -89,7 +89,7 @@ def plot_timeseries(ax, case_data, variable, ylabel, title, show_legend=False):
     ax.grid(True, alpha=0.3, linestyle='--')
 
     # Apply logarithmic scale for specific variables
-    log_scale_vars = {'y', 'y_net', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
+    log_scale_vars = {'y_net', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
     if variable in log_scale_vars:
         ax.set_yscale('log')
 
@@ -160,7 +160,6 @@ def create_results_report_pdf(case_data, output_pdf):
     # Define all variables to plot (in display order, grouped by category)
     variable_specs = [
         # Economic Variables
-        ('y', 'Per-capita consumption plus abatement ($/person/yr)', 'Per-Capita Consumption Plus Abatement'),
         ('y_net', 'Effective income ($/person/yr)', 'Effective Per-Capita Income'),
         ('K', 'Capital stock ($)', 'Capital Stock Over Time'),
         ('Consumption', 'Total consumption ($/yr)', 'Total Consumption'),
@@ -184,10 +183,10 @@ def create_results_report_pdf(case_data, output_pdf):
 
         # Inequality and Utility
         ('Gini', 'Gini before redistribution', 'Background Gini Index'),
-        ('Gini_climate', 'Gini after climate damage', 'Post-Climate-Damage Gini'),
-        ('G_eff', 'Gini after redistribution', 'Post-Climate-Damage Post-Transfer Gini Index'),
         ('U', 'Mean utility', 'Mean Utility Per Capita'),
         ('discounted_utility', 'Discounted utility', 'Discounted Utility Per Capita'),
+        ('redistribution', 'Per-capita redistribution ($/person/yr)', 'Per-Capita Redistribution'),
+        ('Redistribution_amount', 'Total redistribution ($/yr)', 'Total Redistribution'),
 
         # Abatement Economics
         ('marginal_abatement_cost', 'Marginal abatement cost ($/tCO2)', 'Marginal Abatement Cost'),
@@ -473,7 +472,6 @@ def create_results_report_pdf_to_existing(case_data, pdf):
 
     variable_specs = [
         # Economic Variables
-        ('y', 'Per-capita consumption plus abatement ($/person/yr)', 'Per-Capita Consumption Plus Abatement'),
         ('y_net', 'Effective income ($/person/yr)', 'Effective Per-Capita Income'),
         ('K', 'Capital stock ($)', 'Capital Stock Over Time'),
         ('Consumption', 'Total consumption ($/yr)', 'Total Consumption'),
@@ -497,10 +495,10 @@ def create_results_report_pdf_to_existing(case_data, pdf):
 
         # Inequality and Utility
         ('Gini', 'Gini before redistribution', 'Background Gini Index'),
-        ('Gini_climate', 'Gini after climate damage', 'Post-Climate-Damage Gini'),
-        ('G_eff', 'Gini after redistribution', 'Post-Climate-Damage Post-Transfer Gini Index'),
         ('U', 'Mean utility', 'Mean Utility Per Capita'),
         ('discounted_utility', 'Discounted utility', 'Discounted Utility Per Capita'),
+        ('redistribution', 'Per-capita redistribution ($/person/yr)', 'Per-Capita Redistribution'),
+        ('Redistribution_amount', 'Total redistribution ($/yr)', 'Total Redistribution'),
 
         # Abatement Economics
         ('marginal_abatement_cost', 'Marginal abatement cost ($/tCO2)', 'Marginal Abatement Cost'),
@@ -552,7 +550,7 @@ def create_results_report_pdf_to_existing(case_data, pdf):
         plt.tight_layout()
 
         # Apply zero-bound expansion AFTER layout (to prevent being overridden)
-        log_scale_vars = {'y', 'y_net', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
+        log_scale_vars = {'y_net', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
         for idx, (var_name, ylabel, title) in enumerate(page_vars):
             ax_idx = idx + axes_offset
             ax = axes[ax_idx]
