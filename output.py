@@ -66,11 +66,7 @@ VARIABLE_GROUPS = {
         {'type': 'single', 'variables': ['AbateCost']},
         {'type': 'single', 'variables': ['dK_dt']},
         {'type': 'single', 'variables': ['y_net']},
-        {'type': 'combined', 'title': 'Redistribution', 'variables': ['redistribution', 'Redistribution_amount'], 'units': ''}
-    ],
-    'redistribution_details': [
-        {'type': 'single', 'variables': ['redistribution']},
-        {'type': 'single', 'variables': ['Redistribution_amount']}
+        {'type': 'combined', 'title': 'Redistribution', 'variables': ['redistribution', 'Redistribution_amount'], 'units': '$'}
     ],
     'physical_variables': [
         {'type': 'combined', 'title': 'Emissions', 'variables': ['E', 'dEcum_dt'], 'units': 'tCO₂/yr'},
@@ -349,7 +345,8 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'Consumption',  # Total Consumption
         # Per capita indices
         'y_net',  # Effective per-capita income after abatement
-        'redistribution',  # Per-capita redistributable income
+        'redistribution',  # Per-capita redistribution amount
+        'Redistribution_amount',  # Total redistribution amount
         'U',  # Mean utility per capita
         'discounted_utility',  # Discounted utility per capita
         # Dimensionless variables
@@ -559,7 +556,7 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
 
     # Variables that should use logarithmic y-axis
-    log_scale_vars = {'y_net', 'y_damaged', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
+    log_scale_vars = {'y_net', 'y_damaged', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A', 'redistribution', 'Redistribution_amount'}
 
     # Plot each chart
     for i, chart_spec in enumerate(chart_specs):

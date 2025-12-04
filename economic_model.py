@@ -164,7 +164,12 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     # start with a higher value to help convergence
     if income_dependent_damage_distribution and not income_dependent_aggregate_damage:
         Omega_base = Omega_target * np.exp(y_damage_distribution_coeff * y_gross )
-        
+
+    # Initialize Omega_base_prev (only actually used when income_dependent_damage_distribution
+    # is true and income_dependent_aggregate_damage is false, but initialize here to avoid
+    # UnboundLocalError in convergence checks)
+    Omega_base_prev = Omega_base
+
     # Current Gini coefficient from background
     gini = Gini_background
 
@@ -205,8 +210,8 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     while not converged:
         n_damage_iterations += 1
         if n_damage_iterations > MAX_ITERATIONS:
-            omega_base_diff = abs(Omega_base - Omega_base_prev) if 'Omega_base_prev' in locals() else 0.0
-            omega_base_frac_diff = abs(Omega_base / Omega_base_prev - 1.0) if 'Omega_base_prev' in locals() and Omega_base_prev != 0 else 0.0
+            omega_base_diff = abs(Omega_base - Omega_base_prev)
+            omega_base_frac_diff = abs(Omega_base / Omega_base_prev - 1.0) if Omega_base_prev != 0 else 0.0
             # Print full convergence history for offline analysis
             print(f"\nConvergence failure diagnostics (full history):")
             print(f"  Iteration | Omega          | Omega_base     | Omega_diff     | Omega_base_diff")
