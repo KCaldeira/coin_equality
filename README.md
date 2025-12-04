@@ -735,7 +735,7 @@ The iteration count is printed during model execution for debugging purposes.
 
 See `config_baseline.json` for a complete example. To create new scenarios, copy and modify this file.
 
-**Note**: `config_DICE_000.json` provides a configuration for simulations close to the parameters and setup presented in Barrage & Nordhaus (2023), including Gompertz population growth, double exponential functions for carbon intensity and abatement costs, and settings that replicate DICE2023 behavior (fract_gdp >= 1.0 for pure abatement mode, Gini_background = 0.0 for no inequality).
+**Note**: `config_DICE_000.json` provides a configuration for simulations close to the parameters and setup presented in Barrage & Nordhaus (2023), including Gompertz population growth, double exponential functions for carbon intensity and abatement costs, and settings that replicate DICE2023 behavior (income_redistribution = false for pure abatement mode, Gini_background = 0.0 for no inequality).
 
 **Example: Population with Gompertz growth**
 ```json

@@ -580,7 +580,7 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
     Economic: y, y_net, K, Consumption, Savings, s, Y_gross, Y_net
     Climate: delta_T, E, Ecum
     Abatement/Damage: f, mu, Lambda, AbateCost, Omega, Climate_Damage, marginal_abatement_cost
-    Inequality/Utility: Gini, Gini_climate, G_eff, U, discounted_utility
+    Inequality/Utility: Gini, U, discounted_utility, redistribution, Redistribution_amount
     Exogenous: A, L, sigma, theta1
     """
     if not results_data:
@@ -608,9 +608,9 @@ def create_results_comparison_xlsx(results_data, directories, output_path):
         ('Omega', 'Climate Damage (% of Output)'),
         ('Climate_Damage', 'Total Climate Damage'),
         ('Gini', 'Starting Gini Index'),
-        ('Gini_climate', 'Post-Climate-Damage Gini'),
-        ('G_eff', 'Effective Gini Index'),
         ('U', 'Mean Utility Per Capita'),
+        ('redistribution', 'Per-Capita Redistribution'),
+        ('Redistribution_amount', 'Total Redistribution'),
         ('discounted_utility', 'Discounted Utility Per Capita'),
         ('marginal_abatement_cost', 'Marginal Abatement Cost'),
         ('A', 'Total Factor Productivity'),

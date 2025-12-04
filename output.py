@@ -20,8 +20,6 @@ VARIABLE_METADATA = {
     'A': {'description': 'Total Factor Productivity', 'units': '', 'group': 'economic'},
     'E': {'description': 'Actual Emissions', 'units': 'tCO₂/yr', 'group': 'climate'},
     'Ecum': {'description': 'Cumulative Emissions', 'units': 'tCO₂', 'group': 'climate'},
-    'G_eff': {'description': 'Post-Climate-Damage Post-Transfer Gini Index', 'units': '', 'group': 'inequality'},
-    'Gini_climate': {'description': 'Post-Climate-Damage Gini', 'units': '', 'group': 'inequality'},
     'K': {'description': 'Capital Stock', 'units': '$', 'group': 'economic'},
     'L': {'description': 'Population', 'units': 'people', 'group': 'economic'},
     'Lambda': {'description': 'Abatement Cost Fraction', 'units': '', 'group': 'abatement'},
@@ -34,7 +32,8 @@ VARIABLE_METADATA = {
     'dEcum_dt': {'description': 'Emissions Rate', 'units': 'tCO₂/yr', 'group': 'climate'},
     'dK_dt': {'description': 'Capital Growth Rate', 'units': '$/yr', 'group': 'economic'},
     'delta_T': {'description': 'Temperature Change', 'units': '°C', 'group': 'climate'},
-    'redistribution': {'description': 'Per-Capita Redistributable Income', 'units': '$/person', 'group': 'inequality'},
+    'redistribution': {'description': 'Per-Capita Redistribution Amount', 'units': '$/person', 'group': 'inequality'},
+    'Redistribution_amount': {'description': 'Total Redistribution Amount', 'units': '$/yr', 'group': 'inequality'},
     'f': {'description': 'Abatement Allocation Fraction', 'units': '', 'group': 'policy'},
     'mu': {'description': 'Emissions Abatement Fraction', 'units': '', 'group': 'abatement'},
     'sigma': {'description': 'Carbon Intensity of GDP', 'units': 'tCO₂/$', 'group': 'climate'},
@@ -56,7 +55,7 @@ VARIABLE_GROUPS = {
         {'type': 'combined', 'title': 'Control Variables', 'variables': ['f', 's'], 'units': 'fraction'},
         {'type': 'single', 'variables': ['mu']},
         {'type': 'combined', 'title': 'Economic Impact Fractions', 'variables': ['Omega', 'Lambda'], 'units': 'fraction'},
-        {'type': 'combined', 'title': 'Inequality Measures', 'variables': ['Gini', 'Gini_climate', 'G_eff'], 'units': ''},
+        {'type': 'single', 'variables': ['Gini']},
         {'type': 'single', 'variables': ['U']}
     ],
     'dollar_variables': [
@@ -67,7 +66,11 @@ VARIABLE_GROUPS = {
         {'type': 'single', 'variables': ['AbateCost']},
         {'type': 'single', 'variables': ['dK_dt']},
         {'type': 'single', 'variables': ['y_net']},
-        {'type': 'single', 'variables': ['redistribution']}
+        {'type': 'combined', 'title': 'Redistribution', 'variables': ['redistribution', 'Redistribution_amount'], 'units': ''}
+    ],
+    'redistribution_details': [
+        {'type': 'single', 'variables': ['redistribution']},
+        {'type': 'single', 'variables': ['Redistribution_amount']}
     ],
     'physical_variables': [
         {'type': 'combined', 'title': 'Emissions', 'variables': ['E', 'dEcum_dt'], 'units': 'tCO₂/yr'},
@@ -352,8 +355,6 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         # Dimensionless variables
         'Omega',  # Climate damage as fraction of gross output
         'Lambda',  # Abatement cost as fraction of damaged output
-        'Gini_climate',  # Gini index after climate damage before redistribution
-        'G_eff',  # Gini index after redistribution
         # Remaining variables
         'mu',  # Abatement fraction
         'E',  # CO2 emissions
@@ -388,15 +389,14 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'y_net': ('Per-capita net income', '$/person/yr'),
         'Gini': ('Gini index', 'dimensionless'),
         'Gini_background': ('Background Gini index', 'dimensionless'),
-        'Gini_climate': ('Gini index after climate damage', 'dimensionless'),
-        'G_eff': ('Gini index after redistribution', 'dimensionless'),
+        'redistribution': ('Per-capita redistribution amount', '$/person/yr'),
+        'Redistribution_amount': ('Total redistribution amount', '$/yr'),
         'U': ('Mean utility per capita', 'dimensionless'),
         'discounted_utility': ('Discounted utility per capita', 'dimensionless'),
         's': ('Savings rate', 'dimensionless'),
         'f': ('Control: fraction allocated to abatement vs redistribution', 'dimensionless'),
         'marginal_abatement_cost': ('Marginal abatement cost (social cost of carbon)', '$/tCO2'),
         'Y_gross': ('Gross production before climate damage', '$/yr'),
-        'Gini_climate': ('Gini index after climate damage before redistribution', 'dimensionless'),
         'y_net': ('Effective per-capita income after abatement', '$/person/yr'),
         'Lambda': ('Abatement cost as fraction of damaged output', 'dimensionless'),
         'redistribution': ('Per-capita redistributable income', '$/person/yr'),

@@ -273,6 +273,55 @@ All 5 critical bugs have been resolved:
 4. **Missing variables** - Added definitions for `Savings`, `Lambda`, `Gini_climate`, `G_eff`, `redistribution` (fixes UnboundLocalError)
 5. **Output file references** - Removed obsolete `'y'` variable, replaced with `'y_net'` and `'y_damaged'` (fixes KeyError)
 
+### Cleanup: Removed Obsolete fract_gdp >= 1.0 Behavior
+**Files**: `config_DICE_000.json`, `config_COIN-equality_002_01010_1.json`, `config_COIN-equality_002_01010_0.02.json`, `README.md`
+
+**Root Cause**: The codebase previously used `fract_gdp >= 1.0` as an overloaded signal to disable redistribution. With the introduction of the explicit `income_redistribution` boolean switch, this behavior became obsolete but the documentation wasn't updated.
+
+**Current Code**: `economic_model.py` lines 213-216 now correctly uses `income_redistribution`:
+```python
+if income_redistribution:
+    redistribution_amount = (1 - f) * available_for_redistribution_and_abatement
+else:
+    redistribution_amount = 0.0
+```
+
+**Documentation Updates**:
+- Removed misleading comment from all 3 config files: ~~`>= 1.0 disables redistribution and places no bounds on abatement`~~
+- Updated README.md line 738: Changed from "fract_gdp >= 1.0 for pure abatement mode" to "income_redistribution = false for pure abatement mode"
+
+**Note**: `integrated_policy_calculations.py` line 169 still has the old logic `if fract_gdp < 1.0`, but this module is not imported anywhere and appears to be obsolete/unused code.
+
+### Cleanup: Removed Obsolete Gini_climate and G_eff Variables
+**Files**: `economic_model.py`, `output.py`, `comparison_utils.py`
+
+**Root Cause**: The variables `Gini_climate` (Gini after climate damage) and `G_eff` (Gini after redistribution) were simplified placeholders that just copied the background Gini value. They provided no useful information and cluttered the output.
+
+**Changes Made**:
+1. **economic_model.py**:
+   - Removed variable definitions for `Gini_climate` and `G_eff` (lines 381-382, 410, 421)
+   - Removed from detailed output dictionary (lines 445, 464)
+   - Removed from array allocation (lines 616, 635)
+   - Removed from storage loop (lines 686, 705)
+   - Updated docstrings to remove references
+
+2. **output.py**:
+   - Removed from VARIABLE_METADATA (lines 23-24)
+   - Changed inequality plot from combined `['Gini', 'Gini_climate', 'G_eff']` to single `['Gini']` (line 58)
+   - Removed from CSV column ordering (lines 355-356)
+   - Removed from variable descriptions (lines 391-392, 400)
+   - **Added** redistribution variables to metadata and plots:
+     - `'redistribution'`: Per-capita redistribution amount
+     - `'Redistribution_amount'`: Total redistribution amount
+     - New combined plot for redistribution (line 69)
+
+3. **comparison_utils.py**:
+   - Updated docstring (line 583)
+   - Removed from comparison variables (lines 611-612)
+   - Added redistribution variables (lines 612-613)
+
+**Impact**: Cleaner output with only meaningful variables. Redistribution amounts are now properly tracked in CSV/PDF output.
+
 ## Next Actions
 
 The critical bugs are now fixed. Next steps:

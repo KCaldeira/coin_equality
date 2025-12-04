@@ -72,8 +72,8 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         - Tendencies: 'dK_dt', 'dEcum_dt'
         - Income distribution: 'current_income_dist' with {'y_mean': float, 'gini': float}
           for use as previous_step_values in the next time step
-        - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y, redistribution,
-          mu, Lambda, AbateCost, y_net, G_eff, U, E
+        - All intermediate variables: Y_gross, delta_T, Omega, Y_net, y_net, redistribution,
+          mu, Lambda, AbateCost, U, E
 
     Notes
     -----
@@ -91,8 +91,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     11. Λ from AbateCost, Y_damaged (Eq 1.7)
     12. Y_net from Y_damaged, Λ (Eq 1.8)
     13. y_net from y, AbateCost, L (Eq 1.9)
-    14. G_eff from f, ΔL, G_climate (Eq 4.4, applied to climate-damaged distribution)
-    15. U from y_net, G_eff, η (Eq 3.5)
+    14. U from y_net, Gini, η (Eq 3.5)
     16. E from σ, μ, Y_gross (Eq 2.3)
     17. dK/dt from s, Y_net, δ, K (Eq 1.10)
     """
@@ -377,9 +376,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     Savings = s * Y_net  # Total savings
     Lambda = AbateCost / Y_damaged if Y_damaged > 0 else 0.0  # Abatement cost as fraction of damaged output
 
-    # Gini and redistribution tracking (simplified - not tracking Gini changes explicitly)
-    Gini_climate = gini  # Effective Gini after climate damage (simplified: same as background)
-    G_eff = gini  # Effective Gini after redistribution (simplified: same as background)
+    # Redistribution tracking
     redistribution = redistribution_amount  # Per capita redistribution (same as redistribution_amount)
 
     Redistribution_amount = redistribution_amount * L  # total redistribution amount
@@ -407,7 +404,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     # Handle edge cases where economy has collapsed
     if y_gross <= 0 or Y_gross <= 0:
         Omega = 0.0
-        Gini_climate = gini
         Climate_Damage = 0.0
         Y_damaged = 0.0
         Savings = 0.0
@@ -418,7 +414,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         Consumption = 0.0
         y_net = 0.0
         redistribution = 0.0
-        G_eff = gini
         mu = 0.0
         U = NEG_BIGNUM
         E = 0.0
@@ -442,7 +437,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             'delta_T': delta_T,
             'Omega': Omega,
             'Omega_base': Omega_base,  # Base damage from temperature before income adjustment
-            'Gini_climate': Gini_climate,
             'Y_damaged': Y_damaged,
             'Y_net': Y_net,
             'y_net': y_net,
@@ -461,7 +455,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             'Lambda': Lambda,
             'AbateCost': AbateCost,
             'marginal_abatement_cost': marginal_abatement_cost,
-            'G_eff': G_eff,
             'U': U,
             'E': E,
             'Climate_Damage': Climate_Damage,
@@ -479,7 +472,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     })
 
     # Always return current income distribution for use as previous_step_values in next time step
-    # Use G_eff (effective Gini after damage/redistribution) and y_net (net per-capita income)
+    # Use y_net (net per-capita income)
     results['current_income_dist'] = {
         'y_mean': y_net
     }
@@ -513,8 +506,8 @@ def integrate_model(config, store_detailed_output=True):
         - 'Gini': array of Gini index values (from background)
         - 'Gini_background': array of background Gini index values
         - 'A', 'sigma', 'theta1', 'f': time-dependent inputs
-        - All derived variables: Y_gross, delta_T, Omega, Gini_climate, Y_damaged, Y_net,
-          y, redistribution, mu, Lambda, AbateCost, marginal_abatement_cost, y_net, G_eff, E
+        - All derived variables: Y_gross, delta_T, Omega, Y_damaged, Y_net,
+          redistribution, mu, Lambda, AbateCost, marginal_abatement_cost, y_net, E
 
     Notes
     -----
@@ -613,7 +606,6 @@ def integrate_model(config, store_detailed_output=True):
             'Omega_base': np.zeros(n_steps),
             'Gini': np.zeros(n_steps),  # Total Gini (background + perturbation)
             'Gini_background': np.zeros(n_steps),  # Background Gini
-            'Gini_climate': np.zeros(n_steps),
             'Y_damaged': np.zeros(n_steps),
             'Y_net': np.zeros(n_steps),
             'y_damaged': np.zeros(n_steps),
@@ -632,7 +624,6 @@ def integrate_model(config, store_detailed_output=True):
             'AbateCost': np.zeros(n_steps),
             'marginal_abatement_cost': np.zeros(n_steps),
             'y_net': np.zeros(n_steps),
-            'G_eff': np.zeros(n_steps),
             'E': np.zeros(n_steps),
             'dK_dt': np.zeros(n_steps),
             'dEcum_dt': np.zeros(n_steps),
@@ -683,7 +674,6 @@ def integrate_model(config, store_detailed_output=True):
             results['Omega_base'][i] = outputs['Omega_base']
             results['Gini'][i] = outputs['Gini']  # Total Gini
             results['Gini_background'][i] = outputs['Gini_background']  # Background Gini
-            results['Gini_climate'][i] = outputs['Gini_climate']
             results['Y_damaged'][i] = outputs['Y_damaged']
             results['Y_net'][i] = outputs['Y_net']
             results['y_damaged'][i] = outputs['y_damaged']
@@ -702,7 +692,6 @@ def integrate_model(config, store_detailed_output=True):
             results['AbateCost'][i] = outputs['AbateCost']
             results['marginal_abatement_cost'][i] = outputs['marginal_abatement_cost']
             results['y_net'][i] = outputs['y_net']
-            results['G_eff'][i] = outputs['G_eff']
             results['E'][i] = outputs['E']
             results['dK_dt'][i] = outputs['dK_dt']
             results['dEcum_dt'][i] = outputs['dEcum_dt']

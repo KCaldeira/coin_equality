@@ -19,7 +19,7 @@
         "rho": 0.01,
         "_rho": "Pure rate of time preference (1 % per year)",
         "fract_gdp": 1.0,
-        "_fract_gdp": "Fraction of GDP available for redistribution and abatement, >= 1.0 disables redistribution and places no bounds on abatement",
+        "_fract_gdp": "Fraction of GDP available for redistribution and abatement",
         "theta2": 2.6,
         "_theta2": "Abatement cost exponent",
         "mu_max": 1.2,
