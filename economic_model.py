@@ -374,6 +374,13 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
     Consumption = (1-s) * Y_net
     consumption = (1-s) * y_net  # per capita consumption
+    Savings = s * Y_net  # Total savings
+    Lambda = AbateCost / Y_damaged if Y_damaged > 0 else 0.0  # Abatement cost as fraction of damaged output
+
+    # Gini and redistribution tracking (simplified - not tracking Gini changes explicitly)
+    Gini_climate = gini  # Effective Gini after climate damage (simplified: same as background)
+    G_eff = gini  # Effective Gini after redistribution (simplified: same as background)
+    redistribution = redistribution_amount  # Per capita redistribution (same as redistribution_amount)
 
     Redistribution_amount = redistribution_amount * L  # total redistribution amount
 
@@ -409,7 +416,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         Y_net = 0.0
         Redistribution_amount = 0.0
         Consumption = 0.0
-        y = 0.0
         y_net = 0.0
         redistribution = 0.0
         G_eff = gini
@@ -439,7 +445,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             'Gini_climate': Gini_climate,
             'Y_damaged': Y_damaged,
             'Y_net': Y_net,
-            'y': y,
+            'y_net': y_net,
             'y_damaged': y_damaged,  # Per capita gross production after climate damage
             'climate_damage': climate_damage,  # Per capita climate damage
             'redistribution': redistribution,
@@ -455,7 +461,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
             'Lambda': Lambda,
             'AbateCost': AbateCost,
             'marginal_abatement_cost': marginal_abatement_cost,
-            'y_net': y_net,
             'G_eff': G_eff,
             'U': U,
             'E': E,
@@ -611,7 +616,6 @@ def integrate_model(config, store_detailed_output=True):
             'Gini_climate': np.zeros(n_steps),
             'Y_damaged': np.zeros(n_steps),
             'Y_net': np.zeros(n_steps),
-            'y': np.zeros(n_steps),
             'y_damaged': np.zeros(n_steps),
             'climate_damage': np.zeros(n_steps),
             'redistribution': np.zeros(n_steps),
@@ -682,7 +686,6 @@ def integrate_model(config, store_detailed_output=True):
             results['Gini_climate'][i] = outputs['Gini_climate']
             results['Y_damaged'][i] = outputs['Y_damaged']
             results['Y_net'][i] = outputs['Y_net']
-            results['y'][i] = outputs['y']
             results['y_damaged'][i] = outputs['y_damaged']
             results['climate_damage'][i] = outputs['climate_damage']
             results['redistribution'][i] = outputs['redistribution']

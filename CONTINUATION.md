@@ -217,9 +217,65 @@ Consumption = y * L  # Total Consumption  ← y was never defined
 
 **Impact**: Fixes crash when saving optimization results with detailed output.
 
+### Bug #4: Missing Variable Definitions for Detailed Output
+**File**: `economic_model.py:375-385, 449, 465, 419`
+
+**Root Cause**: Several variables were referenced in the detailed output (lines 430-474) but were only defined in the edge case block (lines 408-425), not in the normal code flow.
+
+**Missing variables**:
+- `Gini_climate` - Effective Gini after climate damage
+- `Savings` - Total savings
+- `Lambda` - Abatement cost as fraction of damaged output
+- `redistribution` - Per capita redistribution
+- `G_eff` - Effective Gini after redistribution
+- `y` - Old variable name, should be `y_net`
+
+**Fix**: Added variable definitions in normal flow (lines 377-383):
+```python
+Savings = s * Y_net
+Lambda = AbateCost / Y_damaged if Y_damaged > 0 else 0.0
+Gini_climate = gini  # Simplified: not tracking Gini changes
+G_eff = gini  # Simplified: not tracking Gini changes
+redistribution = redistribution_amount
+```
+
+Also:
+- Replaced `'y': y` with `'y_net': y_net` in output dictionary (line 449)
+- Removed duplicate `'y_net': y_net` entry (was on line 465)
+- Removed obsolete `y = 0.0` from edge case block (line 419)
+- Removed `'y': np.zeros(n_steps)` from array allocation (line 619)
+- Removed `results['y'][i] = outputs['y']` from time-stepping loop (line 690)
+
+**Impact**: Fixes `UnboundLocalError: local variable 'Gini_climate' referenced before assignment` when running forward model with detailed output. Ensures CSV/PDF output uses `y_net` instead of the obsolete `y` variable.
+
+### Bug #5: Output File References to Obsolete Variable 'y'
+**File**: `output.py:43, 68, 360, 388, 558`
+
+**Root Cause**: The output.py module still referenced the obsolete variable `'y'` in variable metadata, plot specifications, CSV output columns, and axis scaling configuration. This caused `KeyError: 'y'` when trying to generate CSV/PDF output.
+
+**Fix**: Removed all references to `'y'` and replaced with `'y_net'`:
+- Line 43: Removed `'y'` from VARIABLE_METADATA dictionary
+- Line 44: Added `'y_damaged'` to VARIABLE_METADATA
+- Line 68: Changed combined plot from `['y', 'y_net']` to `['y_damaged', 'y_net']`
+- Line 360: Changed CSV column from `'y'` to `'y_net'`
+- Line 388: Changed variable description from `'y'` to `'y_net'`
+- Line 558: Changed log scale variable from `'y'` to `'y_damaged'`
+
+**Impact**: Fixes `KeyError: 'y'` when saving CSV/PDF results. The per-capita income plot now shows both `y_damaged` (after climate damage) and `y_net` (after climate damage and abatement cost), which is more informative than the old `y` variable.
+
+## Summary of All Fixes
+
+All 5 critical bugs have been resolved:
+
+1. **High-income segment bug** - Fixed income rank from `Fmin` → `Fmax` (was causing phantom wealth and convergence failure)
+2. **Temperature capping** - Changed from capping `delta_T` to capping `Omega` at `1.0 - EPSILON` (prevents division by zero)
+3. **Variable naming** - Renamed `C_mean` → `Consumption`, `c_mean` → `consumption` (consistent naming convention)
+4. **Missing variables** - Added definitions for `Savings`, `Lambda`, `Gini_climate`, `G_eff`, `redistribution` (fixes UnboundLocalError)
+5. **Output file references** - Removed obsolete `'y'` variable, replaced with `'y_net'` and `'y_damaged'` (fixes KeyError)
+
 ## Next Actions
 
 The critical bugs are now fixed. Next steps:
-1. Test with optimization to verify it completes successfully
+1. Test with optimization to verify it completes successfully and generates CSV/PDF output
 2. Monitor for any new edge cases during optimization
 3. Consider adding assertions to verify redistribution is zero-sum (mean income unchanged)

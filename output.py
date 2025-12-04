@@ -40,7 +40,7 @@ VARIABLE_METADATA = {
     'sigma': {'description': 'Carbon Intensity of GDP', 'units': 'tCO₂/$', 'group': 'climate'},
     'theta1': {'description': 'Marginal Abatement Cost at mu=1', 'units': '$/tCO₂', 'group': 'abatement'},
     'marginal_abatement_cost': {'description': 'Marginal Abatement Cost', 'units': '$/tCO₂', 'group': 'abatement'},
-    'y': {'description': 'Per-Capita Consumption Plus Abatement', 'units': '$/person', 'group': 'economic'},
+    'y_damaged': {'description': 'Per-Capita Income After Climate Damage', 'units': '$/person', 'group': 'economic'},
     'y_net': {'description': 'Per-Capita Net Income', 'units': '$/person', 'group': 'economic'},
     'Consumption': {'description': 'Total Consumption', 'units': '$/yr', 'group': 'economic'},
     'Savings': {'description': 'Gross Investment', 'units': '$/yr', 'group': 'economic'},
@@ -66,7 +66,7 @@ VARIABLE_GROUPS = {
         {'type': 'single', 'variables': ['Savings']},
         {'type': 'single', 'variables': ['AbateCost']},
         {'type': 'single', 'variables': ['dK_dt']},
-        {'type': 'combined', 'title': 'Per-Capita Income', 'variables': ['y', 'y_net'], 'units': '$/person'},
+        {'type': 'single', 'variables': ['y_net']},
         {'type': 'single', 'variables': ['redistribution']}
     ],
     'physical_variables': [
@@ -358,7 +358,6 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'mu',  # Abatement fraction
         'E',  # CO2 emissions
         'dK_dt',  # Net capital accumulation
-        'y',  # Per-capita Consumption Plus Abatement
         'marginal_abatement_cost',  # Marginal abatement cost (social cost of carbon)
     ]
 
@@ -386,7 +385,7 @@ def write_results_csv(results, output_dir, filename='results.csv'):
         'K': ('Capital stock', '$'),
         'Consumption': ('Total Consumption', '$/yr'),
         'dK_dt': ('Net capital accumulation', '$/yr'),
-        'y': ('Per-capita Consumption Plus Abatement', '$/person/yr'),
+        'y_net': ('Per-capita net income', '$/person/yr'),
         'Gini': ('Gini index', 'dimensionless'),
         'Gini_background': ('Background Gini index', 'dimensionless'),
         'Gini_climate': ('Gini index after climate damage', 'dimensionless'),
@@ -556,7 +555,7 @@ def _create_plot_page_new(t, results, chart_specs, group_name, run_name, pdf, pa
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
 
     # Variables that should use logarithmic y-axis
-    log_scale_vars = {'y', 'y_net', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
+    log_scale_vars = {'y_net', 'y_damaged', 'K', 'Consumption', 'Savings', 'Y_gross', 'Y_net', 'A'}
 
     # Plot each chart
     for i, chart_spec in enumerate(chart_specs):
