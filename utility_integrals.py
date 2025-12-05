@@ -7,6 +7,7 @@ over Pareto income distributions with various modifications (taxation, redistrib
 
 import numpy as np
 from constants import LOOSE_EPSILON, EPSILON
+from income_distribution import y_of_F_after_damage
 
 def crra_utility_interval(F0, F1, c_mean, eta):
     """
@@ -95,8 +96,6 @@ def crra_utility_integral_with_damage(
     - Climate damage (income-dependent via power-law)
     - Redistribution
     """
-    from income_distribution import y_of_F_after_damage
-
     F0 = float(F0)
     F1 = float(F1)
     eta = float(eta)
@@ -208,8 +207,6 @@ def climate_damage_integral(
     - Climate damage (income-dependent via power-law)
     - Redistribution
     """
-    from income_distribution import y_of_F_after_damage
-
     F0 = float(F0)
     F1 = float(F1)
 

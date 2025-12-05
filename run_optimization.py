@@ -14,7 +14,9 @@ import os
 import time
 import json
 import argparse
+import tempfile
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from io import StringIO
@@ -23,6 +25,7 @@ from parameters import load_configuration, ModelConfiguration
 from optimization import UtilityOptimizer, create_control_function_from_points
 from economic_model import integrate_model
 from output import save_results, write_optimization_summary, copy_config_file, create_output_directory
+from visualization_utils import create_results_report_pdf
 
 
 class TeeOutput:
@@ -446,8 +449,6 @@ def main():
 
     # Create configuration object from modified dict
     # Save modified dict to temp file for load_configuration to process
-    import tempfile
-    import os
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
         json.dump(config_dict, tmp, indent=2)
         tmp_path = tmp.name
@@ -599,8 +600,6 @@ def main():
 
     # Create comprehensive results visualization using unified plotting
     print("\nCreating comprehensive results visualization...")
-    from visualization_utils import create_results_report_pdf
-    import pandas as pd
     results_df = pd.read_csv(output_paths['csv_file'])
     comprehensive_pdf = Path(output_dir) / 'plots_full.pdf'
     create_results_report_pdf({config.run_name: results_df}, comprehensive_pdf)

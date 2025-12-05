@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from scipy.optimize import root_scalar
+from scipy.optimize import root_scalar, fsolve
 from constants import EPSILON, LOOSE_EPSILON
 
 # --- basic maps ---
@@ -39,36 +39,6 @@ def _phi(r):  # helper for bracketing cap; φ(r) = (r-1) r^{1/(r-1)-1}
     log_abs = math.log(abs(r - 1.0)) + (1.0/(r - 1.0) - 1.0) * math.log(r)
     return sgn * math.exp(log_abs)
 
-def G2_from_deltaL(deltaL, Gini_initial):
-    """
-    Solve ΔL(Gini_initial,G2)=deltaL for G2 (bounded in (0,Gini_initial]).
-    Caps at G2=0 if deltaL exceeds the Pareto-family maximum.
-    """
-    if not (0 < Gini_initial < 1):
-        raise ValueError("Gini_initial must be in (0,1). Invalid value: {}".format(Gini_initial))
-
-    if abs(deltaL) < EPSILON:
-        return Gini_initial, 0.0
-
-    A1 = (1.0 - Gini_initial) / (1.0 + Gini_initial)
-    r_max = 1.0 / A1  # corresponds to G2 -> 0
-    deltaL_max = _phi(r_max)
-    if deltaL >= deltaL_max - EPSILON:
-        return 0.0, float(deltaL - deltaL_max)  # cap & remainder
-    # bracket r
-    bracket = (1.0 + EPSILON, r_max) if deltaL > 0 else (EPSILON, 1.0 - EPSILON)
-    sol = root_scalar(lambda r: _phi(r) - deltaL, bracket=bracket, method="brentq")
-    if not sol.converged:
-        raise RuntimeError("root_scalar failed for r.")
-    r = sol.root
-    A2 = r * A1
-    A2 = min(max(A2, EPSILON), 1.0)
-    G2 = (1.0 - A2) / (1.0 + A2)
-    return float(G2), 0.0
-
-# --- the two-step “Pareto-preserving” effective Gini ---
-
-# --- Income at rank F after damage ---
 
 def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_exponent, y_net_reference, uniform_redistribution, gini, branch=0):
     """
@@ -112,9 +82,6 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
     y_of_F : float or ndarray
         y(F) evaluated at the given F values.
     """
-    import numpy as np
-    from scipy.optimize import fsolve
-
     F = np.clip(np.asarray(F), Fmin, Fmax)
     is_scalar = F.ndim == 0
     if is_scalar:
@@ -136,8 +103,7 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
 
     # Solve implicit equation: y = A - omega_base * (y / y_net_reference)**y_damage_distribution_exponent
     def equation(y, A_val):
-        y_safe = np.maximum(y, EPSILON)
-        return y - A_val + omega_base * (y_safe / y_net_reference)**y_damage_distribution_exponent
+        return y - A_val + omega_base * (y / y_net_reference)**y_damage_distribution_exponent
 
     # Solve for each element
     y_solution = np.zeros_like(A)
