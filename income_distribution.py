@@ -40,6 +40,9 @@ def _phi(r):  # helper for bracketing cap; φ(r) = (r-1) r^{1/(r-1)-1}
     return sgn * math.exp(log_abs)
 
 
+# Global flag to print diagnostics only on first call
+_first_call_diagnostics_printed = False
+
 def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_exponent, y_net_reference, uniform_redistribution, gini, branch=0):
     """
     Compute y(F) from the implicit equation
