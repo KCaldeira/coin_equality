@@ -43,7 +43,8 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
         - 's': Savings rate
         - 'psi1': Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]
         - 'psi2': Quadratic climate damage coefficient (°C⁻²) [Barrage & Nordhaus 2023]
-        - 'y_damage_distribution_scale': Income half-saturation for climate damage ($)
+        - 'y_damage_distribution_exponent': Exponent for income-dependent damage distribution
+        - 'y_net_reference': Reference income for power-law damage scaling ($/person)
         - 'k_climate': Temperature sensitivity (°C tCO2^-1)
         - 'eta': Coefficient of relative risk aversion
         - 'A': Total factor productivity (current)
@@ -116,7 +117,7 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     fract_gdp = params['fract_gdp']
     Gini_background = params['Gini_background']
     f = params['f']
-    y_damage_distribution_scale = params['y_damage_distribution_scale']
+    y_damage_distribution_exponent = params['y_damage_distribution_exponent']
     y_net_reference = params['y_net_reference']
     psi1 = params['psi1']
     psi2 = params['psi2']
@@ -144,11 +145,6 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
 
     # Base damage from temperature (capped just below 1.0 to avoid division by zero)
     Omega = min(psi1 * delta_T + psi2 * (delta_T ** 2), 1.0 - EPSILON)
-
-    if income_dependent_damage_distribution and y_damage_distribution_scale > EPSILON:
-        y_damage_distribution_exponent = 1.0 / y_damage_distribution_scale
-    else:
-        y_damage_distribution_exponent = 0.0
 
     # Target Omega: only iterate if we have income-dependent damage distribution
     # AND income_dependent_aggregate_damage is False

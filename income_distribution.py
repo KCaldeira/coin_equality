@@ -1,7 +1,7 @@
 import math
 import numpy as np
 from scipy.optimize import root_scalar, fsolve
-from constants import EPSILON, LOOSE_EPSILON
+from constants import EPSILON, LOOSE_EPSILON, MAX_ITERATIONS
 
 # --- basic maps ---
 
@@ -105,11 +105,46 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
     def equation(y, A_val):
         return y - A_val + omega_base * (y / y_net_reference)**y_damage_distribution_exponent
 
-    # Solve for each element
+    # Solve for each element with relaxed tolerances to avoid false convergence warnings
     y_solution = np.zeros_like(A)
+    convergence_issues = []
+
     for i in range(len(A)):
         y_guess = np.maximum(A[i] - omega_base, EPSILON)
-        y_solution[i] = fsolve(equation, y_guess, args=(A[i],))[0]
+        result, info, ier, mesg = fsolve(
+            equation, y_guess, args=(A[i],),
+            full_output=True,
+            xtol=LOOSE_EPSILON,
+            maxfev=MAX_ITERATIONS
+        )
+        y_solution[i] = result[0]
+
+        # Only report convergence issues if residual is actually large
+        residual = abs(info['fvec'][0])
+        if ier != 1 and residual > LOOSE_EPSILON:
+            convergence_issues.append({
+                'index': i,
+                'A': A[i],
+                'y_guess': y_guess,
+                'y_solution': result[0],
+                'final_residual': residual,
+                'n_calls': info['nfev'],
+                'message': mesg
+            })
+
+    # Print diagnostic info only for real convergence problems (residual > tolerance)
+    if convergence_issues:
+        print(f"\n=== y_of_F_after_damage convergence diagnostics ===")
+        print(f"Parameters: omega_base={omega_base:.6e}, y_damage_distribution_exponent={y_damage_distribution_exponent:.4f}, y_net_reference={y_net_reference:.2f}")
+        print(f"Total genuine convergence issues: {len(convergence_issues)} out of {len(A)} points")
+        print(f"(Only showing cases with residual > {LOOSE_EPSILON:.1e})")
+        print(f"\nProblem cases:")
+        for issue in convergence_issues[:10]:
+            print(f"  Index {issue['index']}: A={issue['A']:.4e}, guess={issue['y_guess']:.4e}, "
+                  f"solution={issue['y_solution']:.4e}, residual={issue['final_residual']:.4e}, "
+                  f"calls={issue['n_calls']}")
+            print(f"    Status: {issue['message']}")
+        print("="*50 + "\n")
 
     return y_solution[0] if is_scalar else y_solution
 

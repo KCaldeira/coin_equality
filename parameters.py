@@ -294,7 +294,7 @@ class ScalarParameters:
         Linear climate damage coefficient (°C⁻¹) [Barrage & Nordhaus 2023]
     psi2 : float
         Quadratic climate damage coefficient (°C⁻²) [Barrage & Nordhaus 2023]
-    y_damage_distribution_scale : float
+    y_damage_distribution_exponent : float
         Income scale for climate damage distribution ($)
         Controls how damage is distributed across income levels
         Only used when income_dependent_damage_distribution=True
@@ -325,7 +325,7 @@ class ScalarParameters:
         If True, aggregate damage decreases as world gets richer
         If False, damage fraction depends only on temperature (DICE-like)
     income_dependent_damage_distribution : bool
-        If True, damage is weighted towards low-income (uses y_damage_distribution_scale)
+        If True, damage is weighted towards low-income (uses y_damage_distribution_exponent)
         If False, damage is distributed uniformly across income distribution
     income_dependent_tax_policy : bool
         If True, progressive tax (tax richest fraction)
@@ -342,7 +342,7 @@ class ScalarParameters:
     delta: float
     psi1: float
     psi2: float
-    y_damage_distribution_scale: float
+    y_damage_distribution_exponent: float
     y_net_reference: float
     k_climate: float
     eta: float
@@ -636,7 +636,7 @@ def evaluate_params_at_time(t, config):
     dict
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
-        'alpha', 'delta', 'psi1', 'psi2', 'y_damage_distribution_scale', 'y_net_reference', 'k_climate',
+        'alpha', 'delta', 'psi1', 'psi2', 'y_damage_distribution_exponent', 'y_net_reference', 'k_climate',
         'eta', 'rho', 'Gini_background', 'Gini_fract', 'Gini_restore', 'fract_gdp', 'theta2', 'mu_max',
         'A', 'L', 'sigma', 'theta1', 'f', 's'
 
@@ -658,7 +658,7 @@ def evaluate_params_at_time(t, config):
         'delta': sp.delta,
         'psi1': sp.psi1,
         'psi2': sp.psi2,
-        'y_damage_distribution_scale': sp.y_damage_distribution_scale,
+        'y_damage_distribution_exponent': sp.y_damage_distribution_exponent,
         'y_net_reference': sp.y_net_reference,
         'income_dependent_aggregate_damage': sp.income_dependent_aggregate_damage,
         'income_dependent_damage_distribution': sp.income_dependent_damage_distribution,

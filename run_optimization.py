@@ -434,45 +434,51 @@ def main():
     sys.stdout = output_buffer
     sys.stderr = output_buffer
 
-    # Parse command line arguments
-    config_path, overrides = parse_arguments()
-
-    # Load base configuration from JSON file
-    with open(config_path, 'r') as f:
-        config_dict = json.load(f)
-
-    # Apply command line overrides
-    if overrides:
-        print_header("APPLYING COMMAND LINE OVERRIDES")
-        for key_path, value in overrides.items():
-            apply_config_override(config_dict, key_path, value)
-
-    # Create configuration object from modified dict
-    # Save modified dict to temp file for load_configuration to process
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-        json.dump(config_dict, tmp, indent=2)
-        tmp_path = tmp.name
-
     try:
-        config = load_configuration(tmp_path)
-    finally:
-        os.unlink(tmp_path)
-    opt_params = config.optimization_params
+        # Parse command line arguments
+        config_path, overrides = parse_arguments()
 
-    # Create output directory immediately and start logging to file
-    output_dir = create_output_directory(config.run_name)
-    terminal_output_path = Path(output_dir) / 'terminal_output.txt'
+        # Load base configuration from JSON file
+        with open(config_path, 'r') as f:
+            config_dict = json.load(f)
 
-    # Write buffered output to file and switch to tee mode
-    buffered_output = output_buffer.getvalue()
-    sys.stdout = original_stdout
-    sys.stderr = original_stderr
-    tee_stdout = TeeOutput(terminal_output_path, original_stdout)
-    sys.stdout = tee_stdout
-    sys.stderr = tee_stdout
+        # Apply command line overrides
+        if overrides:
+            print_header("APPLYING COMMAND LINE OVERRIDES")
+            for key_path, value in overrides.items():
+                apply_config_override(config_dict, key_path, value)
 
-    # Display buffered output
-    print(buffered_output, end='')
+        # Create configuration object from modified dict
+        # Save modified dict to temp file for load_configuration to process
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+            json.dump(config_dict, tmp, indent=2)
+            tmp_path = tmp.name
+
+        try:
+            config = load_configuration(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+        opt_params = config.optimization_params
+
+        # Create output directory immediately and start logging to file
+        output_dir = create_output_directory(config.run_name)
+        terminal_output_path = Path(output_dir) / 'terminal_output.txt'
+
+        # Write buffered output to file and switch to tee mode
+        buffered_output = output_buffer.getvalue()
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        tee_stdout = TeeOutput(terminal_output_path, original_stdout)
+        sys.stdout = tee_stdout
+        sys.stderr = tee_stdout
+
+        # Display buffered output
+        print(buffered_output, end='')
+    except:
+        # If anything fails during startup, restore stdout/stderr so error is visible
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        raise
 
     is_iterative = opt_params.is_iterative_refinement()
 
