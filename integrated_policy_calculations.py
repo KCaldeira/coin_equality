@@ -29,7 +29,7 @@ def calculate_integrated_economy(
     psi1,
     psi2,
     y_damage_aggregate_scale,
-    y_damage_distribution_coeff,
+    y_damage_distribution_exponent,
     income_dependent_aggregate_damage,
     income_dependent_damage_distribution,
     income_dependent_tax_policy,
@@ -73,7 +73,7 @@ def calculate_integrated_economy(
         Quadratic climate damage coefficient (°C⁻²)
     y_damage_aggregate_scale : float
         Income scale for aggregate damage saturation ($)
-    y_damage_distribution_coeff : float
+    y_damage_distribution_exponent : float
         Damage distribution coefficient parameter
     income_dependent_aggregate_damage : bool
         If True, aggregate damage decreases as world gets richer

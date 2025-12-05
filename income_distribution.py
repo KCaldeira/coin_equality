@@ -70,11 +70,11 @@ def G2_from_deltaL(deltaL, Gini_initial):
 
 # --- Income at rank F after damage ---
 
-def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_coeff, uniform_redistribution, gini, branch=0):
+def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_exponent, y_net_reference, uniform_redistribution, gini, branch=0):
     """
     Compute y(F) from the implicit equation
 
-        y(F) = y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution - omega_base * exp(-y(F) * y_damage_distribution_coeff),
+        y(F) = y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution - omega_base * (y(F) / y_net_reference)**y_damage_distribution_exponent,
 
     where the Lorenz curve is Pareto with Gini index gini:
 
@@ -82,15 +82,7 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
         a    = (1 + 1/gini)/2,
         dL/dF(F) = (1 - 1/a) * (1 - F)^(-1/a).
 
-    The closed-form solution is:
-
-        A(F) = y_mean_before_damage * dL/dF(F; gini) + uniform_redistribution
-
-        c(F) = A(F) + W(
-                     - omega_base * y_damage_distribution_coeff * exp(-A(F) * y_damage_distribution_coeff)
-               ) / y_damage_distribution_coeff
-
-    where W is the Lambert W function (principal branch by default).
+    The implicit equation is solved numerically using a root finder.
 
     Parameters
     ----------
@@ -104,24 +96,29 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
         Mean income.
     omega_base : float
         Maximum damage scale.
-    y_damage_distribution_coeff : float
-        Damage distribution coefficient in exp(-c * y_damage_distribution_coeff).
+    y_damage_distribution_exponent : float
+        Damage distribution exponent.
+    y_net_reference : float
+        Reference income for power-law damage scaling ($/person).
     uniform_redistribution : float
         Additive constant in A(F).
     gini : float
         Gini index (0 < gini < 1).
     branch : int, optional
-        Lambert W branch index (default 0 = principal).
+        Unused parameter (kept for backward compatibility).
 
     Returns
     -------
     y_of_F : float or ndarray
-        y_of_F(F) evaluated at the given F values (real part).
+        y(F) evaluated at the given F values.
     """
     import numpy as np
-    from scipy.special import lambertw
+    from scipy.optimize import fsolve
 
     F = np.clip(np.asarray(F), Fmin, Fmax)
+    is_scalar = F.ndim == 0
+    if is_scalar:
+        F = F.reshape(1)
 
     # Pareto-Lorenz shape parameter from Gini
     a = (1.0 + 1.0 / gini) / 2.0
@@ -130,24 +127,25 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
     dLdF = (1.0 - 1.0 / a) * (1.0 - F) ** (-1.0 / a)
 
     # A(F)
-    A =  y_mean_before_damage * dLdF + uniform_redistribution
+    A = y_mean_before_damage * dLdF + uniform_redistribution
 
-    # Argument to Lambert W
-    z = - (omega_base * y_damage_distribution_coeff) * np.exp(-A * y_damage_distribution_coeff)
+    # Handle y_damage_distribution_exponent ≈ 0 case
+    if np.abs(y_damage_distribution_exponent) < EPSILON:
+        result = A - omega_base
+        return result[0] if is_scalar else result
 
-    # Lambert W (may be complex in general; we usually take the real part)
-    W_vals = lambertw(z, k=branch)
+    # Solve implicit equation: y = A - omega_base * (y / y_net_reference)**y_damage_distribution_exponent
+    def equation(y, A_val):
+        y_safe = np.maximum(y, EPSILON)
+        return y - A_val + omega_base * (y_safe / y_net_reference)**y_damage_distribution_exponent
 
-    # c(F) - handle y_damage_distribution_coeff ≈ 0 case
-    # When y_damage_distribution_coeff → 0, the implicit equation becomes linear: c(F) = A(F) - omega_base
-    # Otherwise use Lambert W solution: c(F) = A(F) + W(z) / y_damage_distribution_coeff
-    y_of_F_vals = np.where(
-        np.abs(y_damage_distribution_coeff) < EPSILON,
-        A - omega_base,
-        A + W_vals / y_damage_distribution_coeff
-    )
+    # Solve for each element
+    y_solution = np.zeros_like(A)
+    for i in range(len(A)):
+        y_guess = np.maximum(A[i] - omega_base, EPSILON)
+        y_solution[i] = fsolve(equation, y_guess, args=(A[i],))[0]
 
-    return np.real(y_of_F_vals)
+    return y_solution[0] if is_scalar else y_solution
 
 
 def segment_integral_with_cut(
@@ -158,7 +156,8 @@ def segment_integral_with_cut(
     Fmax_for_clip,
     y_mean_before_damage,
     omega_base,
-    y_damage_distribution_coeff,
+    y_damage_distribution_exponent,
+    y_net_reference,
     uniform_redistribution,
     gini,
     xi,
@@ -188,7 +187,7 @@ def segment_integral_with_cut(
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_coeff : float
+    y_damage_distribution_exponent : float
         Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
@@ -219,7 +218,8 @@ def segment_integral_with_cut(
         Fmax_for_clip,
         y_mean_before_damage,
         omega_base,
-        y_damage_distribution_coeff,
+        y_damage_distribution_exponent,
+        y_net_reference,
         uniform_redistribution,
         gini,
         branch=branch,
@@ -232,7 +232,8 @@ def segment_integral_with_cut(
         Fmax_for_clip,
         y_mean_before_damage,
         omega_base,
-        y_damage_distribution_coeff,
+        y_damage_distribution_exponent,
+        y_net_reference,
         uniform_redistribution,
         gini,
         branch=branch,
@@ -249,7 +250,8 @@ def total_tax_top(
     Fmin,
     y_mean_before_damage,
     omega_base,
-    y_damage_distribution_coeff,
+    y_damage_distribution_exponent,
+    y_net_reference,
     uniform_redistribution,
     gini,
     xi,
@@ -272,7 +274,7 @@ def total_tax_top(
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_coeff : float
+    y_damage_distribution_exponent : float
         Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
@@ -300,7 +302,8 @@ def total_tax_top(
         Fmax_for_clip=1.0,  # we want F clipped to [Fmin, 1]
         y_mean_before_damage=y_mean_before_damage,
         omega_base=omega_base,
-        y_damage_distribution_coeff=y_damage_distribution_coeff,
+        y_damage_distribution_exponent=y_damage_distribution_exponent,
+        y_net_reference=y_net_reference,
         uniform_redistribution=uniform_redistribution,
         gini=gini,
         xi=xi,
@@ -316,7 +319,8 @@ def total_tax_bottom(
     Fmin,
     y_mean_before_damage,
     omega_base,
-    y_damage_distribution_coeff,
+    y_damage_distribution_exponent,
+    y_net_reference,
     uniform_redistribution,
     gini,
     xi,
@@ -337,7 +341,7 @@ def total_tax_bottom(
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_coeff : float
+    y_damage_distribution_exponent : float
         Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
@@ -365,7 +369,8 @@ def total_tax_bottom(
         Fmax_for_clip=Fmin,    # clip inside [0, Fmin]
         y_mean_before_damage=y_mean_before_damage,
         omega_base=omega_base,
-        y_damage_distribution_coeff=y_damage_distribution_coeff,
+        y_damage_distribution_exponent=y_damage_distribution_exponent,
+        y_net_reference=y_net_reference,
         uniform_redistribution=uniform_redistribution,
         gini=gini,
         xi=xi,
@@ -380,7 +385,8 @@ def total_tax_bottom(
 def find_Fmax(Fmin,
               y_mean_before_damage,
               omega_base,
-              y_damage_distribution_coeff,
+              y_damage_distribution_exponent,
+              y_net_reference,
               uniform_redistribution,
               gini,
               xi,
@@ -401,7 +407,7 @@ def find_Fmax(Fmin,
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_coeff : float
+    y_damage_distribution_exponent : float
         Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
@@ -430,7 +436,8 @@ def find_Fmax(Fmin,
             Fmin,
             y_mean_before_damage,
             omega_base,
-            y_damage_distribution_coeff,
+            y_damage_distribution_exponent,
+            y_net_reference,
             uniform_redistribution,
             gini,
             xi,
@@ -460,7 +467,8 @@ def find_Fmax(Fmin,
 
 def find_Fmin(y_mean_before_damage,
               omega_base,
-              y_damage_distribution_coeff,
+              y_damage_distribution_exponent,
+              y_net_reference,
               uniform_redistribution,
               gini,
               xi,
@@ -479,7 +487,7 @@ def find_Fmin(y_mean_before_damage,
         Mean income before damage.
     omega_base : float
         Base climate damage parameter.
-    y_damage_distribution_coeff : float
+    y_damage_distribution_exponent : float
         Damage distribution coefficient parameter.
     uniform_redistribution : float
         Uniform per-capita redistribution amount.
@@ -507,7 +515,8 @@ def find_Fmin(y_mean_before_damage,
             Fmin,
             y_mean_before_damage,
             omega_base,
-            y_damage_distribution_coeff,
+            y_damage_distribution_exponent,
+            y_net_reference,
             uniform_redistribution,
             gini,
             xi,

@@ -298,6 +298,10 @@ class ScalarParameters:
         Income scale for climate damage distribution ($)
         Controls how damage is distributed across income levels
         Only used when income_dependent_damage_distribution=True
+    y_net_reference : float
+        Reference income for climate damage power-law scaling ($/person)
+        Income levels are normalized by this value in damage calculations
+        Only used when income_dependent_damage_distribution=True
     k_climate : float
         Temperature sensitivity to cumulative emissions (°C tCO2^-1)
     eta : float
@@ -339,6 +343,7 @@ class ScalarParameters:
     psi1: float
     psi2: float
     y_damage_distribution_scale: float
+    y_net_reference: float
     k_climate: float
     eta: float
     rho: float
@@ -631,7 +636,7 @@ def evaluate_params_at_time(t, config):
     dict
         Dictionary containing all parameters evaluated at time t,
         with keys matching those expected by calculate_tendencies():
-        'alpha', 'delta', 'psi1', 'psi2', 'y_damage_distribution_scale', 'k_climate',
+        'alpha', 'delta', 'psi1', 'psi2', 'y_damage_distribution_scale', 'y_net_reference', 'k_climate',
         'eta', 'rho', 'Gini_background', 'Gini_fract', 'Gini_restore', 'fract_gdp', 'theta2', 'mu_max',
         'A', 'L', 'sigma', 'theta1', 'f', 's'
 
@@ -654,6 +659,7 @@ def evaluate_params_at_time(t, config):
         'psi1': sp.psi1,
         'psi2': sp.psi2,
         'y_damage_distribution_scale': sp.y_damage_distribution_scale,
+        'y_net_reference': sp.y_net_reference,
         'income_dependent_aggregate_damage': sp.income_dependent_aggregate_damage,
         'income_dependent_damage_distribution': sp.income_dependent_damage_distribution,
         'income_dependent_tax_policy': sp.income_dependent_tax_policy,
