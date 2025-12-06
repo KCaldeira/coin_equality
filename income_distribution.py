@@ -112,6 +112,17 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
         result = A - omega_base
         return result[0] if is_scalar else result
 
+    # Handle y_damage_distribution_exponent ≈ 0.5 case (analytic solution via quadratic formula)
+    # Implicit equation: y = A - omega_base * (y / y_net_reference)^0.5
+    # Substituting t = sqrt(y): t^2 + B*t - A = 0, where B = omega_base / sqrt(y_net_reference)
+    # Solution: t = (-B + sqrt(B^2 + 4A)) / 2, then y = t^2
+    if np.abs(y_damage_distribution_exponent - 0.5) < EPSILON:
+        B = omega_base / np.sqrt(y_net_reference)
+        discriminant = B**2 + 4.0 * A
+        t = (-B + np.sqrt(discriminant)) / 2.0
+        result = t**2
+        return result[0] if is_scalar else result
+
     # Solve implicit equation: y = A - omega_base * (y / y_net_reference)**y_damage_distribution_exponent
     def equation(y, A_val):
         return y - A_val + omega_base * (y / y_net_reference)**y_damage_distribution_exponent

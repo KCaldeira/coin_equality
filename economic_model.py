@@ -310,6 +310,13 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
                 if Omega >= 1.0 - LOOSE_EPSILON:
                     break
 
+                #----------------------------------------------------------------------------------
+                # This next chunk of code implements a secant-like method to update Omega_base
+                # It is somewhat involved because a naive approach can take a long time to converge
+                # or perhaps not converge at all.
+
+                # We will use a combination of secant method and multiplicative updates
+
                 # Update bracketing bounds
                 if Omega < Omega_target:
                     if lower_bound is None or Omega > lower_bound[1]:
@@ -364,6 +371,8 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
                         # Normal multiplicative update - full step to encourage overshooting, but cap to prevent overflow
                         Omega_base = min(Omega_base * (Omega_target / Omega), INVERSE_EPSILON)
 
+                #----end of iteration -------------------------------------------------------------------
+
         # Record convergence history for diagnostics
         omega_history.append(Omega)
         omega_base_history.append(Omega_base)
@@ -397,18 +406,18 @@ def calculate_tendencies(state, params, previous_step_values, store_detailed_out
     y_damaged = y_gross * (1 - Omega)  # per capita gross production after climate damage
 
     AbateCost = abateCost_amount * L  # total abatement cost
+    Lambda = AbateCost / Y_damaged  # Eq 1.7: Abatement cost as fraction of damaged production  
 
     Y_net = Y_damaged - AbateCost # Eq 1.8: Net production after abatement cost
     y_net = y_damaged - abateCost_amount  # Eq 1.9: per capita income after abatement cost
 
     Consumption = (1-s) * Y_net
     consumption = (1-s) * y_net  # per capita consumption
+
     Savings = s * Y_net  # Total savings
-    Lambda = AbateCost / Y_damaged if Y_damaged > 0 else 0.0  # Abatement cost as fraction of damaged output
 
     # Redistribution tracking
     redistribution = redistribution_amount  # Per capita redistribution (same as redistribution_amount)
-
     Redistribution_amount = redistribution_amount * L  # total redistribution amount
 
     # Eq 2.1: Potential emissions (unabated)
