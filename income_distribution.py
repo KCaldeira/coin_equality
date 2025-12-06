@@ -42,6 +42,7 @@ def _phi(r):  # helper for bracketing cap; φ(r) = (r-1) r^{1/(r-1)-1}
 
 # Global flag to print diagnostics only on first call
 _first_call_diagnostics_printed = False
+_call_counter = 0
 
 def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damage_distribution_exponent, y_net_reference, uniform_redistribution, gini, branch=0):
     """
@@ -85,6 +86,13 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
     y_of_F : float or ndarray
         y(F) evaluated at the given F values.
     """
+    global _first_call_diagnostics_printed, _call_counter
+
+    # Increment call counter and print progress periodically
+    _call_counter += 1
+    if _call_counter % 10000 == 0:
+        print(f"  [y_of_F_after_damage call #{_call_counter}]")
+
     F = np.clip(np.asarray(F), Fmin, Fmax)
     is_scalar = F.ndim == 0
     if is_scalar:
@@ -111,16 +119,38 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
     # Solve for each element with relaxed tolerances to avoid false convergence warnings
     y_solution = np.zeros_like(A)
     convergence_issues = []
+    total_fev = 0
+    first_point_history = None
 
     for i in range(len(A)):
         y_guess = np.maximum(A[i] - omega_base, EPSILON)
-        result, info, ier, mesg = fsolve(
-            equation, y_guess, args=(A[i],),
-            full_output=True,
-            xtol=LOOSE_EPSILON,
-            maxfev=MAX_ITERATIONS
-        )
+
+        # Always track iteration history for first point (for diagnostics if needed)
+        if i == 0:
+            # Custom solver with iteration tracking
+            iteration_history = []
+            def tracked_equation(y):
+                result = equation(y, A[i])
+                iteration_history.append({'y': float(y), 'residual': float(result)})
+                return result
+
+            result, info, ier, mesg = fsolve(
+                tracked_equation, y_guess,
+                full_output=True,
+                xtol=LOOSE_EPSILON,
+                maxfev=MAX_ITERATIONS
+            )
+            first_point_history = iteration_history
+        else:
+            result, info, ier, mesg = fsolve(
+                equation, y_guess, args=(A[i],),
+                full_output=True,
+                xtol=LOOSE_EPSILON,
+                maxfev=MAX_ITERATIONS
+            )
+
         y_solution[i] = result[0]
+        total_fev += info['nfev']
 
         # Only report convergence issues if residual is actually large
         residual = abs(info['fvec'][0])
@@ -135,18 +165,45 @@ def y_of_F_after_damage(F, Fmin, Fmax, y_mean_before_damage, omega_base, y_damag
                 'message': mesg
             })
 
-    # Print diagnostic info only for real convergence problems (residual > tolerance)
-    if convergence_issues:
-        print(f"\n=== y_of_F_after_damage convergence diagnostics ===")
-        print(f"Parameters: omega_base={omega_base:.6e}, y_damage_distribution_exponent={y_damage_distribution_exponent:.4f}, y_net_reference={y_net_reference:.2f}")
-        print(f"Total genuine convergence issues: {len(convergence_issues)} out of {len(A)} points")
-        print(f"(Only showing cases with residual > {LOOSE_EPSILON:.1e})")
-        print(f"\nProblem cases:")
-        for issue in convergence_issues[:10]:
-            print(f"  Index {issue['index']}: A={issue['A']:.4e}, guess={issue['y_guess']:.4e}, "
-                  f"solution={issue['y_solution']:.4e}, residual={issue['final_residual']:.4e}, "
-                  f"calls={issue['n_calls']}")
-            print(f"    Status: {issue['message']}")
+    # Print diagnostic info on first call or if convergence is slow
+    avg_fev = total_fev / len(A) if len(A) > 0 else 0
+    is_slow = avg_fev > 15
+
+    if not _first_call_diagnostics_printed or is_slow:
+        if not _first_call_diagnostics_printed:
+            _first_call_diagnostics_printed = True
+            header = "FIRST CALL"
+        else:
+            header = f"SLOW CONVERGENCE (call #{_call_counter})"
+
+        print(f"\n=== y_of_F_after_damage {header} diagnostics ===")
+        print(f"Parameters:")
+        print(f"  omega_base={omega_base:.6e}")
+        print(f"  y_damage_distribution_exponent={y_damage_distribution_exponent:.4f}")
+        print(f"  y_net_reference={y_net_reference:.2f}")
+        print(f"  gini={gini:.4f}")
+        print(f"  y_mean_before_damage={y_mean_before_damage:.2f}")
+        print(f"Convergence stats:")
+        print(f"  Number of points: {len(A)}")
+        print(f"  Total function evaluations: {total_fev}")
+        print(f"  Average function evals per point: {avg_fev:.1f}")
+        print(f"  Convergence issues (residual > {LOOSE_EPSILON:.1e}): {len(convergence_issues)}")
+
+        if first_point_history:
+            print(f"\nIteration history for first point (A[0]={A[0]:.4e}):")
+            print(f"  Initial guess: y={first_point_history[0]['y']:.6e}")
+            print(f"  Iterations:")
+            for idx, step in enumerate(first_point_history[:20]):  # Limit to first 20 iterations
+                print(f"    {idx:3d}: y={step['y']:12.6e}, residual={step['residual']:12.6e}")
+            if len(first_point_history) > 20:
+                print(f"    ... ({len(first_point_history) - 20} more iterations)")
+            print(f"  Final solution: y={y_solution[0]:.6e}")
+
+        if convergence_issues:
+            print(f"\nProblem cases:")
+            for issue in convergence_issues[:10]:
+                print(f"  Index {issue['index']}: A={issue['A']:.4e}, "
+                      f"residual={issue['final_residual']:.4e}, calls={issue['n_calls']}")
         print("="*50 + "\n")
 
     return y_solution[0] if is_scalar else y_solution
